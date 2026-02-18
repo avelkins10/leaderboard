@@ -8,7 +8,16 @@ import { Section } from '@/components/Section';
 import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
-import { Target, DollarSign, Zap, ChevronRight } from 'lucide-react';
+import { Target, Zap, ArrowRight } from 'lucide-react';
+
+const CHART_COLORS = {
+  bar: 'hsl(160, 84%, 39%)',
+  barMuted: 'hsl(0, 0%, 24%)',
+  axis: 'hsl(0, 0%, 50%)',
+  fg: 'hsl(0, 0%, 93%)',
+  tooltipBg: 'hsl(0, 0%, 7%)',
+  tooltipBorder: 'hsl(0, 0%, 13%)',
+};
 
 interface ScorecardData {
   period: { from: string; to: string };
@@ -21,6 +30,23 @@ interface ScorecardData {
   salesByCloser: Record<string, any>;
   salesBySetter: Record<string, any>;
   activeRepsByOffice: Record<string, number>;
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-[88px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-2 h-[320px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+        <div className="lg:col-span-3 h-[320px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+      </div>
+      <div className="h-[400px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -48,54 +74,54 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Company-wide performance overview</p>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-[13px] text-muted-foreground">Company-wide performance overview</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
-          <span className="ml-3 text-muted-foreground text-sm">Loading scorecard...</span>
-        </div>
-      )}
+      {loading && <LoadingSkeleton />}
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-sm">Error: {error}</div>
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">
+          {error}
+        </div>
       )}
 
       {data && !loading && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <MetricCard label="Total Deals" value={data.summary.totalSales} color="green"
-              icon={<Target className="w-4 h-4" />} tooltip="Total closed deals from QuickBase for this period" />
-            <MetricCard label="Total kW" value={`${data.summary.totalKw.toFixed(1)}`} color="blue"
-              icon={<Zap className="w-4 h-4" />} tooltip="Total kilowatts sold across all offices" />
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <MetricCard label="Deals" value={data.summary.totalSales} color="green"
+              icon={<Target className="h-4 w-4" />} tooltip="Total closed deals from QuickBase" />
+            <MetricCard label="Kilowatts" value={`${data.summary.totalKw.toFixed(1)}`} color="blue"
+              icon={<Zap className="h-4 w-4" />} tooltip="Total kW sold across all offices" />
             <MetricCard label="Avg System" value={`${data.summary.avgSystemSize.toFixed(1)} kW`}
-              icon={<DollarSign className="w-4 h-4" />} tooltip="Average system size per deal" />
-            <MetricCard label="Avg Net PPW" value={`$${data.summary.avgPpw.toFixed(2)}`}
-              icon={<DollarSign className="w-4 h-4" />} tooltip="Average net price per watt across all deals" />
+              tooltip="Average system size per deal" />
+            <MetricCard label="Net PPW" value={`$${data.summary.avgPpw.toFixed(2)}`}
+              tooltip="Average net price per watt" />
           </div>
 
-          {/* Two-column: Chart + Top Performers */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Deals by Office Chart */}
+          {/* Chart + Leaderboard Row */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+            {/* Deals by Office */}
             <div className="lg:col-span-2">
               <Section title="Deals by Office">
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
-                      <XAxis type="number" tick={{ fill: 'hsl(220, 9%, 46%)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="name" tick={{ fill: 'hsl(0, 0%, 95%)', fontSize: 11 }} width={100} axisLine={false} tickLine={false} />
-                      <RTooltip contentStyle={{ background: 'hsl(224, 10%, 8%)', border: '1px solid hsl(224, 10%, 14%)', borderRadius: 6, color: 'hsl(0, 0%, 95%)', fontSize: 12 }} />
-                      <Bar dataKey="deals" radius={[0, 4, 4, 0]}>
-                        {chartData.map((_, i) => (
-                          <Cell key={i} fill={i === 0 ? 'hsl(142, 71%, 45%)' : i < 3 ? 'hsl(217, 91%, 60%)' : 'hsl(220, 9%, 46%)'} />
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 4 }}>
+                      <XAxis type="number" tick={{ fill: CHART_COLORS.axis, fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fill: CHART_COLORS.fg, fontSize: 11, fontFamily: 'var(--font-geist-mono)' }} width={95} axisLine={false} tickLine={false} />
+                      <RTooltip
+                        cursor={{ fill: 'hsl(0, 0%, 10%)' }}
+                        contentStyle={{ background: CHART_COLORS.tooltipBg, border: `1px solid ${CHART_COLORS.tooltipBorder}`, borderRadius: 8, color: CHART_COLORS.fg, fontSize: 12, fontFamily: 'var(--font-geist-mono)' }}
+                      />
+                      <Bar dataKey="deals" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                        {chartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.deals > 0 ? CHART_COLORS.bar : CHART_COLORS.barMuted} fillOpacity={i === 0 ? 1 : 0.6 + (0.4 * (1 - i / chartData.length))} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -106,8 +132,8 @@ export default function Dashboard() {
 
             {/* Top Closers */}
             <div className="lg:col-span-3">
-              <Section title="Top Closers" subtitle="Ranked by QB verified closes">
-                <div className="space-y-0.5">
+              <Section title="Top Closers" subtitle="Ranked by QB-verified closes" noPadding>
+                <div className="divide-y divide-border">
                   {data.closerLeaderboard
                     .filter(c => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0)
                     .sort((a, b) => (b.qbCloses || 0) - (a.qbCloses || 0))
@@ -116,21 +142,21 @@ export default function Dashboard() {
                       const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT) * 100 : 0;
                       return (
                         <Link key={c.userId} href={`/rep/${c.userId}`}
-                          className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-secondary/50 group transition-colors">
+                          className="group flex items-center justify-between px-5 py-2.5 transition-default hover:bg-secondary/50">
                           <div className="flex items-center gap-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                              i < 3 ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                              i < 3 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                             }`}>{i + 1}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{c.name}</span>
-                              <span className="text-muted-foreground/60 text-xs hidden sm:inline">{c.qbOffice?.split(' - ')[0]}</span>
+                            <div>
+                              <span className="text-[13px] font-medium text-foreground transition-default group-hover:text-primary">{c.name}</span>
+                              <span className="ml-2 text-[11px] text-muted-foreground/60 hidden sm:inline">{c.qbOffice?.split(' - ')[0]}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2.5 text-xs">
-                            <span className="text-muted-foreground">{c.SAT || 0} sits</span>
-                            <span className="font-bold text-primary font-mono">{c.qbCloses || 0}</span>
+                          <div className="flex items-center gap-3 text-[12px]">
+                            <span className="text-muted-foreground font-mono">{c.SAT || 0} sits</span>
+                            <span className="font-semibold font-mono text-primary">{c.qbCloses || 0}</span>
                             {(c.CLOS || 0) > (c.qbCloses || 0) && (
-                              <span className="text-warning text-xs">({c.CLOS} claimed)</span>
+                              <span className="text-[11px] text-warning font-mono">({c.CLOS} claimed)</span>
                             )}
                             {sitClose > 0 && <StatusBadge value={Math.round(sitClose)} good={35} ok={25} />}
                           </div>
@@ -142,29 +168,26 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Office Scorecard Table */}
-          <Section title="Office Scorecard" subtitle="Click an office for detailed breakdown">
-            <div className="overflow-x-auto -mx-5">
-              <table className="w-full text-sm">
+          {/* Office Scorecard */}
+          <Section title="Office Scorecard" subtitle="Click any office for detailed breakdown" noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="text-muted-foreground border-b border-border text-[11px] uppercase tracking-wider">
-                    <th className="text-left py-3 px-5 font-medium">Office</th>
-                    <th className="text-center py-3 px-2 font-medium">Active</th>
-                    <th className="text-right py-3 px-2 font-medium">
-                      <div className="flex items-center justify-end gap-1">QB Deals <Tooltip text="Verified closed deals from QuickBase" /></div>
+                  <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <th className="py-3 px-5 text-left font-medium">Office</th>
+                    <th className="py-3 px-3 text-center font-medium">Active</th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">QB Deals <Tooltip text="Verified closed deals from QuickBase" /></span>
                     </th>
-                    <th className="text-right py-3 px-2 font-medium">kW</th>
-                    <th className="text-right py-3 px-2 font-medium">Doors</th>
-                    <th className="text-right py-3 px-2 font-medium">Appts</th>
-                    <th className="text-right py-3 px-2 font-medium">Sits</th>
-                    <th className="text-right py-3 px-2 font-medium">
-                      <div className="flex items-center justify-end gap-1">QB Closes <Tooltip text="Verified closes from QuickBase" /></div>
+                    <th className="py-3 px-3 text-right font-medium">kW</th>
+                    <th className="py-3 px-3 text-right font-medium">Doors</th>
+                    <th className="py-3 px-3 text-right font-medium">Appts</th>
+                    <th className="py-3 px-3 text-right font-medium">Sits</th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">RC Claims <Tooltip text="RepCard self-reported closes" /></span>
                     </th>
-                    <th className="text-right py-3 px-2 font-medium">
-                      <div className="flex items-center justify-end gap-1">RC Claims <Tooltip text="RepCard self-reported closes (Pending KCA)" /></div>
-                    </th>
-                    <th className="text-right py-3 px-3 font-medium">
-                      <div className="flex items-center justify-end gap-1">Sit/Close <Tooltip text="QB Closes / Sits. Target: 35%+" /></div>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">Sit/Close <Tooltip text="QB Closes / Sits. Target: 35%+" /></span>
                     </th>
                   </tr>
                 </thead>
@@ -178,101 +201,97 @@ export default function Dashboard() {
                     const sitClose = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
                     const activeReps = d.activeReps || 0;
                     return (
-                      <tr key={office} className={`border-b border-border/50 hover:bg-secondary/30 transition-colors ${qbCloses === 0 ? 'opacity-50' : ''}`}>
+                      <tr key={office} className={`border-b border-border/50 transition-default hover:bg-secondary/30 ${qbCloses === 0 ? 'opacity-40' : ''}`}>
                         <td className="py-3 px-5">
-                          <Link href={`/office/${encodeURIComponent(office)}`} className="flex items-center gap-2 font-medium text-foreground hover:text-primary transition-colors group">
-                            <span>{office}</span>
-                            <ChevronRight className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Link href={`/office/${encodeURIComponent(office)}`} className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-default hover:text-primary">
+                            {office}
+                            <ArrowRight className="h-3 w-3 text-muted-foreground/30 opacity-0 transition-default group-hover/link:opacity-100 group-hover/link:text-primary" />
                           </Link>
                         </td>
-                        <td className="text-center py-3 px-2">
-                          <span className={`inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded ${
-                            activeReps > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
-                          }`}>
-                            {activeReps}
-                          </span>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                            activeReps > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground/60'
+                          }`}>{activeReps}</span>
                         </td>
-                        <td className="text-right py-3 px-2 font-bold text-primary font-mono">{qbCloses}</td>
-                        <td className="text-right py-3 px-2 text-foreground/80 font-mono">{(d.sales?.kw || 0).toFixed(1)}</td>
-                        <td className="text-right py-3 px-2 text-muted-foreground font-mono">{totalDoors}</td>
-                        <td className="text-right py-3 px-2 text-muted-foreground font-mono">{totalAppts}</td>
-                        <td className="text-right py-3 px-2 text-muted-foreground font-mono">{totalSits}</td>
-                        <td className="text-right py-3 px-2 font-bold text-primary font-mono">{qbCloses}</td>
-                        <td className="text-right py-3 px-2">
-                          <span className={`font-mono ${rcClaims > qbCloses ? 'text-warning font-bold' : 'text-muted-foreground'}`}>
+                        <td className="py-3 px-3 text-right font-semibold font-mono text-primary">{qbCloses}</td>
+                        <td className="py-3 px-3 text-right font-mono text-foreground/70">{(d.sales?.kw || 0).toFixed(1)}</td>
+                        <td className="py-3 px-3 text-right font-mono text-muted-foreground">{totalDoors}</td>
+                        <td className="py-3 px-3 text-right font-mono text-muted-foreground">{totalAppts}</td>
+                        <td className="py-3 px-3 text-right font-mono text-muted-foreground">{totalSits}</td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`font-mono ${rcClaims > qbCloses ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>
                             {rcClaims}
-                            {rcClaims > qbCloses && <span className="text-xs ml-1 text-destructive">+{rcClaims - qbCloses}</span>}
+                            {rcClaims > qbCloses && <span className="ml-1 text-[11px] text-destructive">+{rcClaims - qbCloses}</span>}
                           </span>
                         </td>
-                        <td className="text-right py-3 px-3">
-                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/40">-</span>}
+                        <td className="py-3 px-3 text-right">
+                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/30">--</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border font-bold">
-                    <td className="py-3 px-5 text-foreground/80">TOTAL</td>
-                    <td className="text-center py-3 px-2 text-muted-foreground font-mono">
+                  <tr className="border-t-2 border-border font-semibold">
+                    <td className="py-3 px-5 text-muted-foreground">Total</td>
+                    <td className="py-3 px-3 text-center font-mono text-muted-foreground">
                       {officeEntries.reduce((s, [, d]) => s + (d.activeReps || 0), 0)}
                     </td>
-                    <td className="text-right py-3 px-2 text-primary font-mono">{data.summary.totalSales}</td>
-                    <td className="text-right py-3 px-2 text-foreground/80 font-mono">{data.summary.totalKw.toFixed(1)}</td>
-                    <td className="text-right py-3 px-2 text-muted-foreground font-mono">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.DK || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-2 text-muted-foreground font-mono">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.APPT || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-2 text-muted-foreground font-mono">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.SAT || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-2 text-primary font-mono">{data.summary.totalSales}</td>
-                    <td className="text-right py-3 px-2 text-muted-foreground font-mono">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.CLOS || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-3 text-muted-foreground/40">-</td>
+                    <td className="py-3 px-3 text-right font-mono text-primary">{data.summary.totalSales}</td>
+                    <td className="py-3 px-3 text-right font-mono text-foreground/70">{data.summary.totalKw.toFixed(1)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.DK || 0), 0) || 0), 0)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.APPT || 0), 0) || 0), 0)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.SAT || 0), 0) || 0), 0)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.CLOS || 0), 0) || 0), 0)}</td>
+                    <td className="py-3 px-3 text-right text-muted-foreground/30">--</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
           </Section>
 
-          {/* Bottom row: Setters + Sales by Closer */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Section title="Top Setters" subtitle="Ranked by appointments set">
-              <div className="space-y-0.5">
+          {/* Bottom: Setters + Sales Grid */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section title="Top Setters" subtitle="By appointments set" noPadding>
+              <div className="divide-y divide-border">
                 {data.setterLeaderboard
                   .filter(s => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
                   .sort((a, b) => (b.APPT || 0) - (a.APPT || 0) || (b.DK || 0) - (a.DK || 0))
                   .slice(0, 8)
                   .map((s, i) => (
                     <Link key={s.userId} href={`/rep/${s.userId}`}
-                      className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-secondary/50 group transition-colors">
+                      className="group flex items-center justify-between px-5 py-2.5 transition-default hover:bg-secondary/50">
                       <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          i < 3 ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                          i < 3 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                         }`}>{i + 1}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{s.name}</span>
-                          <span className="text-muted-foreground/60 text-xs hidden sm:inline">{s.qbOffice?.split(' - ')[0]}</span>
+                        <div>
+                          <span className="text-[13px] font-medium text-foreground transition-default group-hover:text-primary">{s.name}</span>
+                          <span className="ml-2 text-[11px] text-muted-foreground/60 hidden sm:inline">{s.qbOffice?.split(' - ')[0]}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5 text-xs">
+                      <div className="flex items-center gap-3 text-[12px] font-mono">
                         <span className="text-muted-foreground">{s.DK || 0} doors</span>
-                        <span className="font-bold text-primary font-mono">{s.APPT || 0} appts</span>
-                        <span className="text-info font-mono">{s.SITS || 0} sits</span>
+                        <span className="font-semibold text-primary">{s.APPT || 0} appts</span>
+                        <span className="text-info">{s.SITS || 0} sits</span>
                       </div>
                     </Link>
                   ))}
               </div>
             </Section>
 
-            <Section title="QB Sales by Closer" subtitle="Deals from QuickBase records">
+            <Section title="QB Sales by Closer" subtitle="QuickBase verified deals">
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(data.salesByCloser)
                   .sort(([, a]: any, [, b]: any) => b.deals - a.deals)
                   .slice(0, 8)
                   .map(([name, d]: [string, any]) => (
-                    <div key={name} className="bg-secondary/50 border border-border rounded-md p-3 hover:border-muted-foreground/20 transition-colors">
-                      <div className="font-medium text-sm text-foreground truncate">{name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{d.office}</div>
-                      <div className="mt-2 flex items-center gap-2 text-xs">
-                        <span className="text-primary font-bold font-mono">{d.deals} deals</span>
-                        <span className="text-muted-foreground font-mono">{d.kw.toFixed(1)} kW</span>
+                    <div key={name} className="rounded-lg border border-border bg-secondary/30 p-3 transition-default hover:bg-secondary/60">
+                      <div className="truncate text-[13px] font-medium text-foreground">{name}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{d.office}</div>
+                      <div className="mt-2 flex items-center gap-2 font-mono text-[12px]">
+                        <span className="font-semibold text-primary">{d.deals} deals</span>
+                        <span className="text-muted-foreground">{d.kw.toFixed(1)} kW</span>
                       </div>
                     </div>
                   ))}

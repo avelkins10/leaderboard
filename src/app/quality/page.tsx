@@ -6,12 +6,18 @@ import { Section } from '@/components/Section';
 import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
-import { Award, FileText, AlertTriangle } from 'lucide-react';
+
+const CHART_COLORS = {
+  axis: 'hsl(0, 0%, 50%)',
+  fg: 'hsl(0, 0%, 93%)',
+  tooltipBg: 'hsl(0, 0%, 7%)',
+  tooltipBorder: 'hsl(0, 0%, 13%)',
+};
 
 function wasteColor(v: number) {
-  if (v >= 30) return 'bg-destructive/10 text-destructive border-destructive/20';
-  if (v >= 15) return 'bg-warning/10 text-warning border-warning/20';
-  return 'bg-primary/10 text-primary border-primary/20';
+  if (v >= 30) return 'bg-destructive/10 text-destructive';
+  if (v >= 15) return 'bg-warning/10 text-warning';
+  return 'bg-primary/10 text-primary';
 }
 
 export default function QualityPage() {
@@ -36,7 +42,6 @@ export default function QualityPage() {
     const setterLB = data.setterLeaderboard || [];
     const setterAppt = data.setterAppointments || [];
     const salesBySetter = data.salesBySetter || {};
-
     const apptMap: Record<number, any> = {};
     for (const sa of setterAppt) apptMap[sa.userId] = sa;
 
@@ -68,128 +73,123 @@ export default function QualityPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <Award className="w-5 h-5 text-primary" /> Quality Metrics
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Setter accountability & appointment quality</p>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Quality</h1>
+          <p className="text-[13px] text-muted-foreground">Setter accountability & appointment quality</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
-          <span className="ml-3 text-muted-foreground text-sm">Loading...</span>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-[100px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+            ))}
+          </div>
+          <div className="h-[320px] animate-pulse-subtle rounded-lg border border-border bg-card" />
         </div>
       )}
+
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-sm">Error: {error}</div>
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">{error}</div>
       )}
 
       {data && !loading && (
         <>
-          {/* Education Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold text-sm text-primary">Quality Appointment</h3>
-              </div>
-              <p className="text-foreground/70 text-xs leading-relaxed">A quality appointment has the <span className="text-foreground font-medium">power bill collected</span> AND is <span className="text-foreground font-medium">set within 48 hours</span>. These appointments sit 2-3x more often.</p>
+          {/* Benchmark Cards */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-primary/10 bg-primary/[0.03] p-4">
+              <h3 className="text-[12px] font-semibold text-primary">Quality Appointment</h3>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                Power bill collected AND set within 48 hours. These sit <span className="font-medium text-foreground">2-3x more often</span>.
+              </p>
             </div>
-            <div className="bg-info/5 border border-info/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-info" />
-                <h3 className="font-semibold text-sm text-info">Why Waste Rate Matters</h3>
-              </div>
-              <p className="text-foreground/70 text-xs leading-relaxed">No-shows and cancels waste closer time. A setter with <span className="text-destructive font-medium">{'>'} 30% waste rate</span> needs coaching. Every wasted appointment = a lost opportunity.</p>
+            <div className="rounded-lg border border-info/10 bg-info/[0.03] p-4">
+              <h3 className="text-[12px] font-semibold text-info">Why Waste Rate Matters</h3>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                No-shows and cancels waste closer time. <span className="font-medium text-destructive">{'>'} 30% waste</span> needs coaching.
+              </p>
             </div>
-            <div className="bg-warning/5 border border-warning/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Award className="w-4 h-4 text-warning" />
-                <h3 className="font-semibold text-sm text-warning">Target Benchmarks</h3>
-              </div>
-              <p className="text-foreground/70 text-xs leading-relaxed"><span className="text-primary font-medium">Sit Rate: 50%+</span> | <span className="text-primary font-medium">Close Rate: 15%+</span> | <span className="text-primary font-medium">Waste: {'<'}15%</span>. These are the numbers that build careers.</p>
+            <div className="rounded-lg border border-warning/10 bg-warning/[0.03] p-4">
+              <h3 className="text-[12px] font-semibold text-warning">Target Benchmarks</h3>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                <span className="font-medium text-primary">Sit: 50%+</span> &middot; <span className="font-medium text-primary">Close: 15%+</span> &middot; <span className="font-medium text-primary">{'Waste: <15%'}</span>
+              </p>
             </div>
           </div>
 
-          {/* Office Sit Rate Comparison */}
-          <Section title="Office Sit Rate Comparison" subtitle="Appointment to Sit conversion by office">
-            <div className="h-64">
+          {/* Office Sit Rate Chart */}
+          <Section title="Office Sit Rate" subtitle="Appointment to Sit conversion by office">
+            <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={officeQuality} layout="vertical" margin={{ left: 10 }}>
-                  <XAxis type="number" domain={[0, 100]} tick={{ fill: 'hsl(220, 9%, 46%)', fontSize: 11 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: 'hsl(0, 0%, 95%)', fontSize: 11 }} width={100} axisLine={false} tickLine={false} />
+                <BarChart data={officeQuality} layout="vertical" margin={{ left: 4 }}>
+                  <XAxis type="number" domain={[0, 100]} tick={{ fill: CHART_COLORS.axis, fontSize: 11 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: CHART_COLORS.fg, fontSize: 11, fontFamily: 'var(--font-geist-mono)' }} width={95} axisLine={false} tickLine={false} />
                   <RTooltip
-                    contentStyle={{ background: 'hsl(224, 10%, 8%)', border: '1px solid hsl(224, 10%, 14%)', borderRadius: 6, color: 'hsl(0, 0%, 95%)', fontSize: 12 }}
+                    cursor={{ fill: 'hsl(0, 0%, 10%)' }}
+                    contentStyle={{ background: CHART_COLORS.tooltipBg, border: `1px solid ${CHART_COLORS.tooltipBorder}`, borderRadius: 8, color: CHART_COLORS.fg, fontSize: 12, fontFamily: 'var(--font-geist-mono)' }}
                     formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Sit Rate']}
                   />
-                  <Bar dataKey="sitRate" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="sitRate" radius={[0, 4, 4, 0]} maxBarSize={20}>
                     {officeQuality.map((o, i) => (
-                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(142, 71%, 45%)' : o.sitRate >= 30 ? 'hsl(38, 92%, 50%)' : 'hsl(0, 84%, 60%)'} />
+                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(160, 84%, 39%)' : o.sitRate >= 30 ? 'hsl(43, 96%, 56%)' : 'hsl(0, 72%, 51%)'} fillOpacity={0.7} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="bg-primary/10 border border-primary/20 rounded-md py-1.5"><span className="text-primary font-medium">50%+ = Great</span></div>
-              <div className="bg-warning/10 border border-warning/20 rounded-md py-1.5"><span className="text-warning font-medium">30-49% = Watch</span></div>
-              <div className="bg-destructive/10 border border-destructive/20 rounded-md py-1.5"><span className="text-destructive font-medium">{'<'}30% = Concern</span></div>
+            <div className="mt-3 flex items-center gap-4 text-[11px]">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> 50%+ Great</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" /> 30-49% Watch</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-destructive" /> {'<30% Concern'}</span>
             </div>
           </Section>
 
           {/* Setter Accountability Table */}
-          <Section title="Setter Accountability" subtitle="Full funnel metrics -- sorted by waste rate (worst first)">
+          <Section title="Setter Accountability" subtitle="Sorted by waste rate (worst first)" noPadding>
             {setterAccountability.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8 text-sm">No setter data available for this period</p>
+              <p className="px-5 py-12 text-center text-[13px] text-muted-foreground">No setter data available</p>
             ) : (
-              <div className="overflow-x-auto -mx-5">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="text-muted-foreground border-b border-border text-[11px] uppercase tracking-wider">
-                      <th className="text-left py-3 px-5 font-medium">#</th>
-                      <th className="text-left py-3 px-2 font-medium">Setter</th>
-                      <th className="text-left py-3 px-2 font-medium">Office</th>
-                      <th className="text-right py-3 px-2 font-medium">Set</th>
-                      <th className="text-right py-3 px-2 font-medium">No Show</th>
-                      <th className="text-right py-3 px-2 font-medium">Cancel</th>
-                      <th className="text-right py-3 px-2 font-medium">Sits</th>
-                      <th className="text-right py-3 px-2 font-medium">QB Closes</th>
-                      <th className="text-right py-3 px-2 font-medium">
-                        <div className="flex items-center justify-end gap-1">Sit% <Tooltip text="Sits / Appointments Set" /></div>
-                      </th>
-                      <th className="text-right py-3 px-2 font-medium">
-                        <div className="flex items-center justify-end gap-1">Close% <Tooltip text="QB Closes / Appointments Set" /></div>
-                      </th>
-                      <th className="text-right py-3 px-3 font-medium">
-                        <div className="flex items-center justify-end gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appointments Set" /></div>
-                      </th>
+                    <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <th className="py-3 px-5 text-left font-medium w-8">#</th>
+                      <th className="py-3 px-3 text-left font-medium">Setter</th>
+                      <th className="py-3 px-3 text-left font-medium">Office</th>
+                      <th className="py-3 px-3 text-right font-medium">Set</th>
+                      <th className="py-3 px-3 text-right font-medium">No Show</th>
+                      <th className="py-3 px-3 text-right font-medium">Cancel</th>
+                      <th className="py-3 px-3 text-right font-medium">Sits</th>
+                      <th className="py-3 px-3 text-right font-medium">QB Closes</th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Sit% <Tooltip text="Sits / Appointments Set" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Close% <Tooltip text="QB Closes / Appointments Set" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appts" /></span></th>
                     </tr>
                   </thead>
                   <tbody>
                     {setterAccountability.map((s: any, i: number) => (
-                      <tr key={s.userId} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                        <td className="py-3 px-5 text-muted-foreground">{i + 1}</td>
-                        <td className="py-3 px-2 font-medium text-foreground">{s.name}</td>
-                        <td className="py-3 px-2 text-muted-foreground text-xs">{s.qbOffice?.split(' - ')[0] || s.team}</td>
-                        <td className="text-right py-3 px-2 text-info font-bold font-mono">{s.appt}</td>
-                        <td className="text-right py-3 px-2 text-destructive font-mono">{s.nosh}</td>
-                        <td className="text-right py-3 px-2 text-warning font-mono">{s.canc}</td>
-                        <td className="text-right py-3 px-2 text-info font-mono">{s.sits}</td>
-                        <td className="text-right py-3 px-2 text-primary font-bold font-mono">{s.qbCloses}</td>
-                        <td className="text-right py-3 px-2">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/40">-</span>}
+                      <tr key={s.userId} className="border-b border-border/50 transition-default hover:bg-secondary/30">
+                        <td className="py-2.5 px-5 text-muted-foreground/60 font-mono">{i + 1}</td>
+                        <td className="py-2.5 px-3 font-medium text-foreground">{s.name}</td>
+                        <td className="py-2.5 px-3 text-[12px] text-muted-foreground">{s.qbOffice?.split(' - ')[0] || s.team}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-info">{s.appt}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-destructive">{s.nosh}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-warning">{s.canc}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-info">{s.sits}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-primary">{s.qbCloses}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/30">--</span>}
                         </td>
-                        <td className="text-right py-3 px-2">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/40">-</span>}
+                        <td className="py-2.5 px-3 text-right">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/30">--</span>}
                         </td>
-                        <td className="text-right py-3 px-3">
+                        <td className="py-2.5 px-3 text-right">
                           {s.appt > 0 ? (
-                            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium border ${wasteColor(Math.round(s.wasteRate))}`}>
+                            <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold font-mono ${wasteColor(Math.round(s.wasteRate))}`}>
                               {Math.round(s.wasteRate)}%
                             </span>
-                          ) : <span className="text-muted-foreground/40">-</span>}
+                          ) : <span className="text-muted-foreground/30">--</span>}
                         </td>
                       </tr>
                     ))}

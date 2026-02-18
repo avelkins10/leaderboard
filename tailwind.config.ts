@@ -65,6 +65,15 @@ const config: Config = {
         sans: ["var(--font-geist-sans)"],
         mono: ["var(--font-geist-mono)"],
       },
+      keyframes: {
+        "pulse-subtle": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.5" },
+        },
+      },
+      animation: {
+        "pulse-subtle": "pulse-subtle 2s ease-in-out infinite",
+      },
     },
   },
   plugins: [],

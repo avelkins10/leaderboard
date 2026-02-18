@@ -1,6 +1,6 @@
 'use client';
 import { format, startOfWeek, endOfWeek, subWeeks, addDays } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface WeekPickerProps {
   weekOffset: number;
@@ -18,37 +18,36 @@ export function useWeekDates(weekOffset: number) {
 export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
-    <div className="flex items-center gap-2">
-      <Calendar className="w-4 h-4 text-muted-foreground" />
-      <span className="text-sm text-foreground font-medium">
-        {format(weekStart, 'MMM d')} — {format(weekEnd, 'MMM d, yyyy')}
+    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card p-1">
+      <button
+        onClick={() => setWeekOffset(w => w + 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-secondary hover:text-foreground"
+        aria-label="Previous week"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <span className="min-w-[140px] text-center text-[13px] font-medium tabular-nums text-foreground">
+        {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d')}
       </span>
-      <div className="flex items-center gap-1 ml-1">
+      {weekOffset > 0 ? (
         <button
-          onClick={() => setWeekOffset(w => w + 1)}
-          className="p-1.5 bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
-          aria-label="Previous week"
+          onClick={() => setWeekOffset(w => w - 1)}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-secondary hover:text-foreground"
+          aria-label="Next week"
         >
-          <ChevronLeft className="w-3.5 h-3.5 text-foreground" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </button>
-        {weekOffset > 0 && (
-          <button
-            onClick={() => setWeekOffset(w => w - 1)}
-            className="p-1.5 bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
-            aria-label="Next week"
-          >
-            <ChevronRight className="w-3.5 h-3.5 text-foreground" />
-          </button>
-        )}
-        {weekOffset !== 0 && (
-          <button
-            onClick={() => setWeekOffset(() => 0)}
-            className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs font-medium transition-colors"
-          >
-            Today
-          </button>
-        )}
-      </div>
+      ) : (
+        <div className="h-7 w-7" />
+      )}
+      {weekOffset !== 0 && (
+        <button
+          onClick={() => setWeekOffset(() => 0)}
+          className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary transition-default hover:bg-primary/20"
+        >
+          Today
+        </button>
+      )}
     </div>
   );
 }

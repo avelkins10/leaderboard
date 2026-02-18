@@ -16,13 +16,14 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: "KIN Sales Intel",
-  description: "Sales performance dashboard for KIN Home solar",
+  description: "Sales performance intelligence for KIN Home",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f1117",
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen`}>
         <Nav />
-        <main className="max-w-[1440px] mx-auto px-4 py-6 md:px-6 lg:px-8">
+        <main className="mx-auto max-w-[1400px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           {children}
         </main>
       </body>
