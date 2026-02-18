@@ -173,12 +173,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Run vision AI on new attachments (batch of up to 15 per run) ──
-    const toVerify = pending.slice(0, 15); // ~2-3s per image, stay under 60s timeout
+    // ── Step 4: Run vision AI on new attachments — ALL IN PARALLEL ──
+    const toVerify = pending.slice(0, 20);
 
-    for (const att of toVerify) {
-      const isPowerBill = await classifyImage(att.url);
+    const results = await Promise.all(
+      toVerify.map(async (att) => {
+        const isPowerBill = await classifyImage(att.url);
+        return { att, isPowerBill };
+      })
+    );
 
+    for (const { att, isPowerBill } of results) {
       if (isPowerBill === null) {
         stats.errors++;
         continue;
@@ -188,7 +193,6 @@ export async function GET(req: NextRequest) {
         ? "power_bill_verified"
         : "not_power_bill";
 
-      // Insert into attachments table
       await supabaseAdmin.from("attachments").insert({
         url: att.url,
         appointment_id: att.appointmentId,
