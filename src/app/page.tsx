@@ -234,8 +234,23 @@ function RepDrillDown({
 
   return (
     <div className="space-y-3">
-      {/* Outcome badges - show immediately */}
-      {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
+      {/* Outcome badges + avg schedule-out */}
+      <div className="flex flex-wrap items-center gap-3">
+        {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
+        {type === "setter" && data?.avgScheduleOutHours != null && (
+          <span className={`rounded px-2 py-0.5 text-2xs font-medium ${
+            data.avgScheduleOutHours <= 48
+              ? "bg-primary/10 text-primary"
+              : data.avgScheduleOutHours <= 72
+                ? "bg-warning/10 text-warning"
+                : "bg-destructive/10 text-destructive"
+          }`}>
+            Avg {data.avgScheduleOutHours < 48
+              ? `${Math.round(data.avgScheduleOutHours)}h`
+              : `${(data.avgScheduleOutHours / 24).toFixed(1)}d`} out
+          </span>
+        )}
+      </div>
 
       {appts.length > 0 ? (
         <div className="mt-2 overflow-x-auto rounded-lg border border-border/40">
@@ -251,6 +266,9 @@ function RepDrillDown({
                   <th className="py-2 px-3 text-left font-medium">Closer</th>
                 )}
                 <th className="py-2 px-3 text-left font-medium">Disposition</th>
+                {type === "setter" && (
+                  <th className="py-2 px-3 text-center font-medium">Sched</th>
+                )}
                 {type === "setter" && (
                   <th className="py-2 px-3 text-center font-medium">Stars</th>
                 )}
@@ -296,6 +314,27 @@ function RepDrillDown({
                       </span>
                     )}
                   </td>
+                  {type === "setter" && (
+                    <td className="py-2 px-3 text-center font-mono tabular-nums text-2xs">
+                      {a.hours_scheduled_out != null ? (
+                        <span
+                          className={
+                            a.hours_scheduled_out <= 48
+                              ? "text-primary"
+                              : a.hours_scheduled_out <= 72
+                                ? "text-warning"
+                                : "text-destructive"
+                          }
+                        >
+                          {a.hours_scheduled_out < 48
+                            ? `${Math.round(a.hours_scheduled_out)}h`
+                            : `${(a.hours_scheduled_out / 24).toFixed(1)}d`}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/25">-</span>
+                      )}
+                    </td>
+                  )}
                   {type === "setter" && (
                     <td className="py-2 px-3 text-center font-mono">
                       {a.star_rating ? (

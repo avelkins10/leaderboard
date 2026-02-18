@@ -72,6 +72,14 @@ export async function GET(
       const apptRows = rcData.result?.data || rcData.data || [];
       appointments = apptRows.map((a: any) => {
         const statusTitle = a.status?.title || null;
+        // Schedule-out: hours between when appointment was created and when it's scheduled
+        let hoursScheduledOut: number | null = null;
+        if (a.createdAt && a.startAt) {
+          const created = new Date(a.createdAt);
+          const start = new Date(a.startAt);
+          hoursScheduledOut = Math.max(0, (start.getTime() - created.getTime()) / (1000 * 60 * 60));
+        }
+
         return {
           id: a.id,
           contact_name: a.contact?.fullName || a.contact?.name || null,
@@ -83,6 +91,8 @@ export async function GET(
               .join(", ") ||
             null,
           appointment_time: a.startAt || null,
+          created_at: a.createdAt || null,
+          hours_scheduled_out: hoursScheduledOut,
           disposition: statusTitle,
           disposition_category: dispositionCategory(statusTitle),
           star_rating: a.contact?.rating ?? null,
@@ -117,10 +127,19 @@ export async function GET(
     const fullName = `${user.firstName} ${user.lastName}`;
     const { allSales: repSales } = getRepSales(sales, userId, fullName);
 
+    // Compute avg schedule-out hours
+    const schedHours = appointments
+      .map((a: any) => a.hours_scheduled_out)
+      .filter((h: any) => h != null && h >= 0);
+    const avgScheduleOutHours = schedHours.length > 0
+      ? schedHours.reduce((sum: number, h: number) => sum + h, 0) / schedHours.length
+      : null;
+
     return NextResponse.json({
       role,
       appointments,
       sales: repSales,
+      avgScheduleOutHours,
       period: { from: fromDate, to: toDate },
     });
   } catch (error: any) {
