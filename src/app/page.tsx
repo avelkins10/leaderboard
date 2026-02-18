@@ -336,7 +336,7 @@ function RepDrillDown({
       {type === "closer" && sales.length > 0 && (
         <div className="mt-2">
           <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
-            QB Sales ({sales.filter((s: any) => !["cancelled", "pending cancel", "rejected"].some((p) => s.status?.toLowerCase().includes(p))).length} active)
+            QB Sales ({sales.filter((s: any) => !["cancelled", "pending cancel"].some((p) => s.status?.toLowerCase().includes(p))).length} active)
           </p>
           <div className="overflow-x-auto rounded-lg border border-border/40">
             <table className="w-full text-xs">
@@ -370,7 +370,7 @@ function RepDrillDown({
                     <td className="py-2 px-3">
                       <span
                         className={`rounded px-1.5 py-0.5 text-2xs font-medium ${
-                          ["cancelled", "pending cancel", "rejected"].some((p) =>
+                          ["cancelled", "pending cancel"].some((p) =>
                             s.status?.toLowerCase().includes(p),
                           )
                             ? "bg-destructive/10 text-destructive"
@@ -576,7 +576,7 @@ export default function Dashboard() {
                 color="green"
                 subtitle={`${data.summary.cancelled} cancelled`}
                 icon={<Target className="h-5 w-5" />}
-                tooltip="All QB deals (active + cancelled + rejected)"
+                tooltip="All QB deals this period"
               />
               <MetricCard
                 label="kW Sold"

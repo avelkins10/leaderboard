@@ -8,7 +8,7 @@ import { getSales, type QBSale } from "./quickbase";
 import { OFFICE_MAPPING, teamIdToQBOffice, normalizeQBOffice } from "./config";
 
 // ── Cancel detection — IDENTICAL everywhere ──
-const CANCEL_PATTERNS = ["cancelled", "pending cancel", "rejected"];
+const CANCEL_PATTERNS = ["cancelled", "pending cancel"];
 export function isCancel(status: string): boolean {
   const lower = status.toLowerCase();
   return CANCEL_PATTERNS.some((p) => lower.includes(p));
