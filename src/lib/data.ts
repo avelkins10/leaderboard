@@ -9,10 +9,17 @@ import { getActiveReps } from './supabase-queries';
 import { OFFICE_MAPPING, teamIdToQBOffice } from './config';
 
 // ── Cancel detection — IDENTICAL everywhere ──
-const CANCEL_PATTERNS = ['cancelled', 'pending cancel'];
+const CANCEL_PATTERNS = ['cancelled', 'pending cancel', 'rejected'];
 export function isCancel(status: string): boolean {
   const lower = status.toLowerCase();
   return CANCEL_PATTERNS.some(p => lower.includes(p));
+}
+
+// ── PPW outlier detection — filter bad data from averages ──
+const PPW_MIN = 0.50;
+const PPW_MAX = 8.00;
+export function isValidPpw(ppw: number): boolean {
+  return ppw >= PPW_MIN && ppw <= PPW_MAX;
 }
 
 // ── Date helpers ──
@@ -161,21 +168,21 @@ function aggregateSales(sales: QBSale[]) {
     // Office aggregation
     if (!byOffice[office]) byOffice[office] = newAgg();
     if (cancelled) { byOffice[office].cancelled++; byOffice[office].cancelledKw += sale.systemSizeKw; }
-    else { byOffice[office].deals++; byOffice[office].kw += sale.systemSizeKw; byOffice[office].ppwSum += sale.netPpw; byOffice[office].ppwCount++; }
+    else { byOffice[office].deals++; byOffice[office].kw += sale.systemSizeKw; if (isValidPpw(sale.netPpw)) { byOffice[office].ppwSum += sale.netPpw; byOffice[office].ppwCount++; } }
 
     // Closer: RepCard ID primary
     if (sale.closerRepCardId) {
       if (!byCloserRC[sale.closerRepCardId]) byCloserRC[sale.closerRepCardId] = { ...newAgg(), office };
       const agg = byCloserRC[sale.closerRepCardId];
       if (cancelled) { agg.cancelled++; agg.cancelledKw += sale.systemSizeKw; }
-      else { agg.deals++; agg.kw += sale.systemSizeKw; agg.ppwSum += sale.netPpw; agg.ppwCount++; }
+      else { agg.deals++; agg.kw += sale.systemSizeKw; if (isValidPpw(sale.netPpw)) { agg.ppwSum += sale.netPpw; agg.ppwCount++; } }
     }
 
     // Closer: name fallback
     const closerName = sale.closerName || 'Unknown';
     if (!byCloserName[closerName]) byCloserName[closerName] = { ...newAgg(), office };
     if (cancelled) { byCloserName[closerName].cancelled++; byCloserName[closerName].cancelledKw += sale.systemSizeKw; }
-    else { byCloserName[closerName].deals++; byCloserName[closerName].kw += sale.systemSizeKw; byCloserName[closerName].ppwSum += sale.netPpw; byCloserName[closerName].ppwCount++; }
+    else { byCloserName[closerName].deals++; byCloserName[closerName].kw += sale.systemSizeKw; if (isValidPpw(sale.netPpw)) { byCloserName[closerName].ppwSum += sale.netPpw; byCloserName[closerName].ppwCount++; } }
 
     // Setter: RepCard ID primary
     if (sale.setterRepCardId) {
@@ -204,17 +211,19 @@ function aggregateSales(sales: QBSale[]) {
 export function getRepSales(sales: QBSale[], userId: number, fullName: string) {
   const id = String(userId);
   const lowerName = fullName.toLowerCase();
+  // Exact match on name (trimmed, case-insensitive) to avoid false positives like "Smith" matching "Smithson"
+  const nameMatch = (field: string | undefined) => field?.trim().toLowerCase() === lowerName;
   return {
     closerSales: sales.filter(s =>
-      s.closerRepCardId === id || s.closerName?.toLowerCase().includes(lowerName)
+      s.closerRepCardId === id || (!s.closerRepCardId && nameMatch(s.closerName))
     ),
     setterSales: sales.filter(s =>
-      s.setterRepCardId === id || s.setterName?.toLowerCase().includes(lowerName)
+      s.setterRepCardId === id || (!s.setterRepCardId && nameMatch(s.setterName))
     ),
     allSales: sales.filter(s =>
       s.closerRepCardId === id || s.setterRepCardId === id ||
-      s.closerName?.toLowerCase().includes(lowerName) ||
-      s.setterName?.toLowerCase().includes(lowerName)
+      (!s.closerRepCardId && nameMatch(s.closerName)) ||
+      (!s.setterRepCardId && nameMatch(s.setterName))
     ),
   };
 }
@@ -228,7 +237,7 @@ export function computeCloserQBStats(closerSales: QBSale[]) {
   const totalDeals = active.length;
   const totalKw = Math.round(active.reduce((sum, s) => sum + (s.systemSizeKw || 0), 0) * 100) / 100;
   const avgSystemSize = totalDeals > 0 ? Math.round((totalKw / totalDeals) * 100) / 100 : 0;
-  const salesWithPpw = active.filter(s => s.netPpw > 0);
+  const salesWithPpw = active.filter(s => isValidPpw(s.netPpw));
   const avgPpw = salesWithPpw.length > 0
     ? Math.round((salesWithPpw.reduce((sum, s) => sum + s.netPpw, 0) / salesWithPpw.length) * 100) / 100
     : 0;
@@ -382,13 +391,15 @@ export async function fetchScorecard(fromDate: string, toDate: string): Promise<
   const activeSales = sales.filter(s => !isCancel(s.status));
   const cancelledSales = sales.filter(s => isCancel(s.status));
 
+  const validPpwSales = activeSales.filter(s => isValidPpw(s.netPpw));
+
   return {
     period: { from: fromDate, to: toDate },
     summary: {
       totalSales: activeSales.length,
       totalKw: activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
       avgSystemSize: activeSales.length > 0 ? activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0) / activeSales.length : 0,
-      avgPpw: activeSales.length > 0 ? activeSales.reduce((sum, s) => sum + s.netPpw, 0) / activeSales.length : 0,
+      avgPpw: validPpwSales.length > 0 ? validPpwSales.reduce((sum, s) => sum + s.netPpw, 0) / validPpwSales.length : 0,
       cancelled: cancelledSales.length,
       cancelledKw: cancelledSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
       cancelPct: sales.length > 0 ? Math.round((cancelledSales.length / sales.length) * 100) : 0,
