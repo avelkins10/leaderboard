@@ -24,6 +24,43 @@ function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
+const DISPOSITION_CARDS: {
+  key: string;
+  label: string;
+  color: string;
+}[] = [
+  {
+    key: "sat",
+    label: "Sat",
+    color: "bg-primary/10 text-primary border-primary/20",
+  },
+  {
+    key: "no_show",
+    label: "No Show",
+    color: "bg-destructive/10 text-destructive border-destructive/20",
+  },
+  {
+    key: "canceled",
+    label: "Cancelled",
+    color: "bg-warning/10 text-warning border-warning/20",
+  },
+  {
+    key: "rescheduled",
+    label: "Rescheduled",
+    color: "bg-secondary text-muted-foreground border-border",
+  },
+  {
+    key: "scheduled",
+    label: "Scheduled",
+    color: "bg-info/10 text-info border-info/20",
+  },
+  {
+    key: "other",
+    label: "Other",
+    color: "bg-secondary text-muted-foreground border-border",
+  },
+];
+
 export default function OfficePage() {
   const params = useParams();
   const officeName = decodeURIComponent(params.name as string);
@@ -35,7 +72,7 @@ export default function OfficePage() {
     displayTo,
     setPreset,
     setCustomRange,
-  } = useDateRange();
+  } = useDateRange("today");
   const { data, error, isLoading } = useSWR(
     `/api/office/${encodeURIComponent(officeName)}?from=${from}&to=${to}`,
   );
@@ -53,17 +90,31 @@ export default function OfficePage() {
           <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-foreground">
             {officeName}
             {data && (
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-2xs font-semibold ${
-                  (data.activeReps || 0) > 0
-                    ? "bg-primary/10 text-primary"
-                    : "bg-secondary text-muted-foreground"
-                }`}
-              >
+              <span className="inline-flex items-center gap-2.5 text-2xs font-semibold">
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${(data.activeReps || 0) > 0 ? "bg-primary" : "bg-muted-foreground"}`}
-                />
-                {data.activeReps || 0} active
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${
+                    (data.activeSetters || 0) > 0
+                      ? "bg-primary/10 text-primary"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${(data.activeSetters || 0) > 0 ? "bg-primary" : "bg-muted-foreground"}`}
+                  />
+                  {data.activeSetters || 0} setters
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${
+                    (data.activeClosers || 0) > 0
+                      ? "bg-info/10 text-info"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${(data.activeClosers || 0) > 0 ? "bg-info" : "bg-muted-foreground"}`}
+                  />
+                  {data.activeClosers || 0} closers
+                </span>
               </span>
             )}
           </h1>
@@ -116,13 +167,13 @@ export default function OfficePage() {
               value={`$${data.summary.avgPpw.toFixed(2)}`}
             />
             <MetricCard
-              label="Setters"
-              value={data.setters.length}
+              label="Active Setters"
+              value={data.activeSetters || 0}
               icon={<Users className="h-5 w-5" />}
             />
             <MetricCard
-              label="Closers"
-              value={data.closers.length}
+              label="Active Closers"
+              value={data.activeClosers || 0}
               icon={<Users className="h-5 w-5" />}
             />
           </div>
@@ -162,6 +213,29 @@ export default function OfficePage() {
                 {data.funnel.rcClaims - data.funnel.qbCloses}
               </div>
             )}
+
+            {/* Disposition Breakdown Cards */}
+            {data.funnel.breakdown && data.funnel.breakdown.total > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {DISPOSITION_CARDS.map(({ key, label, color }) => {
+                  const count = data.funnel.breakdown[key] || 0;
+                  if (count === 0) return null;
+                  return (
+                    <div
+                      key={key}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 ${color}`}
+                    >
+                      <span className="text-lg font-bold font-mono tabular-nums">
+                        {count}
+                      </span>
+                      <span className="text-2xs font-semibold uppercase tracking-wider">
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Section>
 
           <Section title="Setter Accountability" noPadding>
@@ -189,6 +263,12 @@ export default function OfficePage() {
                       <th className="py-3 px-3 text-right font-medium">
                         Cancel
                       </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Pending{" "}
+                          <Tooltip text="APPT - (Sits + No Show + Cancel)" />
+                        </span>
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">Sits</th>
                       <th className="py-3 px-3 text-right font-medium">
                         QB Closes
@@ -210,83 +290,139 @@ export default function OfficePage() {
                           Waste% <Tooltip text="(No Shows + Cancels) / Appts" />
                         </span>
                       </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Quality{" "}
+                          <Tooltip text="Avg star rating from Supabase (1-3)" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          PB{" "}
+                          <Tooltip text="Appointments with power bill attached" />
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
                     {data.setters
                       .sort((a: any, b: any) => (b.APPT || 0) - (a.APPT || 0))
-                      .map((s: any, i: number) => (
-                        <tr
-                          key={s.userId}
-                          className="border-b border-border/60 transition-colors hover:bg-secondary/30"
-                        >
-                          <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">
-                            {i + 1}
-                          </td>
-                          <td className="py-3.5 px-3">
-                            <Link
-                              href={`/rep/${s.userId}`}
-                              className="font-medium text-foreground transition-colors hover:text-primary"
-                            >
-                              {s.name}
-                            </Link>
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
-                            {s.APPT || 0}
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">
-                            {s.nosh || 0}
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">
-                            {s.canc || 0}
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                            {s.SITS || 0}
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                            {s.qbCloses || 0}
-                          </td>
-                          <td className="py-3.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? (
-                              <StatusBadge
-                                value={Math.round(s.sitRate)}
-                                good={50}
-                                ok={30}
-                              />
-                            ) : (
-                              <span className="text-muted-foreground/25 font-mono">
-                                --
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? (
-                              <StatusBadge
-                                value={Math.round(s.closeRate)}
-                                good={15}
-                                ok={8}
-                              />
-                            ) : (
-                              <span className="text-muted-foreground/25 font-mono">
-                                --
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? (
-                              <span
-                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}
+                      .map((s: any, i: number) => {
+                        const pending = Math.max(
+                          0,
+                          (s.APPT || 0) -
+                            ((s.SITS || 0) + (s.nosh || 0) + (s.canc || 0)),
+                        );
+                        return (
+                          <tr
+                            key={s.userId}
+                            className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                          >
+                            <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">
+                              {i + 1}
+                            </td>
+                            <td className="py-3.5 px-3">
+                              <Link
+                                href={`/rep/${s.userId}`}
+                                className="font-medium text-foreground transition-colors hover:text-primary"
                               >
-                                {Math.round(s.wasteRate)}%
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground/25 font-mono">
-                                --
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                                {s.name}
+                              </Link>
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
+                              {s.APPT || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">
+                              {s.nosh || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">
+                              {s.canc || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              {pending > 0 ? (
+                                <span className="inline-flex items-center rounded-md bg-info/10 px-1.5 py-0.5 text-2xs font-semibold font-mono tabular-nums leading-none text-info">
+                                  {pending}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  0
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {s.SITS || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                              {s.qbCloses || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              {(s.APPT || 0) > 0 ? (
+                                <StatusBadge
+                                  value={Math.round(s.sitRate)}
+                                  good={50}
+                                  ok={30}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              {(s.APPT || 0) > 0 ? (
+                                <StatusBadge
+                                  value={Math.round(s.closeRate)}
+                                  good={15}
+                                  ok={8}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              {(s.APPT || 0) > 0 ? (
+                                <span
+                                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}
+                                >
+                                  {Math.round(s.wasteRate)}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 text-right">
+                              {(s.avgStars || 0) > 0 ? (
+                                <span className="inline-flex items-center gap-0.5 font-mono tabular-nums text-xs text-foreground">
+                                  {s.avgStars.toFixed(1)}{" "}
+                                  <span className="text-warning">&#9733;</span>
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums">
+                              {(s.powerBillCount || 0) > 0 ? (
+                                <span className="text-foreground">
+                                  {s.powerBillCount}
+                                  <span className="text-2xs text-muted-foreground/50 ml-0.5">
+                                    /{s.APPT || 0}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/25">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -416,6 +552,89 @@ export default function OfficePage() {
               </div>
             )}
           </Section>
+
+          {/* Setter-Closer Partnerships */}
+          {data.partnerships && data.partnerships.length > 0 && (
+            <Section
+              title="Setter-Closer Partnerships"
+              subtitle="Appointment volume and outcomes by pairing"
+              noPadding
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                      <th className="py-3 px-6 text-left font-medium">
+                        Setter
+                      </th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Closer
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Appts
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">Sat</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Closed
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">Sit%</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[13px]">
+                    {data.partnerships.slice(0, 15).map((p: any, i: number) => {
+                      const sitRate =
+                        p.total_appts > 0 ? (p.sat / p.total_appts) * 100 : 0;
+                      return (
+                        <tr
+                          key={i}
+                          className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                        >
+                          <td className="py-3.5 px-6">
+                            <Link
+                              href={`/rep/${p.setter_id}`}
+                              className="font-medium text-foreground transition-colors hover:text-primary"
+                            >
+                              {p.setter_name}
+                            </Link>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <Link
+                              href={`/rep/${p.closer_id}`}
+                              className="font-medium text-foreground transition-colors hover:text-primary"
+                            >
+                              {p.closer_name}
+                            </Link>
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
+                            {p.total_appts}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                            {p.sat}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                            {p.closed}
+                          </td>
+                          <td className="py-3.5 px-3 text-right">
+                            {p.total_appts > 0 ? (
+                              <StatusBadge
+                                value={Math.round(sitRate)}
+                                good={50}
+                                ok={30}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground/25 font-mono">
+                                --
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
         </div>
       )}
     </div>

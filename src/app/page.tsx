@@ -19,7 +19,7 @@ import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Tooltip } from "@/components/Tooltip";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Target, Zap, ArrowRight } from "lucide-react";
+import { Target, Zap, ArrowRight, Activity } from "lucide-react";
 
 const C = {
   primary: "hsl(152, 56%, 40%)",
@@ -63,13 +63,25 @@ function LoadingSkeleton() {
           <Skeleton key={i} className="h-28" />
         ))}
       </div>
+      <Skeleton className="h-96" />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <Skeleton className="h-80 lg:col-span-2" />
         <Skeleton className="h-80 lg:col-span-3" />
+        <Skeleton className="h-80 lg:col-span-2" />
       </div>
       <Skeleton className="h-96" />
     </div>
   );
+}
+
+function formatTimeAgo(isoStr: string): string {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
 export default function Dashboard() {
@@ -81,10 +93,14 @@ export default function Dashboard() {
     displayTo,
     setPreset,
     setCustomRange,
-  } = useDateRange();
+  } = useDateRange("today");
   const { data, error, isLoading } = useSWR<ScorecardData>(
     `/api/scorecard?from=${from}&to=${to}`,
+    { refreshInterval: 60_000 },
   );
+  const { data: activityData } = useSWR<{
+    feed: { type: string; time: string; text: string; office: string }[];
+  }>("/api/activity?limit=20", { refreshInterval: 30_000 });
 
   const prefetchOffice = useCallback(
     (name: string) => {
@@ -112,6 +128,15 @@ export default function Dashboard() {
     name: name.split(" - ")[0],
     deals: d.sales?.deals || 0,
   }));
+
+  // Build sorted setter list for the hero leaderboard
+  const setterHeroList = data
+    ? data.setterLeaderboard
+        .filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
+        .sort(
+          (a, b) => (b.DK || 0) - (a.DK || 0) || (b.APPT || 0) - (a.APPT || 0),
+        )
+    : [];
 
   return (
     <div className="space-y-8">
@@ -144,7 +169,7 @@ export default function Dashboard() {
 
       {data && !isLoading && (
         <div className="animate-enter space-y-8">
-          {/* KPI Cards -- dark metric cards */}
+          {/* KPI Cards */}
           <div>
             <p className="mb-3 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
               Company Stats
@@ -181,68 +206,102 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Chart + Top Closers */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-2">
-              <Section title="Deals by Office">
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      layout="vertical"
-                      margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
-                    >
-                      <XAxis
-                        type="number"
-                        tick={{
-                          fill: C.axis,
-                          fontSize: 10,
-                          fontFamily: "var(--font-jetbrains)",
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        tick={{
-                          fill: C.fg,
-                          fontSize: 11,
-                          fontFamily: "var(--font-inter)",
-                        }}
-                        width={95}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <RTooltip
-                        cursor={{ fill: C.gridLine }}
-                        contentStyle={{
-                          background: C.card,
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 8,
-                          color: C.fg,
-                          fontSize: 12,
-                          fontFamily: "var(--font-jetbrains)",
-                        }}
-                      />
-                      <Bar
-                        dataKey="deals"
-                        radius={[0, 4, 4, 0]}
-                        maxBarSize={18}
+          {/* SETTER HERO LEADERBOARD */}
+          <Section
+            title="Setter Leaderboard"
+            subtitle="Sorted by doors knocked — all setters with activity"
+            noPadding
+          >
+            {setterHeroList.length === 0 ? (
+              <p className="px-6 py-16 text-center text-sm text-muted-foreground">
+                No setter activity for this period
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                      <th className="py-3 px-6 text-left font-medium w-8">#</th>
+                      <th className="py-3 px-3 text-left font-medium">Name</th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Office
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Doors
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Appts
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">Sits</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          QB Closes{" "}
+                          <Tooltip text="Verified closes from QuickBase" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          D/QH <Tooltip text="Doors per quality hour" />
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[13px]">
+                    {setterHeroList.map((s, i) => (
+                      <tr
+                        key={s.userId}
+                        className="border-b border-border/60 transition-colors hover:bg-secondary/30"
                       >
-                        {chartData.map((_, i) => (
-                          <Cell
-                            key={i}
-                            fill={i === 0 ? C.primary : C.barDefault}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Section>
-            </div>
+                        <td className="py-3.5 px-6">
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                              i === 0
+                                ? "bg-primary/15 text-primary"
+                                : i < 3
+                                  ? "bg-secondary text-foreground"
+                                  : "text-muted-foreground/40"
+                            }`}
+                          >
+                            {i + 1}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <Link
+                            href={`/rep/${s.userId}`}
+                            onMouseEnter={() => prefetchRep(s.userId)}
+                            className="font-medium text-foreground transition-colors hover:text-primary"
+                          >
+                            {s.name}
+                          </Link>
+                        </td>
+                        <td className="py-3.5 px-3 text-muted-foreground">
+                          {s.qbOffice?.split(" - ")[0]}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground text-lg">
+                          {s.DK || 0}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-info">
+                          {s.APPT || 0}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {s.SITS || 0}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                          {s.qbCloses || 0}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {s["D/QH"] ? s["D/QH"] : "--"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
 
+          {/* Top Closers + Deals by Office chart */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
               <Section
                 title="Top Closers"
@@ -310,6 +369,66 @@ export default function Dashboard() {
                         </Link>
                       );
                     })}
+                </div>
+              </Section>
+            </div>
+
+            <div className="lg:col-span-2">
+              <Section title="Deals by Office">
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      layout="vertical"
+                      margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
+                    >
+                      <XAxis
+                        type="number"
+                        tick={{
+                          fill: C.axis,
+                          fontSize: 10,
+                          fontFamily: "var(--font-jetbrains)",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tick={{
+                          fill: C.fg,
+                          fontSize: 11,
+                          fontFamily: "var(--font-inter)",
+                        }}
+                        width={95}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <RTooltip
+                        cursor={{ fill: C.gridLine }}
+                        contentStyle={{
+                          background: C.card,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 8,
+                          color: C.fg,
+                          fontSize: 12,
+                          fontFamily: "var(--font-jetbrains)",
+                        }}
+                      />
+                      <Bar
+                        dataKey="deals"
+                        radius={[0, 4, 4, 0]}
+                        maxBarSize={18}
+                      >
+                        {chartData.map((_, i) => (
+                          <Cell
+                            key={i}
+                            fill={i === 0 ? C.primary : C.barDefault}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </Section>
             </div>
@@ -515,98 +634,91 @@ export default function Dashboard() {
             </div>
           </Section>
 
-          {/* Bottom Row */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Section
-              title="Top Setters"
-              subtitle="By appointments set"
-              noPadding
-            >
-              <div className="divide-y divide-border">
-                {data.setterLeaderboard
-                  .filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
-                  .sort(
-                    (a, b) =>
-                      (b.APPT || 0) - (a.APPT || 0) ||
-                      (b.DK || 0) - (a.DK || 0),
-                  )
-                  .slice(0, 8)
-                  .map((s, i) => (
-                    <Link
-                      key={s.userId}
-                      href={`/rep/${s.userId}`}
-                      onMouseEnter={() => prefetchRep(s.userId)}
-                      className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-secondary/50"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                            i === 0
-                              ? "bg-primary/15 text-primary"
-                              : i < 3
-                                ? "bg-secondary text-foreground"
-                                : "bg-transparent text-muted-foreground/40"
-                          }`}
-                        >
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="truncate text-[13px] font-medium text-foreground group-hover:text-primary transition-colors">
-                            {s.name}
-                          </div>
-                          <div className="text-2xs text-muted-foreground">
-                            {s.qbOffice?.split(" - ")[0]}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 font-mono tabular-nums shrink-0">
-                        <span className="text-xs text-muted-foreground">
-                          {s.DK || 0} doors
-                        </span>
-                        <span className="text-xs font-semibold text-info">
-                          {s.APPT || 0} appts
-                        </span>
-                        <span className="text-xs text-primary">
-                          {s.SITS || 0} sits
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-              </div>
-            </Section>
+          {/* QB Sales by Closer */}
+          <Section
+            title="QB Sales by Closer"
+            subtitle="QuickBase verified deals"
+          >
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {Object.entries(data.salesByCloser)
+                .sort(([, a]: any, [, b]: any) => b.deals - a.deals)
+                .slice(0, 8)
+                .map(([name, d]: [string, any]) => (
+                  <div
+                    key={name}
+                    className="rounded-lg border border-border bg-secondary/30 p-4 transition-all hover:bg-secondary/60 hover:border-border"
+                  >
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {name}
+                    </div>
+                    <div className="truncate text-2xs text-muted-foreground mt-0.5">
+                      {d.office}
+                    </div>
+                    <div className="mt-3 flex items-center gap-3 font-mono text-xs tabular-nums">
+                      <span className="font-semibold text-primary">
+                        {d.deals} deals
+                      </span>
+                      <span className="text-muted-foreground">
+                        {d.kw.toFixed(1)} kW
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </Section>
 
+          {/* Activity Feed */}
+          {activityData?.feed && activityData.feed.length > 0 && (
             <Section
-              title="QB Sales by Closer"
-              subtitle="QuickBase verified deals"
+              title="Recent Activity"
+              subtitle="Live feed from the field"
             >
-              <div className="grid grid-cols-2 gap-2.5">
-                {Object.entries(data.salesByCloser)
-                  .sort(([, a]: any, [, b]: any) => b.deals - a.deals)
-                  .slice(0, 8)
-                  .map(([name, d]: [string, any]) => (
-                    <div
-                      key={name}
-                      className="rounded-lg border border-border bg-secondary/30 p-4 transition-all hover:bg-secondary/60 hover:border-border"
+              <div className="space-y-1">
+                {activityData.feed.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-secondary/30"
+                  >
+                    <span
+                      className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                        item.type === "knock"
+                          ? "bg-secondary text-muted-foreground"
+                          : item.type === "appointment"
+                            ? "bg-info/10 text-info"
+                            : item.type === "conversion"
+                              ? "bg-primary/10 text-primary"
+                              : "bg-warning/10 text-warning"
+                      }`}
                     >
-                      <div className="truncate text-[13px] font-medium text-foreground">
-                        {name}
+                      {item.type === "knock" ? (
+                        <Activity className="h-3 w-3" />
+                      ) : item.type === "appointment" ? (
+                        "A"
+                      ) : item.type === "conversion" ? (
+                        "$"
+                      ) : (
+                        "D"
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] text-foreground truncate">
+                        {item.text}
                       </div>
-                      <div className="truncate text-2xs text-muted-foreground mt-0.5">
-                        {d.office}
-                      </div>
-                      <div className="mt-3 flex items-center gap-3 font-mono text-xs tabular-nums">
-                        <span className="font-semibold text-primary">
-                          {d.deals} deals
-                        </span>
-                        <span className="text-muted-foreground">
-                          {d.kw.toFixed(1)} kW
-                        </span>
+                      <div className="flex items-center gap-2 text-2xs text-muted-foreground">
+                        <span>{formatTimeAgo(item.time)}</span>
+                        {item.office && (
+                          <>
+                            <span className="text-muted-foreground/30">|</span>
+                            <span>{item.office.split(" - ")[0]}</span>
+                          </>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             </Section>
-          </div>
+          )}
         </div>
       )}
     </div>

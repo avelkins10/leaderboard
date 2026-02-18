@@ -14,7 +14,15 @@ import { Section } from "@/components/Section";
 import { MetricCard } from "@/components/MetricCard";
 import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
-import { ArrowLeft, Briefcase, MapPin } from "lucide-react";
+import {
+  ArrowLeft,
+  Briefcase,
+  MapPin,
+  Star,
+  FileText,
+  Clock,
+  Calendar,
+} from "lucide-react";
 
 const PIE_COLORS = [
   "hsl(152, 56%, 40%)",
@@ -280,6 +288,128 @@ export default function RepPage() {
               </Section>
             )}
 
+          {/* Closer QB Stats */}
+          {data.user.role === "closer" && data.closerQBStats && (
+            <Section title="QB Performance" subtitle="QuickBase verified stats">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <MetricCard
+                  label="Total Deals"
+                  value={data.closerQBStats.totalDeals}
+                  color="green"
+                />
+                <MetricCard
+                  label="Total kW"
+                  value={`${data.closerQBStats.totalKw.toFixed(1)}`}
+                  color="blue"
+                />
+                <MetricCard
+                  label="Avg System"
+                  value={`${data.closerQBStats.avgSystemSize.toFixed(1)} kW`}
+                />
+                <MetricCard
+                  label="Avg PPW"
+                  value={`$${data.closerQBStats.avgPpw.toFixed(2)}`}
+                />
+              </div>
+            </Section>
+          )}
+
+          {/* Quality Stats */}
+          {data.qualityStats && data.qualityStats.total > 0 && (
+            <Section
+              title="Appointment Quality"
+              subtitle={`${data.qualityStats.total} appointment${data.qualityStats.total !== 1 ? "s" : ""} tracked`}
+            >
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Star className="h-3.5 w-3.5" /> Avg Stars
+                  </div>
+                  <div className="mt-2 flex items-center gap-1">
+                    <span className="text-2xl font-bold font-mono tabular-nums text-foreground">
+                      {data.qualityStats.avgStars.toFixed(1)}
+                    </span>
+                    <span className="text-warning text-lg">&#9733;</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" /> Power Bills
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-2xl font-bold font-mono tabular-nums text-foreground">
+                      {data.qualityStats.withPowerBill}
+                    </span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      / {data.qualityStats.total} (
+                      {Math.round(
+                        (data.qualityStats.withPowerBill /
+                          data.qualityStats.total) *
+                          100,
+                      )}
+                      %)
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" /> Within 48hrs
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-2xl font-bold font-mono tabular-nums text-foreground">
+                      {data.qualityStats.within48hrs}
+                    </span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      / {data.qualityStats.total} (
+                      {Math.round(
+                        (data.qualityStats.within48hrs /
+                          data.qualityStats.total) *
+                          100,
+                      )}
+                      %)
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                  <div className="text-xs text-muted-foreground">
+                    Star Breakdown
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {[
+                      {
+                        label: "3-star",
+                        count: data.qualityStats.threeStarCount,
+                        color: "text-primary",
+                      },
+                      {
+                        label: "2-star",
+                        count: data.qualityStats.twoStarCount,
+                        color: "text-warning",
+                      },
+                      {
+                        label: "1-star",
+                        count: data.qualityStats.oneStarCount,
+                        color: "text-destructive",
+                      },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className="text-muted-foreground">{s.label}</span>
+                        <span
+                          className={`font-mono tabular-nums font-semibold ${s.color}`}
+                        >
+                          {s.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Section>
+          )}
+
           {data.sales && data.sales.length > 0 && (
             <Section
               title="QuickBase Sales"
@@ -327,6 +457,102 @@ export default function RepPage() {
                           <span className="rounded-md bg-secondary px-2 py-0.5 text-2xs font-medium text-muted-foreground">
                             {s.status}
                           </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
+          {/* Appointment History from Supabase */}
+          {data.appointmentHistory && data.appointmentHistory.length > 0 && (
+            <Section
+              title="Appointment History"
+              subtitle={`Last ${data.appointmentHistory.length} appointments from Supabase`}
+              noPadding
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                      <th className="py-3 px-6 text-left font-medium">Date</th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Contact
+                      </th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Address
+                      </th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Disposition
+                      </th>
+                      <th className="py-3 px-3 text-center font-medium">
+                        Power Bill
+                      </th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        {data.user.role === "setter" ? "Closer" : "Setter"}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[13px]">
+                    {data.appointmentHistory.map((a: any) => (
+                      <tr
+                        key={a.id}
+                        className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                      >
+                        <td className="py-3.5 px-6 font-mono tabular-nums text-xs text-foreground whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            {a.appointment_time
+                              ? new Date(a.appointment_time).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                  },
+                                )
+                              : "-"}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-3 text-foreground">
+                          {a.contact_name || "-"}
+                        </td>
+                        <td className="py-3.5 px-3 text-muted-foreground max-w-[200px] truncate">
+                          {a.contact_address || "-"}
+                        </td>
+                        <td className="py-3.5 px-3">
+                          {a.disposition ? (
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-2xs font-medium ${
+                                a.disposition_category === "closed"
+                                  ? "bg-primary/10 text-primary"
+                                  : a.disposition_category === "no_show"
+                                    ? "bg-destructive/10 text-destructive"
+                                    : a.disposition_category === "canceled"
+                                      ? "bg-warning/10 text-warning"
+                                      : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              {a.disposition}
+                            </span>
+                          ) : (
+                            <span className="rounded-md bg-info/10 px-2 py-0.5 text-2xs font-medium text-info">
+                              Scheduled
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          {a.has_power_bill ? (
+                            <span className="text-primary">&#10003;</span>
+                          ) : (
+                            <span className="text-muted-foreground/25">-</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3 text-muted-foreground">
+                          {data.user.role === "setter"
+                            ? a.closer_name || "-"
+                            : a.setter_name || "-"}
                         </td>
                       </tr>
                     ))}

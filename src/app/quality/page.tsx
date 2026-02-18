@@ -48,6 +48,10 @@ export default function QualityPage() {
   const { data, error, isLoading } = useSWR(
     `/api/scorecard?from=${from}&to=${to}`,
   );
+  const { data: pipelineData } = useSWR<{
+    total: number;
+    statuses: { status: string; count: number }[];
+  }>(`/api/pipeline?from=${from}&to=${to}`);
 
   const setterAccountability = (() => {
     if (!data) return [];
@@ -395,6 +399,54 @@ export default function QualityPage() {
               </div>
             )}
           </Section>
+
+          {/* Lead Pipeline */}
+          {pipelineData && pipelineData.statuses.length > 0 && (
+            <Section
+              title="Lead Pipeline"
+              subtitle={`${pipelineData.total.toLocaleString()} status changes in period`}
+            >
+              <div className="space-y-2">
+                {pipelineData.statuses.slice(0, 12).map((s) => {
+                  const pct =
+                    pipelineData.total > 0
+                      ? (s.count / pipelineData.total) * 100
+                      : 0;
+                  return (
+                    <div key={s.status} className="flex items-center gap-3">
+                      <div className="w-40 truncate text-[13px] text-foreground shrink-0">
+                        {s.status}
+                      </div>
+                      <div className="flex-1 h-6 bg-secondary/50 rounded-md overflow-hidden">
+                        <div
+                          className={`h-full rounded-md transition-all ${
+                            s.status === "Appointment Scheduled"
+                              ? "bg-primary/70"
+                              : s.status.includes("Not Interested")
+                                ? "bg-destructive/50"
+                                : s.status.includes("Not Home")
+                                  ? "bg-secondary"
+                                  : s.status.includes("Come Back")
+                                    ? "bg-info/50"
+                                    : s.status.includes("DQ")
+                                      ? "bg-warning/50"
+                                      : "bg-muted-foreground/20"
+                          }`}
+                          style={{ width: `${Math.max(pct, 1)}%` }}
+                        />
+                      </div>
+                      <div className="w-20 text-right font-mono tabular-nums text-xs text-muted-foreground shrink-0">
+                        {s.count.toLocaleString()}
+                        <span className="text-2xs text-muted-foreground/50 ml-1">
+                          ({pct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
         </div>
       )}
     </div>
