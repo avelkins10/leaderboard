@@ -18,34 +18,34 @@ export function useWeekDates(weekOffset: number) {
 export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-card">
+    <div className="inline-flex items-center rounded-lg border border-border/50 bg-card text-sm">
       <button
         onClick={() => setWeekOffset(w => w + 1)}
-        className="flex h-8 w-8 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         aria-label="Previous week"
       >
-        <ChevronLeft className="h-3.5 w-3.5" />
+        <ChevronLeft className="h-4 w-4" />
       </button>
-      <span className="flex h-8 min-w-[140px] items-center justify-center border-x border-border px-3 text-[12px] font-medium tabular-nums text-foreground font-mono">
+      <span className="flex h-9 min-w-[148px] items-center justify-center border-x border-border/50 px-3 text-xs font-medium tabular-nums text-foreground font-mono">
         {format(weekStart, 'MMM d')} &ndash; {format(weekEnd, 'MMM d')}
       </span>
       {weekOffset > 0 ? (
         <button
           onClick={() => setWeekOffset(w => w - 1)}
-          className="flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           aria-label="Next week"
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       ) : (
-        <div className="h-8 w-8" />
+        <div className="h-9 w-9" />
       )}
       {weekOffset !== 0 && (
         <button
           onClick={() => setWeekOffset(() => 0)}
-          className="mr-0.5 rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/20"
+          className="mr-1 rounded-md px-2.5 py-1 text-2xs font-semibold text-primary transition-colors hover:bg-primary/10"
         >
-          Now
+          Today
         </button>
       )}
     </div>

@@ -7,11 +7,11 @@ import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
 
-const T = {
-  axis: 'hsl(0, 0%, 35%)',
-  fg: 'hsl(0, 0%, 93%)',
-  card: 'hsl(0, 0%, 6.5%)',
-  border: 'hsl(0, 0%, 12%)',
+const C = {
+  axis: 'hsl(0, 0%, 40%)',
+  fg: 'hsl(0, 0%, 95%)',
+  card: 'hsl(0, 0%, 5%)',
+  border: 'hsl(0, 0%, 10%)',
 };
 
 function wasteColor(v: number) {
@@ -21,7 +21,7 @@ function wasteColor(v: number) {
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-foreground/5 ${className}`} />;
+  return <div className={`animate-skeleton rounded-xl bg-foreground/[0.03] ${className}`} />;
 }
 
 export default function QualityPage() {
@@ -74,22 +74,22 @@ export default function QualityPage() {
   }).sort((a, b) => b.sitRate - a.sitRate) : [];
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Quality</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">Setter accountability & appointment quality</p>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">Quality</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Setter accountability & appointment quality</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
       {loading && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[1,2,3].map(i => <Skeleton key={i} className="h-[104px]" />)}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[1,2,3].map(i => <Skeleton key={i} className="h-28" />)}
           </div>
           <Skeleton className="h-72" />
-          <Skeleton className="h-[420px]" />
+          <Skeleton className="h-96" />
         </div>
       )}
 
@@ -98,24 +98,24 @@ export default function QualityPage() {
       )}
 
       {data && !loading && (
-        <div className="animate-fade-up space-y-10">
+        <div className="animate-enter space-y-8">
           {/* Benchmark Cards */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-primary/10 bg-primary/[0.03] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">Quality Appointment</h3>
-              <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-primary">Quality Appointment</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Power bill collected AND set within 48 hours. These sit <span className="font-medium text-foreground">2-3x more often</span>.
               </p>
             </div>
             <div className="rounded-xl border border-info/10 bg-info/[0.03] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info">Why Waste Rate Matters</h3>
-              <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-info">Why Waste Rate Matters</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 No-shows and cancels waste closer time. <span className="font-medium text-destructive">{'>'} 30% waste</span> needs coaching.
               </p>
             </div>
             <div className="rounded-xl border border-warning/10 bg-warning/[0.03] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-warning">Target Benchmarks</h3>
-              <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-warning">Target Benchmarks</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 <span className="font-medium text-primary">Sit: 50%+</span> &middot; <span className="font-medium text-primary">Close: 15%+</span> &middot; <span className="font-medium text-primary">{'Waste: <15%'}</span>
               </p>
             </div>
@@ -125,23 +125,23 @@ export default function QualityPage() {
           <Section title="Office Sit Rate" subtitle="Appointment to Sit conversion by office">
             <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={officeQuality} layout="vertical" margin={{ left: 0, right: 12, top: 4, bottom: 4 }}>
-                  <XAxis type="number" domain={[0, 100]} tick={{ fill: T.axis, fontSize: 11, fontFamily: 'var(--font-geist-mono)' }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: T.fg, fontSize: 11, fontFamily: 'var(--font-geist-mono)' }} width={90} axisLine={false} tickLine={false} />
+                <BarChart data={officeQuality} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 4 }}>
+                  <XAxis type="number" domain={[0, 100]} tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: C.fg, fontSize: 11, fontFamily: 'var(--font-inter)' }} width={95} axisLine={false} tickLine={false} />
                   <RTooltip
-                    cursor={{ fill: 'hsl(0, 0%, 10%)' }}
-                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, color: T.fg, fontSize: 12, fontFamily: 'var(--font-geist-mono)' }}
+                    cursor={{ fill: 'hsl(0, 0%, 8%)' }}
+                    contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }}
                     formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Sit Rate']}
                   />
                   <Bar dataKey="sitRate" radius={[0, 4, 4, 0]} maxBarSize={18}>
                     {officeQuality.map((o, i) => (
-                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(152, 76%, 42%)' : o.sitRate >= 30 ? 'hsl(40, 96%, 53%)' : 'hsl(0, 84%, 60%)'} fillOpacity={0.75} />
+                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(160, 84%, 39%)' : o.sitRate >= 30 ? 'hsl(38, 92%, 50%)' : 'hsl(0, 84%, 60%)'} fillOpacity={0.75} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 flex items-center gap-5 text-[11px] text-muted-foreground">
+            <div className="mt-4 flex items-center gap-5 text-2xs text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> 50%+ Great</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" /> 30-49% Watch</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-destructive" /> {'<30% Concern'}</span>
@@ -151,12 +151,12 @@ export default function QualityPage() {
           {/* Setter Accountability Table */}
           <Section title="Setter Accountability" subtitle="Sorted by waste rate (worst first)" noPadding>
             {setterAccountability.length === 0 ? (
-              <p className="px-6 py-20 text-center text-[13px] text-muted-foreground">No setter data available</p>
+              <p className="px-6 py-20 text-center text-sm text-muted-foreground">No setter data available</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
+                <table className="w-full">
                   <thead>
-                    <tr className="border-b border-border text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                    <tr className="border-b border-border text-2xs uppercase tracking-widest text-muted-foreground">
                       <th className="py-3 px-6 text-left font-medium w-8">#</th>
                       <th className="py-3 px-3 text-left font-medium">Setter</th>
                       <th className="py-3 px-3 text-left font-medium">Office</th>
@@ -170,29 +170,29 @@ export default function QualityPage() {
                       <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appts" /></span></th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="text-[13px]">
                     {setterAccountability.map((s: any, i: number) => (
-                      <tr key={s.userId} className="border-b border-border/50 transition-colors hover:bg-secondary/30">
-                        <td className="py-3 px-6 text-muted-foreground/40 font-mono text-[12px]">{i + 1}</td>
+                      <tr key={s.userId} className="border-b border-border/30 transition-colors hover:bg-secondary/30">
+                        <td className="py-3 px-6 text-muted-foreground/30 font-mono text-xs">{i + 1}</td>
                         <td className="py-3 px-3 font-medium text-foreground">{s.name}</td>
-                        <td className="py-3 px-3 text-[12px] text-muted-foreground">{s.qbOffice?.split(' - ')[0] || s.team}</td>
+                        <td className="py-3 px-3 text-xs text-muted-foreground">{s.qbOffice?.split(' - ')[0] || s.team}</td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">{s.appt}</td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh}</td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">{s.canc}</td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-info">{s.sits}</td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses}</td>
                         <td className="py-3 px-3 text-right">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/15 font-mono">--</span>}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/15 font-mono">--</span>}
                         </td>
                         <td className="py-3 px-3 text-right">
                           {s.appt > 0 ? (
-                            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
+                            <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
                               {Math.round(s.wasteRate)}%
                             </span>
-                          ) : <span className="text-muted-foreground/20 font-mono">--</span>}
+                          ) : <span className="text-muted-foreground/15 font-mono">--</span>}
                         </td>
                       </tr>
                     ))}
