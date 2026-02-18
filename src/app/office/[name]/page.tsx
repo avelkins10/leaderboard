@@ -350,7 +350,7 @@ export default function OfficePage() {
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           Quality{" "}
-                          <Tooltip text="3★ = power bill + within 48hrs, 2★ = power bill only, 1★ = no power bill" />
+                          <Tooltip text="3★ = power bill + within 2 days, 2★ = power bill only, 1★ = no power bill" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">

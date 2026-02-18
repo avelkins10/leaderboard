@@ -155,7 +155,7 @@ export default function QualityPage() {
                 Quality Appointment
               </h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                Power bill collected AND set within 48 hours. These sit{" "}
+                Power bill collected AND set within 2 days. These sit{" "}
                 <span className="font-medium text-foreground">
                   2-3x more often
                 </span>
@@ -196,7 +196,7 @@ export default function QualityPage() {
               </h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 <span className="font-medium text-primary">3★</span> = Power
-                bill + set within 48hrs.{" "}
+                bill + set within 2 days.{" "}
                 <span className="font-medium text-warning">2★</span> = Power
                 bill only.{" "}
                 <span className="font-medium text-destructive">1★</span> = No

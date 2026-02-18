@@ -434,7 +434,7 @@ export default function RepPage() {
                 </div>
                 <div className="rounded-xl border border-border bg-secondary/30 p-4">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" /> Within 48hrs
+                    <Clock className="h-3.5 w-3.5" /> Within 2 days
                   </div>
                   <div className="mt-2">
                     <span className="text-2xl font-bold font-mono tabular-nums text-foreground">
@@ -458,7 +458,7 @@ export default function RepPage() {
                   <div className="mt-2 space-y-1.5">
                     {[
                       {
-                        label: "3★ PB + 48hr",
+                        label: "3★ PB + ≤2d",
                         count: data.qualityStats.threeStarCount,
                         color: "text-primary",
                       },
@@ -556,7 +556,7 @@ export default function RepPage() {
                       <div className="mt-4 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-foreground">
-                            Within 48hrs
+                            Within 2 days
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-lg font-bold font-mono tabular-nums text-primary">
@@ -569,7 +569,7 @@ export default function RepPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-foreground">
-                            Over 48hrs
+                            Over 2 days
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-lg font-bold font-mono tabular-nums text-destructive">
@@ -589,7 +589,7 @@ export default function RepPage() {
                             data.qualityInsights.sitRate_within48 -
                             data.qualityInsights.sitRate_over48
                           ).toFixed(0)}
-                          % higher sit rate when set within 48hrs
+                          % higher sit rate when set within 2 days
                         </div>
                       )}
                     </div>
