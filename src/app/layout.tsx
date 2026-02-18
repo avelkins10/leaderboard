@@ -15,8 +15,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KIN Sales Intel",
-  description: "Sales performance intelligence for KIN Home",
+  title: "KIN PULSE",
+  description: "Real-time sales performance intelligence for KIN",
 };
 
 export const viewport: Viewport = {
