@@ -250,6 +250,26 @@ export async function GET(
       }
     }
 
+    // Enrich appointments with Supabase star/power bill data
+    const apptIds = userAppts.map((a: any) => a.id).filter(Boolean);
+    if (apptIds.length > 0) {
+      const { data: starData } = await supabaseAdmin
+        .from("appointments")
+        .select("id, star_rating, has_power_bill, hours_to_appointment")
+        .in("id", apptIds);
+      if (starData) {
+        const starMap = new Map(starData.map((s: any) => [s.id, s]));
+        for (const appt of userAppts) {
+          const sb = starMap.get(appt.id);
+          if (sb) {
+            appt.star_rating = sb.star_rating ?? null;
+            appt.has_power_bill = sb.has_power_bill ?? null;
+            appt.hours_to_appointment = sb.hours_to_appointment ?? null;
+          }
+        }
+      }
+    }
+
     // Appointment history from RepCard API (sorted by date descending, last 50)
     const appointmentHistory = userAppts
       .sort(
@@ -258,6 +278,54 @@ export async function GET(
           new Date(a.appointment_time).getTime(),
       )
       .slice(0, 50);
+
+    // Setter coaching metrics
+    let setterCoaching = null;
+    if (role === "setter" && setterStats) {
+      const appt = setterStats.APPT || 0;
+      const sits = setterStats.SITS || 0;
+      const clos = setterStats.CLOS || 0;
+      const dk = setterStats.DK || 0;
+      const qp = setterStats.QP || 0;
+      const nosh = setterApptStats?.NOSH || 0;
+      const canc = setterApptStats?.CANC || 0;
+      const rsch = setterApptStats?.RSCH || 0;
+      const ntr = setterApptStats?.NTR || 0;
+      const qbCloses = repSales.length;
+      
+      // Compute schedule-out from RepCard appointments
+      const schedHours = userAppts
+        .map((a: any) => {
+          if (!a.appointment_time) return null;
+          // Use Supabase hours_to_appointment if available, else compute
+          if (a.hours_to_appointment != null) return a.hours_to_appointment;
+          return null;
+        })
+        .filter((h: any) => h != null && h > 0);
+      const avgScheduleOut = schedHours.length > 0
+        ? schedHours.reduce((sum: number, h: number) => sum + h, 0) / schedHours.length
+        : null;
+
+      setterCoaching = {
+        doors: dk,
+        qualifiedPitches: qp,
+        appointments: appt,
+        sits: sits,
+        rcCloses: clos,
+        qbCloses,
+        noShows: nosh,
+        cancels: canc,
+        reschedules: rsch,
+        notReached: ntr,
+        pending: Math.max(0, appt - sits - nosh - canc),
+        sitRate: appt > 0 ? Math.round((sits / appt) * 1000) / 10 : 0,
+        closeRate: appt > 0 ? Math.round((qbCloses / appt) * 1000) / 10 : 0,
+        wasteRate: appt > 0 ? Math.round(((nosh + canc) / appt) * 1000) / 10 : 0,
+        doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,
+        doorToQP: dk > 0 ? Math.round((qp / dk) * 1000) / 10 : 0,
+        avgScheduleOutHours: avgScheduleOut,
+      };
+    }
 
     // Closer QB stats — use shared computation from data.ts
     const closerQBStats =
@@ -289,6 +357,7 @@ export async function GET(
       dispositions,
       qualityStats,
       qualityInsights,
+      setterCoaching,
       closerQBStats,
       appointments: userAppts,
       appointmentHistory,

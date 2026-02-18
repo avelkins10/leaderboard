@@ -143,49 +143,109 @@ export default function RepPage() {
 
       {data && !isLoading && data.user && (
         <div className="animate-enter space-y-8">
-          {data.user.role === "setter" && data.stats && (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-              <MetricCard
-                label="Doors"
-                value={data.stats.DK || 0}
-                tooltip="Total unique doors knocked"
-              />
-              <MetricCard
-                label="Appointments"
-                value={data.stats.APPT || 0}
-                color="blue"
-                tooltip="Appointments set"
-              />
-              <MetricCard
-                label="Sits"
-                value={data.stats.SITS || 0}
-                color="blue"
-                tooltip="Appointments that sat"
-              />
-              <MetricCard
-                label="Closes"
-                value={data.stats.CLOS || 0}
-                color="green"
-                tooltip="RepCard self-reported closes (not verified)"
-              />
-              <MetricCard
-                label="Sit %"
-                value={`${data.stats["SIT%"] || 0}%`}
-                color={
-                  (data.stats["SIT%"] || 0) >= 50
-                    ? "green"
-                    : (data.stats["SIT%"] || 0) >= 30
-                      ? "yellow"
-                      : "red"
-                }
-                tooltip="Set to Sit percentage"
-              />
-              <MetricCard
-                label="D/$"
-                value={data.stats["D/$"] || "-"}
-                tooltip="Doors to deal ratio"
-              />
-            </div>
+          {data.user.role === "setter" && data.setterCoaching && (
+            <>
+              {/* Primary KPIs */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+                <MetricCard
+                  label="Doors"
+                  value={data.setterCoaching.doors}
+                  tooltip="Total unique doors knocked"
+                />
+                <MetricCard
+                  label="Pitches"
+                  value={data.setterCoaching.qualifiedPitches}
+                  color="blue"
+                  subtitle={data.setterCoaching.doors > 0 ? `${data.setterCoaching.doorToQP}% of doors` : undefined}
+                  tooltip="Qualified pitches — homeowner engaged"
+                />
+                <MetricCard
+                  label="Appts Set"
+                  value={data.setterCoaching.appointments}
+                  color="blue"
+                  subtitle={data.setterCoaching.doors > 0 ? `${data.setterCoaching.doorToAppt}% of doors` : undefined}
+                  tooltip="Appointments set"
+                />
+                <MetricCard
+                  label="Sits"
+                  value={data.setterCoaching.sits}
+                  color="blue"
+                  tooltip="Appointments that sat"
+                />
+                <MetricCard
+                  label="QB Closes"
+                  value={data.setterCoaching.qbCloses}
+                  color="green"
+                  tooltip="Verified closes from QuickBase"
+                />
+                <MetricCard
+                  label="Sit %"
+                  value={`${data.setterCoaching.sitRate}%`}
+                  color={data.setterCoaching.sitRate >= 50 ? "green" : data.setterCoaching.sitRate >= 30 ? "yellow" : "red"}
+                  tooltip="Appointments that sat / total set"
+                />
+                <MetricCard
+                  label="Close %"
+                  value={`${data.setterCoaching.closeRate}%`}
+                  color={data.setterCoaching.closeRate >= 15 ? "green" : data.setterCoaching.closeRate >= 8 ? "yellow" : "red"}
+                  tooltip="QB Closes / appointments set"
+                />
+                <MetricCard
+                  label="Waste %"
+                  value={`${data.setterCoaching.wasteRate}%`}
+                  color={data.setterCoaching.wasteRate <= 15 ? "green" : data.setterCoaching.wasteRate <= 30 ? "yellow" : "red"}
+                  tooltip="(No Shows + Cancels) / appointments set"
+                />
+              </div>
+
+              {/* Accountability Breakdown */}
+              <Section title="Appointment Outcomes" subtitle="Where appointments end up">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-primary/60">Sits</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-primary">{data.setterCoaching.sits}</div>
+                  </div>
+                  <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-destructive/60">No Shows</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-destructive">{data.setterCoaching.noShows}</div>
+                  </div>
+                  <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-warning/60">Cancels</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-warning">{data.setterCoaching.cancels}</div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Reschedules</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">{data.setterCoaching.reschedules}</div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Not Reached</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">{data.setterCoaching.notReached}</div>
+                  </div>
+                  <div className="rounded-xl border border-info/20 bg-info/5 p-4 text-center">
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-info/60">Pending</div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-info">{data.setterCoaching.pending}</div>
+                  </div>
+                  {data.setterCoaching.avgScheduleOutHours != null && (
+                    <div className={`rounded-xl border p-4 text-center ${
+                      data.setterCoaching.avgScheduleOutHours <= 48 
+                        ? "border-primary/20 bg-primary/5" 
+                        : data.setterCoaching.avgScheduleOutHours <= 72 
+                          ? "border-warning/20 bg-warning/5" 
+                          : "border-destructive/20 bg-destructive/5"
+                    }`}>
+                      <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Avg Sched Out</div>
+                      <div className={`mt-1 text-2xl font-bold font-mono tabular-nums ${
+                        data.setterCoaching.avgScheduleOutHours <= 48 ? "text-primary" : data.setterCoaching.avgScheduleOutHours <= 72 ? "text-warning" : "text-destructive"
+                      }`}>
+                        {data.setterCoaching.avgScheduleOutHours < 48 
+                          ? `${Math.round(data.setterCoaching.avgScheduleOutHours)}h` 
+                          : `${(data.setterCoaching.avgScheduleOutHours / 24).toFixed(1)}d`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            </>
           )}
 
           {data.user.role === "closer" && data.stats && (
