@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/verify-attachments?key=backfill2026",
-      "schedule": "30 */4 * * *"
+      "schedule": "30 */2 * * *"
     }
   ]
 }

@@ -173,8 +173,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Run vision AI on new attachments (batch of up to 30 per run) ──
-    const toVerify = pending.slice(0, 30); // Cap to stay within timeout
+    // ── Step 4: Run vision AI on new attachments (batch of up to 15 per run) ──
+    const toVerify = pending.slice(0, 15); // ~2-3s per image, stay under 60s timeout
 
     for (const att of toVerify) {
       const isPowerBill = await classifyImage(att.url);
