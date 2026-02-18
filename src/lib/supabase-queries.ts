@@ -276,9 +276,13 @@ export async function getDailyActiveReps(from: string, to: string, officeTeam?: 
 }
 
 export async function getContactTimeline(contactId: number): Promise<TimelineEvent[]> {
-  const [apptResult, knockResult] = await Promise.all([
+  const [apptResult, knockResult, statusResult, typeResult, attachResult, matchResult] = await Promise.all([
     supabaseAdmin.from('appointments').select('*').eq('contact_id', contactId),
     supabaseAdmin.from('door_knocks').select('*').eq('contact_id', contactId),
+    supabaseAdmin.from('lead_status_changes').select('*').eq('contact_id', contactId).order('changed_at'),
+    supabaseAdmin.from('contact_type_changes').select('*').eq('contact_id', contactId).order('changed_at'),
+    supabaseAdmin.from('attachments').select('*').eq('contact_id', contactId).order('created_at'),
+    supabaseAdmin.from('deal_matches').select('*').eq('contact_id', contactId),
   ]);
 
   if (apptResult.error) throw apptResult.error;
@@ -303,6 +307,7 @@ export async function getContactTimeline(contactId: number): Promise<TimelineEve
       setter: appt.setter_name || '',
       closer: appt.closer_name || '',
       has_power_bill: !!appt.has_power_bill,
+      star_rating: appt.star_rating,
     });
     if (appt.disposition) {
       events.push({
@@ -312,6 +317,46 @@ export async function getContactTimeline(contactId: number): Promise<TimelineEve
         closer: appt.closer_name || '',
       });
     }
+  }
+
+  for (const sc of statusResult.data || []) {
+    events.push({
+      type: 'status_change',
+      date: sc.changed_at || sc.created_at,
+      old_status: sc.old_status,
+      new_status: sc.new_status,
+      rep_name: sc.rep_name || '',
+    });
+  }
+
+  for (const tc of typeResult.data || []) {
+    events.push({
+      type: 'contact_type_change',
+      date: tc.changed_at || tc.created_at,
+      old_type: tc.old_type,
+      new_type: tc.new_type,
+      closer_name: tc.closer_name || '',
+    });
+  }
+
+  for (const att of attachResult.data || []) {
+    events.push({
+      type: 'attachment',
+      date: att.uploaded_at || att.created_at,
+      url: att.url,
+      attachment_type: att.attachment_type,
+    });
+  }
+
+  for (const dm of matchResult.data || []) {
+    events.push({
+      type: 'deal_match',
+      date: dm.matched_at || dm.qb_sale_date,
+      qb_record_id: dm.qb_record_id,
+      match_method: dm.match_method,
+      match_confidence: dm.match_confidence,
+      qb_customer_name: dm.qb_customer_name,
+    });
   }
 
   events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
