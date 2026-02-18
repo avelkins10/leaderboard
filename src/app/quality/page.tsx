@@ -8,10 +8,10 @@ import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
 
 const C = {
-  axis: 'hsl(0, 0%, 55%)',
-  fg: 'hsl(0, 0%, 9%)',
+  axis: 'hsl(220, 9%, 46%)',
+  fg: 'hsl(224, 71%, 4%)',
   card: 'hsl(0, 0%, 100%)',
-  border: 'hsl(0, 0%, 89%)',
+  border: 'hsl(220, 13%, 87%)',
 };
 
 function wasteColor(v: number) {
@@ -21,7 +21,7 @@ function wasteColor(v: number) {
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-muted ${className}`} />;
+  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
 }
 
 export default function QualityPage() {
@@ -77,7 +77,7 @@ export default function QualityPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">Quality</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Reports</h1>
           <p className="mt-1 text-sm text-muted-foreground">Setter accountability & appointment quality</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
@@ -99,24 +99,23 @@ export default function QualityPage() {
 
       {data && !loading && (
         <div className="animate-enter space-y-8">
-          {/* Benchmark Cards */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">Quality Appointment</h3>
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-primary">Quality Appointment</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Power bill collected AND set within 48 hours. These sit <span className="font-medium text-foreground">2-3x more often</span>.
               </p>
             </div>
             <div className="rounded-xl border border-info/15 bg-info/[0.04] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info">Why Waste Rate Matters</h3>
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-info">Why Waste Rate Matters</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                No-shows and cancels waste closer time. <span className="font-medium text-destructive">{'>'} 30% waste</span> needs coaching.
+                {'No-shows and cancels waste closer time. '}<span className="font-medium text-destructive">{'> 30% waste'}</span>{' needs coaching.'}
               </p>
             </div>
             <div className="rounded-xl border border-warning/15 bg-warning/[0.04] p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-warning">Target Benchmarks</h3>
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-warning">Target Benchmarks</h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                <span className="font-medium text-primary">Sit: 50%+</span> &middot; <span className="font-medium text-primary">Close: 15%+</span> &middot; <span className="font-medium text-primary">{'Waste: <15%'}</span>
+                <span className="font-medium text-primary">{'Sit: 50%+'}</span>{' \u00B7 '}<span className="font-medium text-primary">{'Close: 15%+'}</span>{' \u00B7 '}<span className="font-medium text-primary">{'Waste: <15%'}</span>
               </p>
             </div>
           </div>
@@ -128,21 +127,21 @@ export default function QualityPage() {
                   <XAxis type="number" domain={[0, 100]} tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" tick={{ fill: C.fg, fontSize: 11, fontFamily: 'var(--font-inter)' }} width={95} axisLine={false} tickLine={false} />
                   <RTooltip
-                    cursor={{ fill: 'hsl(0, 0%, 94%)' }}
+                    cursor={{ fill: 'hsl(220, 14%, 94%)' }}
                     contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }}
                     formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Sit Rate']}
                   />
                   <Bar dataKey="sitRate" radius={[0, 4, 4, 0]} maxBarSize={18}>
                     {officeQuality.map((o, i) => (
-                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(152, 60%, 36%)' : o.sitRate >= 30 ? 'hsl(38, 92%, 50%)' : 'hsl(0, 72%, 51%)'} fillOpacity={0.85} />
+                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(152, 56%, 40%)' : o.sitRate >= 30 ? 'hsl(38, 92%, 50%)' : 'hsl(346, 77%, 50%)'} fillOpacity={0.85} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-4 flex items-center gap-5 text-2xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> 50%+ Great</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" /> 30-49% Watch</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> {'50%+ Great'}</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warning" /> {'30-49% Watch'}</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-destructive" /> {'<30% Concern'}</span>
             </div>
           </Section>
@@ -154,7 +153,7 @@ export default function QualityPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-border bg-muted/30 text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                       <th className="py-3 px-6 text-left font-medium w-8">#</th>
                       <th className="py-3 px-3 text-left font-medium">Setter</th>
                       <th className="py-3 px-3 text-left font-medium">Office</th>
@@ -170,27 +169,27 @@ export default function QualityPage() {
                   </thead>
                   <tbody className="text-[13px]">
                     {setterAccountability.map((s: any, i: number) => (
-                      <tr key={s.userId} className="border-b border-border transition-colors hover:bg-muted/30">
-                        <td className="py-3 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
-                        <td className="py-3 px-3 font-medium text-foreground">{s.name}</td>
-                        <td className="py-3 px-3 text-xs text-muted-foreground">{s.qbOffice?.split(' - ')[0] || s.team}</td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{s.appt}</td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh}</td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">{s.canc}</td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">{s.sits}</td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses}</td>
-                        <td className="py-3 px-3 text-right">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
+                      <tr key={s.userId} className="border-b border-border/60 transition-colors hover:bg-secondary/30">
+                        <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
+                        <td className="py-3.5 px-3 font-medium text-foreground">{s.name}</td>
+                        <td className="py-3.5 px-3 text-xs text-muted-foreground">{s.qbOffice?.split(' - ')[0] || s.team}</td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{s.appt}</td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh}</td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">{s.canc}</td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{s.sits}</td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses}</td>
+                        <td className="py-3.5 px-3 text-right">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
                         </td>
-                        <td className="py-3 px-3 text-right">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
+                        <td className="py-3.5 px-3 text-right">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-3.5 px-3 text-right">
                           {s.appt > 0 ? (
                             <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
                               {Math.round(s.wasteRate)}%
                             </span>
-                          ) : <span className="text-muted-foreground/20 font-mono">--</span>}
+                          ) : <span className="text-muted-foreground/25 font-mono">--</span>}
                         </td>
                       </tr>
                     ))}

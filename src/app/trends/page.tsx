@@ -6,10 +6,10 @@ import { Section } from '@/components/Section';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const OFFICE_COLORS: Record<string, string> = {
-  'Stevens': 'hsl(152, 60%, 36%)',
+  'Stevens': 'hsl(152, 56%, 40%)',
   'Bontrager': 'hsl(217, 91%, 60%)',
   'Molina': 'hsl(38, 92%, 50%)',
-  'Douglass': 'hsl(0, 72%, 51%)',
+  'Douglass': 'hsl(346, 77%, 50%)',
   'Elevate': 'hsl(262, 83%, 58%)',
   'Allen': 'hsl(330, 76%, 58%)',
   'Champagne': 'hsl(174, 72%, 50%)',
@@ -17,22 +17,22 @@ const OFFICE_COLORS: Record<string, string> = {
 };
 
 const C = {
-  axis: 'hsl(0, 0%, 55%)',
-  fg: 'hsl(0, 0%, 9%)',
-  grid: 'hsl(0, 0%, 92%)',
+  axis: 'hsl(220, 9%, 46%)',
+  fg: 'hsl(224, 71%, 4%)',
+  grid: 'hsl(220, 13%, 91%)',
   card: 'hsl(0, 0%, 100%)',
-  border: 'hsl(0, 0%, 89%)',
+  border: 'hsl(220, 13%, 87%)',
 };
 
 function getColor(name: string): string {
   for (const [key, color] of Object.entries(OFFICE_COLORS)) {
     if (name.includes(key)) return color;
   }
-  return 'hsl(0, 0%, 55%)';
+  return 'hsl(220, 9%, 46%)';
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-muted ${className}`} />;
+  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
 }
 
 export default function TrendsPage() {
@@ -103,14 +103,14 @@ export default function TrendsPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">Trends</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
           <p className="mt-1 text-sm text-muted-foreground">Week-over-week performance tracking</p>
         </div>
         <div className="inline-flex items-center rounded-lg border border-border bg-card">
           {[4, 6, 8].map(w => (
             <button key={w} onClick={() => setWeeks(w)}
               className={`h-9 px-4 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                weeks === w ? 'bg-foreground text-card' : 'text-muted-foreground hover:text-foreground'
+                weeks === w ? 'bg-card-dark text-card-dark-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}>
               {w}w
             </button>
@@ -139,7 +139,7 @@ export default function TrendsPage() {
                   <XAxis dataKey="week" tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
                   <RTooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }} />
-                  <Line type="monotone" dataKey="deals" stroke="hsl(152, 60%, 36%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(152, 60%, 36%)' }} />
+                  <Line type="monotone" dataKey="deals" stroke="hsl(152, 56%, 40%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(152, 56%, 40%)' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -150,7 +150,7 @@ export default function TrendsPage() {
               {metrics.map(m => (
                 <button key={m} onClick={() => setMetric(m)}
                   className={`h-9 px-3.5 text-xs font-medium capitalize transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                    metric === m ? 'bg-foreground text-card' : 'text-muted-foreground hover:text-foreground'
+                    metric === m ? 'bg-card-dark text-card-dark-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   {m}
                 </button>
@@ -189,7 +189,7 @@ export default function TrendsPage() {
           <Section title="Week-over-Week" subtitle={`${metric} compared to previous week`}>
             <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
               {weeklyTrends.map(t => (
-                <div key={t.office} className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-4 transition-all hover:bg-muted/40">
+                <div key={t.office} className="flex items-center justify-between rounded-xl border border-border p-4 transition-all hover:bg-secondary/30">
                   <div>
                     <div className="text-[13px] font-medium text-foreground">{t.office.split(' - ')[0]}</div>
                     <div className="mt-1 text-xs font-mono tabular-nums text-muted-foreground">
