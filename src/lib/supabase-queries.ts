@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase";
-import { getTimezoneForTeam } from "./config";
+import { getTimezoneForTeam, repCardTeamToQBOffice } from "./config";
 
 // ── Types ──
 
@@ -246,48 +246,42 @@ export async function getActiveReps(
 ): Promise<Record<string, number>> {
   const results: Record<string, number> = {};
 
+  // Derive active reps from appointments (unique setter_id + closer_id) where office_team is known
   let query = supabaseAdmin
-    .from("door_knocks")
-    .select("office_team, rep_id, knocked_at");
+    .from("appointments")
+    .select("office_team, setter_id, closer_id, appointment_time")
+    .not("office_team", "is", null);
 
   if (from && to) {
-    // Date range mode — get all unique reps who knocked in the range
-    query = query.gte("knocked_at", from).lte("knocked_at", to + "T23:59:59Z");
+    query = query
+      .gte("appointment_time", `${from}T00:00:00Z`)
+      .lte("appointment_time", `${to}T23:59:59Z`);
   } else {
-    // Today mode — query last 24h then filter by office timezone
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    query = query.gte("knocked_at", yesterday);
+    // Today mode — look back 7 days to catch upcoming/recent appointments
+    const weekAgo = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    query = query.gte("appointment_time", weekAgo);
   }
 
   const { data, error } = await query;
   if (error) throw error;
 
-  const byOffice: Record<string, Set<number>> = {};
+  // Group unique rep IDs by QB office name (via repCardTeamToQBOffice)
+  const byQBOffice: Record<string, Set<number>> = {};
   for (const row of data || []) {
-    const office = row.office_team || "";
+    const teamName = row.office_team;
+    if (!teamName) continue;
+    const qbOffice = repCardTeamToQBOffice(teamName);
+    if (!qbOffice) continue; // skip unmapped offices
 
-    if (from && to) {
-      // Date range — count anyone who knocked in the range
-      if (!byOffice[office]) byOffice[office] = new Set();
-      byOffice[office].add(row.rep_id);
-    } else {
-      // Today — timezone-aware filtering
-      const tz = getTimezoneForTeam(office);
-      const knockDate = new Date(row.knocked_at).toLocaleDateString("en-CA", {
-        timeZone: tz,
-      });
-      const todayDate = new Date().toLocaleDateString("en-CA", {
-        timeZone: tz,
-      });
-      if (knockDate === todayDate) {
-        if (!byOffice[office]) byOffice[office] = new Set();
-        byOffice[office].add(row.rep_id);
-      }
-    }
+    if (!byQBOffice[qbOffice]) byQBOffice[qbOffice] = new Set();
+    if (row.setter_id) byQBOffice[qbOffice].add(row.setter_id);
+    if (row.closer_id) byQBOffice[qbOffice].add(row.closer_id);
   }
 
-  for (const [office, reps] of Object.entries(byOffice)) {
-    if (office) results[office] = reps.size;
+  for (const [office, reps] of Object.entries(byQBOffice)) {
+    results[office] = reps.size;
   }
   return results;
 }

@@ -24,7 +24,12 @@ import {
   TrendingUp,
   Inbox,
 } from "lucide-react";
-import { formatNumber, formatKw, formatCurrency } from "@/lib/format";
+import {
+  formatNumber,
+  formatKw,
+  formatCurrency,
+  formatDate,
+} from "@/lib/format";
 
 // ── Types ──
 interface ScorecardData {
@@ -171,6 +176,216 @@ function OutcomeRow({
         <span className="text-2xs text-muted-foreground/40">
           No outcome data
         </span>
+      )}
+    </div>
+  );
+}
+
+// ── Disposition category → badge color ──
+function dispositionBadgeClass(cat: string) {
+  switch (cat) {
+    case "closed":
+      return "bg-primary/10 text-primary";
+    case "no_show":
+      return "bg-destructive/10 text-destructive";
+    case "canceled":
+      return "bg-warning/10 text-warning";
+    case "credit_fail":
+      return "bg-secondary text-muted-foreground";
+    case "no_close":
+      return "bg-warning/10 text-warning";
+    default:
+      return "bg-secondary text-muted-foreground";
+  }
+}
+
+// ── Lazy-loaded rep drill-down (appointments + sales) ──
+function RepDrillDown({
+  repId,
+  type,
+  from,
+  to,
+  outcomes,
+}: {
+  repId: number;
+  type: "setter" | "closer";
+  from: string;
+  to: string;
+  outcomes?: Record<string, number>;
+}) {
+  const { data, isLoading } = useSWR(
+    `/api/rep/${repId}/appointments?from=${from}&to=${to}`,
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
+        <div className="text-2xs text-muted-foreground/50 animate-pulse">
+          Loading appointments...
+        </div>
+      </div>
+    );
+  }
+
+  const appts: any[] = data?.appointments || [];
+  const sales: any[] = data?.sales || [];
+
+  return (
+    <div className="space-y-3">
+      {/* Outcome badges - show immediately */}
+      {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
+
+      {appts.length > 0 ? (
+        <div className="mt-2 overflow-x-auto rounded-lg border border-border/40">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border/40 bg-secondary/20 text-2xs uppercase tracking-widest text-muted-foreground">
+                <th className="py-2 px-3 text-left font-medium">Date</th>
+                <th className="py-2 px-3 text-left font-medium">Customer</th>
+                {type === "closer" && (
+                  <th className="py-2 px-3 text-left font-medium">Setter</th>
+                )}
+                {type === "setter" && (
+                  <th className="py-2 px-3 text-left font-medium">Closer</th>
+                )}
+                <th className="py-2 px-3 text-left font-medium">Disposition</th>
+                {type === "setter" && (
+                  <th className="py-2 px-3 text-center font-medium">Stars</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {appts.slice(0, 10).map((a) => (
+                <tr
+                  key={a.id}
+                  className="border-b border-border/20 hover:bg-secondary/20 transition-colors"
+                >
+                  <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                    {a.appointment_time
+                      ? new Date(a.appointment_time).toLocaleDateString(
+                          "en-US",
+                          { month: "short", day: "numeric" },
+                        )
+                      : "-"}
+                  </td>
+                  <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
+                    {a.contact_name || "-"}
+                  </td>
+                  {type === "closer" && (
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {a.setter_name || "-"}
+                    </td>
+                  )}
+                  {type === "setter" && (
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {a.closer_name || "-"}
+                    </td>
+                  )}
+                  <td className="py-2 px-3">
+                    {a.disposition ? (
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-2xs font-medium ${dispositionBadgeClass(a.disposition_category)}`}
+                      >
+                        {a.disposition}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-info/10 px-1.5 py-0.5 text-2xs font-medium text-info">
+                        Scheduled
+                      </span>
+                    )}
+                  </td>
+                  {type === "setter" && (
+                    <td className="py-2 px-3 text-center font-mono">
+                      {a.star_rating ? (
+                        <span
+                          className={
+                            a.star_rating === 3
+                              ? "text-primary"
+                              : a.star_rating === 2
+                                ? "text-warning"
+                                : "text-destructive"
+                          }
+                        >
+                          {a.star_rating}★
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/25">-</span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {appts.length > 10 && (
+            <div className="px-3 py-2 text-2xs text-muted-foreground/60 text-center border-t border-border/20">
+              +{appts.length - 10} more — view full profile
+            </div>
+          )}
+        </div>
+      ) : (
+        data && (
+          <p className="text-2xs text-muted-foreground/40">
+            No appointments in this period
+          </p>
+        )
+      )}
+
+      {/* QB Sales inline for closers */}
+      {type === "closer" && sales.length > 0 && (
+        <div className="mt-2">
+          <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
+            QB Sales ({sales.filter((s: any) => !["cancelled", "pending cancel", "rejected"].some((p) => s.status?.toLowerCase().includes(p))).length} active)
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-border/40">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border/40 bg-secondary/20 text-2xs uppercase tracking-widest text-muted-foreground">
+                  <th className="py-2 px-3 text-left font-medium">Date</th>
+                  <th className="py-2 px-3 text-left font-medium">Customer</th>
+                  <th className="py-2 px-3 text-right font-medium">kW</th>
+                  <th className="py-2 px-3 text-right font-medium">PPW</th>
+                  <th className="py-2 px-3 text-left font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.slice(0, 5).map((s: any, i: number) => (
+                  <tr
+                    key={i}
+                    className="border-b border-border/20 hover:bg-secondary/20 transition-colors"
+                  >
+                    <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                      {formatDate(s.saleDate)}
+                    </td>
+                    <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
+                      {s.customerName || "-"}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">
+                      {formatKw(s.systemSizeKw)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">
+                      {s.netPpw > 0 ? formatCurrency(s.netPpw) : "-"}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-2xs font-medium ${
+                          ["cancelled", "pending cancel", "rejected"].some((p) =>
+                            s.status?.toLowerCase().includes(p),
+                          )
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-primary/10 text-primary"
+                        }`}
+                      >
+                        {s.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -614,18 +829,23 @@ export default function Dashboard() {
                                 )}
                               </td>
                             </tr>
-                            {isExpanded && s.outcomes && (
+                            {isExpanded && (
                               <tr className="bg-secondary/10 border-b border-border/40">
                                 <td colSpan={9} className="py-3 px-6 sm:px-12">
-                                  <div className="flex items-center justify-between">
-                                    <OutcomeRow
-                                      outcomes={s.outcomes}
-                                      type="setter"
-                                    />
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <RepDrillDown
+                                        repId={s.userId}
+                                        type="setter"
+                                        from={from}
+                                        to={to}
+                                        outcomes={s.outcomes}
+                                      />
+                                    </div>
                                     <Link
                                       href={`/rep/${s.userId}`}
                                       onClick={(e) => e.stopPropagation()}
-                                      className="text-2xs text-primary hover:underline shrink-0 ml-4 hidden sm:inline"
+                                      className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
                                     >
                                       Full profile &rarr;
                                     </Link>
@@ -834,18 +1054,23 @@ export default function Dashboard() {
                                 {c.qbCancelled || 0}
                               </td>
                             </tr>
-                            {isExpanded && c.outcomes && (
+                            {isExpanded && (
                               <tr className="bg-secondary/10 border-b border-border/40">
                                 <td colSpan={10} className="py-3 px-6 sm:px-12">
-                                  <div className="flex items-center justify-between">
-                                    <OutcomeRow
-                                      outcomes={c.outcomes}
-                                      type="closer"
-                                    />
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <RepDrillDown
+                                        repId={c.userId}
+                                        type="closer"
+                                        from={from}
+                                        to={to}
+                                        outcomes={c.outcomes}
+                                      />
+                                    </div>
                                     <Link
                                       href={`/rep/${c.userId}`}
                                       onClick={(e) => e.stopPropagation()}
-                                      className="text-2xs text-primary hover:underline shrink-0 ml-4 hidden sm:inline"
+                                      className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
                                     >
                                       Full profile &rarr;
                                     </Link>
@@ -931,7 +1156,7 @@ export default function Dashboard() {
                         sortKey="activeReps"
                         sort={officeSort}
                         onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Reps with door knocks"
+                        tooltip="Unique reps (setters + closers) with appointments in this period"
                         align="center"
                       />
                     </tr>

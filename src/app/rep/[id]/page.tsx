@@ -602,6 +602,9 @@ export default function RepPage() {
                     <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                       <th className="py-3 px-6 text-left font-medium">Date</th>
                       <th className="py-3 px-3 text-left font-medium">
+                        Customer
+                      </th>
+                      <th className="py-3 px-3 text-left font-medium">
                         Office
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
@@ -621,8 +624,11 @@ export default function RepPage() {
                         key={i}
                         className="border-b border-border/60 transition-colors hover:bg-secondary/30"
                       >
-                        <td className="py-3.5 px-6 font-mono tabular-nums text-xs text-foreground">
+                        <td className="py-3.5 px-6 font-mono tabular-nums text-xs text-foreground whitespace-nowrap">
                           {formatDate(s.saleDate)}
+                        </td>
+                        <td className="py-3.5 px-3 text-foreground max-w-[200px] truncate">
+                          {s.customerName || "-"}
                         </td>
                         <td className="py-3.5 px-3 text-muted-foreground">
                           {s.salesOffice}
