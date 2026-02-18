@@ -13,9 +13,11 @@ async function fetchPage(page: number) {
 }
 
 function mapAppointment(appt: any) {
-  const owner = appt.contact?.owner || appt.contact?.user;
+  // List API has setter as direct field, webhook has contact.owner
+  const setter = appt.setter || appt.contact?.owner || appt.contact?.user || appt.user;
+  const owner = setter;
   const startAt = appt.startAt;
-  const leadCreated = appt.contact?.createdAt;
+  const leadCreated = appt.contact?.createdAt || appt.createdAt;
 
   let hoursToAppointment: number | null = null;
   if (startAt && leadCreated) {
@@ -29,26 +31,26 @@ function mapAppointment(appt: any) {
 
   return {
     id: appt.id,
-    setter_id: owner?.id ?? null,
-    setter_name: owner?.name ?? null,
+    setter_id: setter?.id ?? null,
+    setter_name: setter?.name || setter?.fullName || null,
     closer_id: appt.closer?.id ?? null,
-    closer_name: appt.closer?.name ?? null,
+    closer_name: appt.closer?.name || appt.closer?.fullName || null,
     contact_id: contact.id ?? null,
     contact_name: contact.name || contact.fullName || null,
     contact_phone: contact.phoneNumber ?? null,
-    contact_address: address,
+    contact_address: appt.appointmentLocation || address,
     contact_city: contact.city ?? null,
     contact_state: contact.state ?? null,
     latitude: contact.latitude ? parseFloat(contact.latitude) : null,
     longitude: contact.longitude ? parseFloat(contact.longitude) : null,
-    office_team: owner?.team ?? null,
-    office_region: owner?.location ?? null,
+    office_team: setter?.team ?? null,
+    office_region: setter?.location ?? null,
     appointment_time: startAt ?? null,
     lead_created_at: leadCreated ?? null,
     hours_to_appointment: hoursToAppointment,
     has_power_bill: Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0,
-    power_bill_urls: appt.appointment_attachment ?? [],
-    is_quality: false,
+    power_bill_urls: Array.isArray(appt.appointment_attachment) ? appt.appointment_attachment : [],
+    is_quality: (Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0) && (hoursToAppointment !== null && hoursToAppointment <= 48),
     both_spouses_present: contact.both_spouses_present ?? null,
     disposition: appt.status?.title ?? null,
     disposition_category: appt.status?.category?.title ?? null,
@@ -72,8 +74,10 @@ export async function POST(req: NextRequest) {
 
   while (hasMore) {
     const data = await fetchPage(page);
-    const records = data.data || data.appointments || data || [];
+    const result = data.result || data;
+    const records = result.data || result.appointments || result || [];
     const items = Array.isArray(records) ? records : [];
+    const totalPages = result.totalPages || 999;
 
     if (items.length === 0) {
       hasMore = false;
@@ -99,8 +103,8 @@ export async function POST(req: NextRequest) {
     }
 
     page++;
-    // If we got fewer than 100, we're on the last page
-    if (items.length < 100) hasMore = false;
+    // Stop if we've passed the last page or got fewer than 100
+    if (items.length < 100 || page > totalPages) hasMore = false;
   }
 
   return NextResponse.json({
