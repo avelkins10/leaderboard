@@ -3,6 +3,7 @@ import { getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import { REPCARD_API_KEY } from "@/lib/config";
 import { getRepSales, getMonday, getToday } from "@/lib/data";
+import { supabaseAdmin } from "@/lib/supabase";
 
 // Map RepCard status to a disposition category for badge coloring
 function dispositionCategory(status?: string | null): string {
@@ -91,6 +92,25 @@ export async function GET(
           office_team: a.setter?.team || null,
         };
       });
+    }
+
+    // Enrich with star ratings from Supabase (webhooks compute these)
+    const apptIds = appointments.map((a: any) => a.id).filter(Boolean);
+    if (apptIds.length > 0) {
+      const { data: starData } = await supabaseAdmin
+        .from("appointments")
+        .select("id, star_rating, has_power_bill")
+        .in("id", apptIds);
+      if (starData) {
+        const starMap = new Map(starData.map((s: any) => [s.id, s]));
+        for (const appt of appointments) {
+          const sb = starMap.get(appt.id);
+          if (sb) {
+            appt.star_rating = sb.star_rating ?? null;
+            appt.has_power_bill = sb.has_power_bill ?? null;
+          }
+        }
+      }
     }
 
     // QB sales attributed to this rep
