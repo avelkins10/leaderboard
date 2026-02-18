@@ -1,151 +1,289 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { Section } from '@/components/Section';
-import { MetricCard } from '@/components/MetricCard';
-import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
-import { FunnelChart } from '@/components/FunnelChart';
-import { StatusBadge } from '@/components/StatusBadge';
-import { Tooltip } from '@/components/Tooltip';
-import { ArrowLeft, Target, Users } from 'lucide-react';
+import useSWR from "swr";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { Section } from "@/components/Section";
+import { MetricCard } from "@/components/MetricCard";
+import { DateFilter } from "@/components/DateFilter";
+import { useDateRange } from "@/hooks/useDateRange";
+import { FunnelChart } from "@/components/FunnelChart";
+import { StatusBadge } from "@/components/StatusBadge";
+import { Tooltip } from "@/components/Tooltip";
+import { ArrowLeft, Target, Users } from "lucide-react";
 
 function wasteColor(v: number) {
-  if (v >= 30) return 'bg-destructive/10 text-destructive';
-  if (v >= 15) return 'bg-warning/10 text-warning';
-  return 'bg-primary/10 text-primary';
+  if (v >= 30) return "bg-destructive/10 text-destructive";
+  if (v >= 15) return "bg-warning/10 text-warning";
+  return "bg-primary/10 text-primary";
 }
 
-function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />
+  );
 }
 
 export default function OfficePage() {
   const params = useParams();
   const officeName = decodeURIComponent(params.name as string);
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0);
-  const { from, to } = useWeekDates(weekOffset);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/office/${encodeURIComponent(officeName)}?from=${from}&to=${to}`)
-      .then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else setData(d); })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [officeName, from, to]);
+  const {
+    preset,
+    from,
+    to,
+    displayFrom,
+    displayTo,
+    setPreset,
+    setCustomRange,
+  } = useDateRange();
+  const { data, error, isLoading } = useSWR(
+    `/api/office/${encodeURIComponent(officeName)}?from=${from}&to=${to}`,
+  );
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <Link
+            href="/"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </Link>
           <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-foreground">
             {officeName}
             {data && (
-              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-2xs font-semibold ${
-                (data.activeReps || 0) > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${(data.activeReps || 0) > 0 ? 'bg-primary' : 'bg-muted-foreground'}`} />
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-2xs font-semibold ${
+                  (data.activeReps || 0) > 0
+                    ? "bg-primary/10 text-primary"
+                    : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${(data.activeReps || 0) > 0 ? "bg-primary" : "bg-muted-foreground"}`}
+                />
                 {data.activeReps || 0} active
               </span>
             )}
           </h1>
-          {data && <p className="mt-1 text-sm text-muted-foreground">{data.region}</p>}
+          {data && (
+            <p className="mt-1 text-sm text-muted-foreground">{data.region}</p>
+          )}
         </div>
-        <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
+        <DateFilter
+          preset={preset}
+          displayFrom={displayFrom}
+          displayTo={displayTo}
+          onPreset={setPreset}
+          onCustomRange={setCustomRange}
+        />
       </div>
 
-      {loading && (
+      {isLoading && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-[120px]" />)}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-[120px]" />
+            ))}
           </div>
           <Skeleton className="h-64" />
         </div>
       )}
 
       {error && (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-sm text-destructive">{error}</div>
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-sm text-destructive">
+          {error.message}
+        </div>
       )}
 
-      {data && !loading && (
+      {data && !isLoading && (
         <div className="animate-enter space-y-8">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <MetricCard label="QB Deals" value={data.summary.deals} color="green" icon={<Target className="h-5 w-5" />} />
-            <MetricCard label="kW Sold" value={`${data.summary.kw.toFixed(1)}`} color="blue" />
-            <MetricCard label="Avg PPW" value={`$${data.summary.avgPpw.toFixed(2)}`} />
-            <MetricCard label="Setters" value={data.setters.length} icon={<Users className="h-5 w-5" />} />
-            <MetricCard label="Closers" value={data.closers.length} icon={<Users className="h-5 w-5" />} />
+            <MetricCard
+              label="QB Deals"
+              value={data.summary.deals}
+              color="green"
+              icon={<Target className="h-5 w-5" />}
+            />
+            <MetricCard
+              label="kW Sold"
+              value={`${data.summary.kw.toFixed(1)}`}
+              color="blue"
+            />
+            <MetricCard
+              label="Avg PPW"
+              value={`$${data.summary.avgPpw.toFixed(2)}`}
+            />
+            <MetricCard
+              label="Setters"
+              value={data.setters.length}
+              icon={<Users className="h-5 w-5" />}
+            />
+            <MetricCard
+              label="Closers"
+              value={data.closers.length}
+              icon={<Users className="h-5 w-5" />}
+            />
           </div>
 
           <Section title="Sales Funnel" subtitle="Doors to QB Closes">
-            <FunnelChart steps={[
-              { label: 'Doors Knocked', value: data.funnel.doors, color: 'hsl(220, 9%, 46%)' },
-              { label: 'Appointments', value: data.funnel.appointments, color: 'hsl(217, 91%, 60%)' },
-              { label: 'Sits', value: data.funnel.sits, color: 'hsl(262, 83%, 58%)' },
-              { label: 'QB Closes', value: data.funnel.qbCloses, color: 'hsl(152, 56%, 40%)' },
-            ]} />
+            <FunnelChart
+              steps={[
+                {
+                  label: "Doors Knocked",
+                  value: data.funnel.doors,
+                  color: "hsl(220, 9%, 46%)",
+                },
+                {
+                  label: "Appointments",
+                  value: data.funnel.appointments,
+                  color: "hsl(217, 91%, 60%)",
+                },
+                {
+                  label: "Sits",
+                  value: data.funnel.sits,
+                  color: "hsl(262, 83%, 58%)",
+                },
+                {
+                  label: "QB Closes",
+                  value: data.funnel.qbCloses,
+                  color: "hsl(152, 56%, 40%)",
+                },
+              ]}
+            />
             {data.funnel.rcClaims > data.funnel.qbCloses && (
               <div className="mt-5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-[13px] text-warning">
-                {'RC Claims ('}{data.funnel.rcClaims}{') exceed QB Closes ('}{data.funnel.qbCloses}{') -- gap of '}{data.funnel.rcClaims - data.funnel.qbCloses}
+                {"RC Claims ("}
+                {data.funnel.rcClaims}
+                {") exceed QB Closes ("}
+                {data.funnel.qbCloses}
+                {") -- gap of "}
+                {data.funnel.rcClaims - data.funnel.qbCloses}
               </div>
             )}
           </Section>
 
           <Section title="Setter Accountability" noPadding>
             {data.setters.length === 0 ? (
-              <p className="px-6 py-20 text-center text-sm text-muted-foreground">No setter data for this period</p>
+              <p className="px-6 py-20 text-center text-sm text-muted-foreground">
+                No setter data for this period
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                       <th className="py-3 px-6 text-left font-medium w-8">#</th>
-                      <th className="py-3 px-3 text-left font-medium">Setter</th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Set <Tooltip text="Appointments set via RepCard" /></span></th>
-                      <th className="py-3 px-3 text-right font-medium">No Show</th>
-                      <th className="py-3 px-3 text-right font-medium">Cancel</th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Setter
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Set <Tooltip text="Appointments set via RepCard" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        No Show
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Cancel
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">Sits</th>
-                      <th className="py-3 px-3 text-right font-medium">QB Closes</th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Sit% <Tooltip text="Green: >50%, Yellow: 30-50%, Red: <30%" /></span></th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Close% <Tooltip text="Green: >15%, Yellow: 8-15%, Red: <8%" /></span></th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appts" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        QB Closes
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Sit%{" "}
+                          <Tooltip text="Green: >50%, Yellow: 30-50%, Red: <30%" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Close%{" "}
+                          <Tooltip text="Green: >15%, Yellow: 8-15%, Red: <8%" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Waste% <Tooltip text="(No Shows + Cancels) / Appts" />
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
                     {data.setters
                       .sort((a: any, b: any) => (b.APPT || 0) - (a.APPT || 0))
                       .map((s: any, i: number) => (
-                        <tr key={s.userId} className="border-b border-border/60 transition-colors hover:bg-secondary/30">
-                          <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
+                        <tr
+                          key={s.userId}
+                          className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                        >
+                          <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">
+                            {i + 1}
+                          </td>
                           <td className="py-3.5 px-3">
-                            <Link href={`/rep/${s.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{s.name}</Link>
+                            <Link
+                              href={`/rep/${s.userId}`}
+                              className="font-medium text-foreground transition-colors hover:text-primary"
+                            >
+                              {s.name}
+                            </Link>
                           </td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{s.APPT || 0}</td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh || 0}</td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">{s.canc || 0}</td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{s.SITS || 0}</td>
-                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses || 0}</td>
-                          <td className="py-3.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
+                            {s.APPT || 0}
                           </td>
-                          <td className="py-3.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">
+                            {s.nosh || 0}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">
+                            {s.canc || 0}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                            {s.SITS || 0}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                            {s.qbCloses || 0}
                           </td>
                           <td className="py-3.5 px-3 text-right">
                             {(s.APPT || 0) > 0 ? (
-                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
+                              <StatusBadge
+                                value={Math.round(s.sitRate)}
+                                good={50}
+                                ok={30}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground/25 font-mono">
+                                --
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? (
+                              <StatusBadge
+                                value={Math.round(s.closeRate)}
+                                good={15}
+                                ok={8}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground/25 font-mono">
+                                --
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? (
+                              <span
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}
+                              >
                                 {Math.round(s.wasteRate)}%
                               </span>
-                            ) : <span className="text-muted-foreground/25 font-mono">--</span>}
+                            ) : (
+                              <span className="text-muted-foreground/25 font-mono">
+                                --
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -155,53 +293,121 @@ export default function OfficePage() {
             )}
           </Section>
 
-          <Section title="Closers" subtitle="QB-verified closes vs RepCard claims" noPadding>
+          <Section
+            title="Closers"
+            subtitle="QB-verified closes vs RepCard claims"
+            noPadding
+          >
             {data.closers.length === 0 ? (
-              <p className="px-6 py-20 text-center text-sm text-muted-foreground">No closer data for this period</p>
+              <p className="px-6 py-20 text-center text-sm text-muted-foreground">
+                No closer data for this period
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                       <th className="py-3 px-6 text-left font-medium w-8">#</th>
-                      <th className="py-3 px-3 text-left font-medium">Closer</th>
-                      <th className="py-3 px-3 text-right font-medium">Leads</th>
+                      <th className="py-3 px-3 text-left font-medium">
+                        Closer
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Leads
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">Sat</th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">QB Closes <Tooltip text="Verified from QuickBase" /></span></th>
-                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">RC Claims <Tooltip text="RepCard self-reported" /></span></th>
-                      <th className="py-3 px-3 text-right font-medium">Sit/Close%</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          QB Closes <Tooltip text="Verified from QuickBase" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          RC Claims <Tooltip text="RepCard self-reported" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Sit/Close%
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">CF</th>
-                      <th className="py-3 px-3 text-right font-medium">No Close</th>
-                      <th className="py-3 px-3 text-right font-medium">Follow Up</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        No Close
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Follow Up
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
                     {data.closers
-                      .sort((a: any, b: any) => (b.qbCloses || 0) - (a.qbCloses || 0))
+                      .sort(
+                        (a: any, b: any) =>
+                          (b.qbCloses || 0) - (a.qbCloses || 0),
+                      )
                       .map((c: any, i: number) => {
-                        const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT * 100) : 0;
+                        const sitClose =
+                          (c.SAT || 0) > 0
+                            ? ((c.qbCloses || 0) / c.SAT) * 100
+                            : 0;
                         const gap = (c.CLOS || 0) - (c.qbCloses || 0);
                         return (
-                          <tr key={c.userId} className="border-b border-border/60 transition-colors hover:bg-secondary/30">
-                            <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
-                            <td className="py-3.5 px-3">
-                              <Link href={`/rep/${c.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{c.name}</Link>
+                          <tr
+                            key={c.userId}
+                            className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                          >
+                            <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">
+                              {i + 1}
                             </td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.LEAD || 0}</td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.SAT || 0}</td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{c.qbCloses || 0}</td>
+                            <td className="py-3.5 px-3">
+                              <Link
+                                href={`/rep/${c.userId}`}
+                                className="font-medium text-foreground transition-colors hover:text-primary"
+                              >
+                                {c.name}
+                              </Link>
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {c.LEAD || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {c.SAT || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
+                              {c.qbCloses || 0}
+                            </td>
                             <td className="py-3.5 px-3 text-right">
-                              <span className={`font-mono tabular-nums ${gap > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>
+                              <span
+                                className={`font-mono tabular-nums ${gap > 0 ? "font-semibold text-warning" : "text-muted-foreground"}`}
+                              >
                                 {c.CLOS || 0}
-                                {gap > 0 && <span className="ml-1 text-2xs text-destructive">+{gap}</span>}
+                                {gap > 0 && (
+                                  <span className="ml-1 text-2xs text-destructive">
+                                    +{gap}
+                                  </span>
+                                )}
                               </span>
                             </td>
                             <td className="py-3.5 px-3 text-right">
-                              {sitClose > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
+                              {sitClose > 0 ? (
+                                <StatusBadge
+                                  value={Math.round(sitClose)}
+                                  good={35}
+                                  ok={25}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
                             </td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">{c.CF || 0}</td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">{c.NOCL || 0}</td>
-                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.FUS || 0}</td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">
+                              {c.CF || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">
+                              {c.NOCL || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {c.FUS || 0}
+                            </td>
                           </tr>
                         );
                       })}

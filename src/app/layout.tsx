@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { SWRProvider } from "@/lib/swr";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,14 +27,22 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased min-h-screen`}>
-        <Nav />
-        <main className="mx-auto max-w-[1440px] px-6 pb-24 pt-8 lg:px-10">
-          {children}
-        </main>
+      <body
+        className={`${inter.variable} ${jetbrains.variable} font-sans antialiased min-h-screen`}
+      >
+        <SWRProvider>
+          <Nav />
+          <main className="mx-auto max-w-[1440px] px-6 pb-24 pt-8 lg:px-10">
+            {children}
+          </main>
+        </SWRProvider>
       </body>
     </html>
   );
