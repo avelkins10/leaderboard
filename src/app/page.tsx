@@ -94,7 +94,7 @@ export default function Dashboard() {
 
       {data && !loading && (
         <div className="animate-enter space-y-8">
-          {/* KPI Cards -- dark cards like KINNECT */}
+          {/* KPI Cards -- dark metric cards */}
           <div>
             <p className="mb-3 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">Company Stats</p>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

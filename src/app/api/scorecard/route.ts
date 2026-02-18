@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTypedLeaderboards, getUsers } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
+import { getActiveRepsToday } from '@/lib/supabase-queries';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const fromDate = searchParams.get('from') || getMonday();
   const toDate = searchParams.get('to') || getToday();
-  const today = getToday();
 
   try {
-    const [closerBoards, setterBoards, setterBoardsToday, users, sales] = await Promise.all([
+    const [closerBoards, setterBoards, users, sales, activeRepsByOffice] = await Promise.all([
       getTypedLeaderboards('closer', fromDate, toDate),
       getTypedLeaderboards('setter', fromDate, toDate),
-      getTypedLeaderboards('setter', today, today),
       getUsers(),
       getSales(fromDate, toDate),
+      getActiveRepsToday(),
     ]);
 
     // Build user lookup
@@ -27,29 +27,17 @@ export async function GET(req: NextRequest) {
     const closerLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Leaderboard');
     const setterApptLB = setterBoards.find((lb: any) => lb.leaderboard_name === 'Setter Appointment Data');
     const closerApptLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Appointment Data');
-    const setterTodayLB = setterBoardsToday.find((lb: any) => lb.leaderboard_name === 'Setter Leaderboard');
-
     const setterStats = processLeaderboard(setterLB, userMap);
     const closerStats = processLeaderboard(closerLB, userMap);
     const setterApptStats = processLeaderboard(setterApptLB, userMap);
     const closerApptStats = processLeaderboard(closerApptLB, userMap);
-    const setterTodayStats = processLeaderboard(setterTodayLB, userMap);
 
-    // Active reps per office (setters with DK > 0 today)
-    const activeRepsByOffice: Record<string, number> = {};
-    for (const s of setterTodayStats) {
-      if ((s.DK || 0) > 0) {
-        const office = s.qbOffice;
-        if (office && office !== 'Unknown') {
-          activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
-        }
-      }
-    }
-
-    // Process QB sales
+    // Process QB sales — index by both name and RepCard ID
     const salesByOffice: Record<string, { deals: number; kw: number; closers: Record<string, { deals: number; kw: number }> }> = {};
     const salesByCloser: Record<string, { deals: number; kw: number; office: string }> = {};
     const salesBySetter: Record<string, { deals: number; kw: number }> = {};
+    const salesByCloserRC: Record<string, { deals: number; kw: number; office: string }> = {};
+    const salesBySetterRC: Record<string, { deals: number; kw: number }> = {};
 
     for (const sale of sales) {
       const office = sale.salesOffice || 'Unknown';
@@ -66,16 +54,28 @@ export async function GET(req: NextRequest) {
       salesByCloser[closer].deals++;
       salesByCloser[closer].kw += sale.systemSizeKw;
 
+      if (sale.closerRepCardId) {
+        if (!salesByCloserRC[sale.closerRepCardId]) salesByCloserRC[sale.closerRepCardId] = { deals: 0, kw: 0, office };
+        salesByCloserRC[sale.closerRepCardId].deals++;
+        salesByCloserRC[sale.closerRepCardId].kw += sale.systemSizeKw;
+      }
+
       const setter = sale.setterName || 'Unknown';
       if (setter !== 'Unknown') {
         if (!salesBySetter[setter]) salesBySetter[setter] = { deals: 0, kw: 0 };
         salesBySetter[setter].deals++;
         salesBySetter[setter].kw += sale.systemSizeKw;
       }
+
+      if (sale.setterRepCardId) {
+        if (!salesBySetterRC[sale.setterRepCardId]) salesBySetterRC[sale.setterRepCardId] = { deals: 0, kw: 0 };
+        salesBySetterRC[sale.setterRepCardId].deals++;
+        salesBySetterRC[sale.setterRepCardId].kw += sale.systemSizeKw;
+      }
     }
 
     // Build office scorecards
-    const officeScores = buildOfficeScores(setterStats, closerStats, setterApptStats, closerApptStats, salesByOffice, salesByCloser, salesBySetter, activeRepsByOffice);
+    const officeScores = buildOfficeScores(setterStats, closerStats, setterApptStats, closerApptStats, salesByOffice, salesByCloser, salesBySetter, salesByCloserRC, salesBySetterRC, activeRepsByOffice);
 
     return NextResponse.json({
       period: { from: fromDate, to: toDate },
@@ -139,6 +139,8 @@ function buildOfficeScores(
   salesByOffice: Record<string, any>,
   salesByCloser: Record<string, any>,
   salesBySetter: Record<string, any>,
+  salesByCloserRC: Record<string, any>,
+  salesBySetterRC: Record<string, any>,
   activeRepsByOffice: Record<string, number>
 ) {
   const offices: Record<string, any> = {};
@@ -155,8 +157,8 @@ function buildOfficeScores(
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
     const o = getOrCreate(office);
-    // Attach QB closes to setter
-    const qbData = salesBySetter[s.name];
+    // Attach QB closes to setter — prefer RepCard ID match, fallback to name
+    const qbData = salesBySetterRC[s.userId] || salesBySetter[s.name];
     s.qbCloses = qbData?.deals || 0;
     o.setters.push(s);
   }
@@ -165,8 +167,8 @@ function buildOfficeScores(
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
     const o = getOrCreate(office);
-    // Attach QB closes to closer
-    const qbData = salesByCloser[s.name];
+    // Attach QB closes to closer — prefer RepCard ID match, fallback to name
+    const qbData = salesByCloserRC[s.userId] || salesByCloser[s.name];
     s.qbCloses = qbData?.deals || 0;
     o.closers.push(s);
   }
