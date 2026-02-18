@@ -51,6 +51,12 @@ function mapAppointment(appt: any) {
     has_power_bill: Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0,
     power_bill_urls: Array.isArray(appt.appointment_attachment) ? appt.appointment_attachment : [],
     is_quality: (Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0) && (hoursToAppointment !== null && hoursToAppointment <= 48),
+    star_rating: (() => {
+      const hasPB = Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0;
+      if (hasPB && hoursToAppointment !== null && hoursToAppointment > 0 && hoursToAppointment <= 48) return 3;
+      if (hasPB) return 2;
+      return 1;
+    })(),
     both_spouses_present: contact.both_spouses_present ?? null,
     disposition: appt.status?.title ?? null,
     disposition_category: appt.status?.category?.title ?? null,
