@@ -28,21 +28,37 @@ const DISPOSITION_CARDS: {
   key: string;
   label: string;
   color: string;
+  tip?: string;
 }[] = [
   {
-    key: "sat",
-    label: "Sat",
+    key: "closed",
+    label: "Closed",
     color: "bg-primary/10 text-primary border-primary/20",
+    tip: "Deal closed — closer converted",
+  },
+  {
+    key: "closer_fault",
+    label: "No Close",
+    color: "bg-warning/10 text-warning border-warning/20",
+    tip: "Closer sat but didn't close (No Close, 1-Legger, Follow Up)",
+  },
+  {
+    key: "setter_fault",
+    label: "Bad Lead",
+    color: "bg-destructive/10 text-destructive border-destructive/20",
+    tip: "Setter accountability — Credit Fail or Shade",
   },
   {
     key: "no_show",
     label: "No Show",
     color: "bg-destructive/10 text-destructive border-destructive/20",
+    tip: "Closer didn't meet homeowner — appointment wasted",
   },
   {
     key: "canceled",
     label: "Cancelled",
-    color: "bg-warning/10 text-warning border-warning/20",
+    color: "bg-secondary text-muted-foreground border-border",
+    tip: "Appointment cancelled before the sit",
   },
   {
     key: "rescheduled",
@@ -53,6 +69,7 @@ const DISPOSITION_CARDS: {
     key: "scheduled",
     label: "Scheduled",
     color: "bg-info/10 text-info border-info/20",
+    tip: "Pending — no disposition yet",
   },
   {
     key: "other",
@@ -156,25 +173,30 @@ export default function OfficePage() {
               value={data.summary.deals}
               color="green"
               icon={<Target className="h-5 w-5" />}
+              tooltip="Verified closed deals from QuickBase"
             />
             <MetricCard
               label="kW Sold"
               value={`${data.summary.kw.toFixed(1)}`}
               color="blue"
+              tooltip="Total kilowatts sold"
             />
             <MetricCard
               label="Avg PPW"
               value={`$${data.summary.avgPpw.toFixed(2)}`}
+              tooltip="Average net price per watt"
             />
             <MetricCard
               label="Active Setters"
               value={data.activeSetters || 0}
               icon={<Users className="h-5 w-5" />}
+              tooltip="Unique reps with door knocks in this period"
             />
             <MetricCard
               label="Active Closers"
               value={data.activeClosers || 0}
               icon={<Users className="h-5 w-5" />}
+              tooltip="Unique closers with appointments in this period"
             />
           </div>
 
@@ -217,7 +239,7 @@ export default function OfficePage() {
             {/* Disposition Breakdown Cards */}
             {data.funnel.breakdown && data.funnel.breakdown.total > 0 && (
               <div className="mt-5 flex flex-wrap gap-2">
-                {DISPOSITION_CARDS.map(({ key, label, color }) => {
+                {DISPOSITION_CARDS.map(({ key, label, color, tip }) => {
                   const count = data.funnel.breakdown[key] || 0;
                   if (count === 0) return null;
                   return (
@@ -231,6 +253,7 @@ export default function OfficePage() {
                       <span className="text-2xs font-semibold uppercase tracking-wider">
                         {label}
                       </span>
+                      {tip && <Tooltip text={tip} />}
                     </div>
                   );
                 })}
@@ -258,10 +281,16 @@ export default function OfficePage() {
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        No Show
+                        <span className="inline-flex items-center gap-1">
+                          No Show{" "}
+                          <Tooltip text="Closer didn't meet homeowner — appointment wasted" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Cancel
+                        <span className="inline-flex items-center gap-1">
+                          Cancel{" "}
+                          <Tooltip text="Appointment cancelled before the sit" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
@@ -269,9 +298,17 @@ export default function OfficePage() {
                           <Tooltip text="APPT - (Sits + No Show + Cancel)" />
                         </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sits</th>
                       <th className="py-3 px-3 text-right font-medium">
-                        QB Closes
+                        <span className="inline-flex items-center gap-1">
+                          Sits{" "}
+                          <Tooltip text="Appointments that sat (from RepCard Setter LB)" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          QB Closes{" "}
+                          <Tooltip text="Verified closes from QuickBase" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
@@ -293,7 +330,7 @@ export default function OfficePage() {
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           Quality{" "}
-                          <Tooltip text="Avg star rating from Supabase (1-3)" />
+                          <Tooltip text="3★ = power bill + within 48hrs, 2★ = power bill only, 1★ = no power bill" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
@@ -448,9 +485,15 @@ export default function OfficePage() {
                         Closer
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Leads
+                        <span className="inline-flex items-center gap-1">
+                          Leads <Tooltip text="Assigned leads from RepCard" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sat</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Sat <Tooltip text="Appointments this closer sat on" />
+                        </span>
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           QB Closes <Tooltip text="Verified from QuickBase" />
@@ -462,14 +505,28 @@ export default function OfficePage() {
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Sit/Close%
+                        <span className="inline-flex items-center gap-1">
+                          Sit/Close%{" "}
+                          <Tooltip text="QB Closes / Sits. Target: 35%+" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">CF</th>
                       <th className="py-3 px-3 text-right font-medium">
-                        No Close
+                        <span className="inline-flex items-center gap-1">
+                          CF{" "}
+                          <Tooltip text="Credit Fail — homeowner didn't qualify" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Follow Up
+                        <span className="inline-flex items-center gap-1">
+                          No Close{" "}
+                          <Tooltip text="Sat but didn't close the deal" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Follow Up{" "}
+                          <Tooltip text="Follow-up scheduled for later" />
+                        </span>
                       </th>
                     </tr>
                   </thead>
@@ -571,13 +628,27 @@ export default function OfficePage() {
                         Closer
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Appts
+                        <span className="inline-flex items-center gap-1">
+                          Appts{" "}
+                          <Tooltip text="Total appointments for this setter-closer pair" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sat</th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Closed
+                        <span className="inline-flex items-center gap-1">
+                          Sat <Tooltip text="Appointments that sat" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sit%</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Closed{" "}
+                          <Tooltip text="Appointments dispositioned as Closed (RepCard, not QB-verified)" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Sit% <Tooltip text="Sat / Total Appointments" />
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">

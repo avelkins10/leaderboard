@@ -3,6 +3,7 @@ import { getLeaderboards, getUsers, getAppointments } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
 import { supabaseAdmin } from '@/lib/supabase';
+import { dispositionCategory } from '@/lib/supabase-queries';
 import repRoles from '@/lib/rep-roles.json';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -75,11 +76,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Quality stats from Supabase — query as setter for setters, as closer for closers
     let qualityStats = null;
+    let qualityInsights = null;
     {
       const idField = role === 'closer' ? 'closer_id' : 'setter_id';
       const { data: apptRows } = await supabaseAdmin
         .from('appointments')
-        .select('has_power_bill, hours_to_appointment, is_quality')
+        .select('has_power_bill, hours_to_appointment, is_quality, disposition, star_rating')
         .eq(idField, userId)
         .gte('appointment_time', qualityFrom)
         .lte('appointment_time', qualityTo + 'T23:59:59');
@@ -94,13 +96,48 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         const avgStars = total > 0 ? Math.round(((threeStarCount * 3 + twoStarCount * 2 + oneStarCount * 1) / total) * 100) / 100 : 0;
 
         qualityStats = { total, withPowerBill, within48hrs, threeStarCount, twoStarCount, oneStarCount, avgStars, range: qualityRange };
+
+        // Quality insights — sit rate by quality factors
+        const SAT_CATS = new Set(["closed", "no_close", "one_legger", "follow_up", "credit_fail", "shade"]);
+        const isSat = (row: any) => SAT_CATS.has(dispositionCategory(row.disposition));
+        const hasDisposition = (row: any) => dispositionCategory(row.disposition) !== "unknown";
+
+        const dispositioned = apptRows.filter(hasDisposition);
+
+        const withPB = dispositioned.filter(a => a.has_power_bill === true);
+        const withoutPB = dispositioned.filter(a => a.has_power_bill !== true);
+        const within48 = dispositioned.filter(a => a.hours_to_appointment != null && a.hours_to_appointment > 0 && a.hours_to_appointment <= 48);
+        const over48 = dispositioned.filter(a => a.hours_to_appointment != null && a.hours_to_appointment > 48);
+        const star3 = dispositioned.filter(a => a.star_rating === 3);
+        const star2 = dispositioned.filter(a => a.star_rating === 2);
+        const star1 = dispositioned.filter(a => a.star_rating === 1);
+
+        const rate = (arr: any[]) => arr.length > 0 ? Math.round((arr.filter(isSat).length / arr.length) * 1000) / 10 : 0;
+        const MIN_SAMPLE = 3;
+
+        qualityInsights = {
+          sitRate_withPB: withPB.length >= MIN_SAMPLE ? rate(withPB) : null,
+          sitRate_withoutPB: withoutPB.length >= MIN_SAMPLE ? rate(withoutPB) : null,
+          n_withPB: withPB.length,
+          n_withoutPB: withoutPB.length,
+          sitRate_within48: within48.length >= MIN_SAMPLE ? rate(within48) : null,
+          sitRate_over48: over48.length >= MIN_SAMPLE ? rate(over48) : null,
+          n_within48: within48.length,
+          n_over48: over48.length,
+          sitRate_3star: star3.length >= MIN_SAMPLE ? rate(star3) : null,
+          sitRate_2star: star2.length >= MIN_SAMPLE ? rate(star2) : null,
+          sitRate_1star: star1.length >= MIN_SAMPLE ? rate(star1) : null,
+          n_3star: star3.length,
+          n_2star: star2.length,
+          n_1star: star1.length,
+        };
       }
     }
 
     // Appointment history from Supabase
     const { data: appointmentHistory } = await supabaseAdmin
       .from('appointments')
-      .select('id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name')
+      .select('id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name, star_rating')
       .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
       .order('appointment_time', { ascending: false })
       .limit(50);
@@ -152,6 +189,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       closerApptStats: closerApptStats,
       dispositions,
       qualityStats,
+      qualityInsights,
       closerQBStats,
       appointments: userAppts,
       appointmentHistory: appointmentHistory || [],
