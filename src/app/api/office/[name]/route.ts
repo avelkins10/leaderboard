@@ -187,20 +187,19 @@ export async function GET(
           qbByCloserRC[sale.closerRepCardId].ppwCount++;
         }
       }
+      // A close is a close — count all deals for setter attribution
       const setter = sale.setterName || "Unknown";
-      if (!cancelled) {
-        if (setter !== "Unknown")
-          qbClosesBySetter[setter] = (qbClosesBySetter[setter] || 0) + 1;
-        if (sale.setterRepCardId)
-          qbClosesBySetterRC[sale.setterRepCardId] =
-            (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
-      }
+      if (setter !== "Unknown")
+        qbClosesBySetter[setter] = (qbClosesBySetter[setter] || 0) + 1;
+      if (sale.setterRepCardId)
+        qbClosesBySetterRC[sale.setterRepCardId] =
+          (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
     }
 
     // Attach QB stats to closers — RepCard ID primary, name fallback
     for (const c of closers) {
       const agg = qbByCloserRC[c.userId] || qbByCloserName[c.name];
-      c.qbCloses = agg?.deals || 0;
+      c.qbCloses = (agg?.deals || 0) + (agg?.cancelled || 0);
       c.qbCancelled = agg?.cancelled || 0;
       const total = c.qbCloses + c.qbCancelled;
       c.cancelPct = total > 0 ? Math.round((c.qbCancelled / total) * 100) : 0;
@@ -258,7 +257,7 @@ export async function GET(
       (s: number, r: any) => s + (r.SAT || 0),
       0,
     );
-    const totalQBCloses = activeOfficeSales.length;
+    const totalQBCloses = officeSales.length;
     const totalRCClaims = closers.reduce(
       (s: number, r: any) => s + (r.CLOS || 0),
       0,
@@ -284,8 +283,8 @@ export async function GET(
       },
       partnerships,
       summary: {
-        deals: activeOfficeSales.length,
-        kw: activeOfficeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),
+        deals: officeSales.length,
+        kw: officeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),
         cancelled: cancelledOfficeSales.length,
         cancelPct:
           officeSales.length > 0
@@ -293,11 +292,10 @@ export async function GET(
                 (cancelledOfficeSales.length / officeSales.length) * 100,
               )
             : 0,
-        avgPpw:
-          activeOfficeSales.length > 0
-            ? activeOfficeSales.reduce((s, sale) => s + sale.netPpw, 0) /
-              activeOfficeSales.length
-            : 0,
+        avgPpw: (() => {
+          const valid = officeSales.filter(s => s.netPpw > 1 && s.netPpw < 8);
+          return valid.length > 0 ? valid.reduce((s, sale) => s + sale.netPpw, 0) / valid.length : 0;
+        })(),
       },
     });
   } catch (error: any) {
