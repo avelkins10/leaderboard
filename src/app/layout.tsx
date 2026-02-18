@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#0d1117",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -29,9 +29,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         <Nav />
-        <main className="mx-auto max-w-[1400px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-[1360px] px-4 pb-20 pt-8 sm:px-6 lg:px-8">
           {children}
         </main>
       </body>

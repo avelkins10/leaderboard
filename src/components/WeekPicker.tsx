@@ -18,32 +18,32 @@ export function useWeekDates(weekOffset: number) {
 export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card p-1">
+    <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-card p-1">
       <button
         onClick={() => setWeekOffset(w => w + 1)}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-secondary hover:text-foreground"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         aria-label="Previous week"
       >
-        <ChevronLeft className="h-3.5 w-3.5" />
+        <ChevronLeft className="h-4 w-4" />
       </button>
-      <span className="min-w-[140px] text-center text-[13px] font-medium tabular-nums text-foreground">
-        {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d')}
+      <span className="min-w-[150px] text-center text-[13px] font-medium tabular-nums text-foreground font-mono">
+        {format(weekStart, 'MMM d')} &ndash; {format(weekEnd, 'MMM d')}
       </span>
       {weekOffset > 0 ? (
         <button
           onClick={() => setWeekOffset(w => w - 1)}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-secondary hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           aria-label="Next week"
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       ) : (
-        <div className="h-7 w-7" />
+        <div className="h-8 w-8" />
       )}
       {weekOffset !== 0 && (
         <button
           onClick={() => setWeekOffset(() => 0)}
-          className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary transition-default hover:bg-primary/20"
+          className="rounded-lg bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/20"
         >
           Today
         </button>

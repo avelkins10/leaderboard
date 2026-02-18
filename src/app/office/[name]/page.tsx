@@ -17,6 +17,10 @@ function wasteColor(v: number) {
   return 'bg-primary/10 text-primary';
 }
 
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-skeleton rounded-xl bg-muted/50 ${className || ''}`} />;
+}
+
 export default function OfficePage() {
   const params = useParams();
   const officeName = decodeURIComponent(params.name as string);
@@ -37,17 +41,17 @@ export default function OfficePage() {
   }, [officeName, from, to]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/" className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-default hover:text-foreground">
+          <Link href="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
           </Link>
-          <h1 className="flex items-center gap-3 text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight text-foreground">
             {officeName}
             {data && (
-              <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${
                 (data.activeReps || 0) > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
               }`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${(data.activeReps || 0) > 0 ? 'bg-primary' : 'bg-muted-foreground'}`} />
@@ -55,28 +59,26 @@ export default function OfficePage() {
               </span>
             )}
           </h1>
-          {data && <p className="mt-0.5 text-[13px] text-muted-foreground">{data.region}</p>}
+          {data && <p className="mt-1 text-sm text-muted-foreground">{data.region}</p>}
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
       {loading && (
-        <div className="space-y-4">
+        <div className="animate-fade-in space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-[88px] animate-pulse-subtle rounded-lg border border-border bg-card" />
-            ))}
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
-          <div className="h-[240px] animate-pulse-subtle rounded-lg border border-border bg-card" />
+          <Skeleton className="h-64" />
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">{error}</div>
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>
       )}
 
       {data && !loading && (
-        <>
+        <div className="animate-fade-in space-y-8">
           {/* Summary */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <MetricCard label="QB Deals" value={data.summary.deals} color="green" icon={<Target className="h-4 w-4" />} />
@@ -89,13 +91,13 @@ export default function OfficePage() {
           {/* Funnel */}
           <Section title="Sales Funnel" subtitle="Doors to QB Closes">
             <FunnelChart steps={[
-              { label: 'Doors Knocked', value: data.funnel.doors, color: 'hsl(0, 0%, 50%)' },
-              { label: 'Appointments', value: data.funnel.appointments, color: 'hsl(213, 94%, 58%)' },
-              { label: 'Sits', value: data.funnel.sits, color: 'hsl(270, 76%, 58%)' },
-              { label: 'QB Closes', value: data.funnel.qbCloses, color: 'hsl(160, 84%, 39%)' },
+              { label: 'Doors Knocked', value: data.funnel.doors, color: 'hsl(217, 10%, 50%)' },
+              { label: 'Appointments', value: data.funnel.appointments, color: 'hsl(217, 91%, 60%)' },
+              { label: 'Sits', value: data.funnel.sits, color: 'hsl(262, 83%, 58%)' },
+              { label: 'QB Closes', value: data.funnel.qbCloses, color: 'hsl(158, 64%, 45%)' },
             ]} />
             {data.funnel.rcClaims > data.funnel.qbCloses && (
-              <div className="mt-3 rounded-md border border-warning/20 bg-warning/5 px-3 py-2 text-[13px] text-warning">
+              <div className="mt-4 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-sm text-warning">
                 RC Claims ({data.funnel.rcClaims}) exceed QB Closes ({data.funnel.qbCloses}) -- gap of {data.funnel.rcClaims - data.funnel.qbCloses}
               </div>
             )}
@@ -104,10 +106,10 @@ export default function OfficePage() {
           {/* Setter Table */}
           <Section title="Setter Accountability" noPadding>
             {data.setters.length === 0 ? (
-              <p className="px-5 py-12 text-center text-[13px] text-muted-foreground">No setter data for this period</p>
+              <p className="px-5 py-16 text-center text-sm text-muted-foreground">No setter data for this period</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5 text-left font-medium w-8">#</th>
@@ -126,28 +128,28 @@ export default function OfficePage() {
                     {data.setters
                       .sort((a: any, b: any) => (b.APPT || 0) - (a.APPT || 0))
                       .map((s: any, i: number) => (
-                        <tr key={s.userId} className="border-b border-border/50 transition-default hover:bg-secondary/30">
-                          <td className="py-2.5 px-5 text-muted-foreground/60 font-mono">{i + 1}</td>
-                          <td className="py-2.5 px-3">
-                            <Link href={`/rep/${s.userId}`} className="font-medium text-foreground transition-default hover:text-primary">{s.name}</Link>
+                        <tr key={s.userId} className="border-b border-border/40 transition-colors hover:bg-secondary/30">
+                          <td className="py-3 px-5 text-muted-foreground/50 font-mono text-[12px]">{i + 1}</td>
+                          <td className="py-3 px-3">
+                            <Link href={`/rep/${s.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{s.name}</Link>
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-info">{s.APPT || 0}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-destructive">{s.nosh || 0}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-warning">{s.canc || 0}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-info">{s.SITS || 0}</td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-primary">{s.qbCloses || 0}</td>
-                          <td className="py-2.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/30">--</span>}
+                          <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">{s.APPT || 0}</td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh || 0}</td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">{s.canc || 0}</td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-info">{s.SITS || 0}</td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses || 0}</td>
+                          <td className="py-3 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
                           </td>
-                          <td className="py-2.5 px-3 text-right">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/30">--</span>}
+                          <td className="py-3 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
                           </td>
-                          <td className="py-2.5 px-3 text-right">
+                          <td className="py-3 px-3 text-right">
                             {(s.APPT || 0) > 0 ? (
-                              <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold font-mono ${wasteColor(Math.round(s.wasteRate))}`}>
+                              <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
                                 {Math.round(s.wasteRate)}%
                               </span>
-                            ) : <span className="text-muted-foreground/30">--</span>}
+                            ) : <span className="text-muted-foreground/20 font-mono">--</span>}
                           </td>
                         </tr>
                       ))}
@@ -160,10 +162,10 @@ export default function OfficePage() {
           {/* Closer Table */}
           <Section title="Closers" subtitle="QB-verified closes vs RepCard claims" noPadding>
             {data.closers.length === 0 ? (
-              <p className="px-5 py-12 text-center text-[13px] text-muted-foreground">No closer data for this period</p>
+              <p className="px-5 py-16 text-center text-sm text-muted-foreground">No closer data for this period</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5 text-left font-medium w-8">#</th>
@@ -185,26 +187,26 @@ export default function OfficePage() {
                         const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT * 100) : 0;
                         const gap = (c.CLOS || 0) - (c.qbCloses || 0);
                         return (
-                          <tr key={c.userId} className="border-b border-border/50 transition-default hover:bg-secondary/30">
-                            <td className="py-2.5 px-5 text-muted-foreground/60 font-mono">{i + 1}</td>
-                            <td className="py-2.5 px-3">
-                              <Link href={`/rep/${c.userId}`} className="font-medium text-foreground transition-default hover:text-primary">{c.name}</Link>
+                          <tr key={c.userId} className="border-b border-border/40 transition-colors hover:bg-secondary/30">
+                            <td className="py-3 px-5 text-muted-foreground/50 font-mono text-[12px]">{i + 1}</td>
+                            <td className="py-3 px-3">
+                              <Link href={`/rep/${c.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{c.name}</Link>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{c.LEAD || 0}</td>
-                            <td className="py-2.5 px-3 text-right font-mono text-info">{c.SAT || 0}</td>
-                            <td className="py-2.5 px-3 text-right font-mono font-semibold text-primary">{c.qbCloses || 0}</td>
-                            <td className="py-2.5 px-3 text-right">
-                              <span className={`font-mono ${gap > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.LEAD || 0}</td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-info">{c.SAT || 0}</td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">{c.qbCloses || 0}</td>
+                            <td className="py-3 px-3 text-right">
+                              <span className={`font-mono tabular-nums ${gap > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>
                                 {c.CLOS || 0}
-                                {gap > 0 && <span className="ml-1 text-[11px] text-destructive">+{gap}</span>}
+                                {gap > 0 && <span className="ml-1 text-[10px] text-destructive">+{gap}</span>}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right">
-                              {sitClose > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/30">--</span>}
+                            <td className="py-3 px-3 text-right">
+                              {sitClose > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-destructive">{c.CF || 0}</td>
-                            <td className="py-2.5 px-3 text-right font-mono text-warning">{c.NOCL || 0}</td>
-                            <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">{c.FUS || 0}</td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">{c.CF || 0}</td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">{c.NOCL || 0}</td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.FUS || 0}</td>
                           </tr>
                         );
                       })}
@@ -213,7 +215,7 @@ export default function OfficePage() {
               </div>
             )}
           </Section>
-        </>
+        </div>
       )}
     </div>
   );

@@ -10,21 +10,25 @@ import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { ArrowLeft, Briefcase, MapPin } from 'lucide-react';
 
 const PIE_COLORS = [
-  'hsl(160, 84%, 39%)',
-  'hsl(213, 94%, 58%)',
-  'hsl(43, 96%, 56%)',
-  'hsl(0, 72%, 51%)',
-  'hsl(270, 76%, 58%)',
-  'hsl(0, 0%, 50%)',
+  'hsl(158, 64%, 45%)',
+  'hsl(217, 91%, 60%)',
+  'hsl(38, 92%, 50%)',
+  'hsl(0, 72%, 55%)',
+  'hsl(262, 83%, 58%)',
+  'hsl(217, 10%, 50%)',
   'hsl(330, 76%, 58%)',
   'hsl(174, 72%, 50%)',
 ];
 
-const CHART_STYLE = {
-  fg: 'hsl(0, 0%, 93%)',
-  tooltipBg: 'hsl(0, 0%, 7%)',
-  tooltipBorder: 'hsl(0, 0%, 13%)',
+const C = {
+  fg: 'hsl(210, 17%, 95%)',
+  card: 'hsl(220, 13%, 9%)',
+  border: 'hsl(220, 12%, 14%)',
 };
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-skeleton rounded-xl bg-muted/50 ${className || ''}`} />;
+}
 
 export default function RepPage() {
   const params = useParams();
@@ -46,27 +50,27 @@ export default function RepPage() {
   }, [repId, from, to]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/" className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-default hover:text-foreground">
+          <Link href="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
           </Link>
           {data?.user && (
             <>
-              <h1 className="flex items-center gap-3 text-lg font-semibold tracking-tight text-foreground">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-[15px] font-bold text-primary">
+              <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight text-foreground">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-base font-bold text-primary">
                   {data.user.name.charAt(0)}
                 </span>
                 {data.user.name}
               </h1>
-              <div className="mt-2 flex items-center gap-3 text-[13px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {data.user.role === 'setter' ? 'Setter' : 'Closer'}</span>
-                <Link href={`/office/${encodeURIComponent(data.user.office)}`} className="inline-flex items-center gap-1 transition-default hover:text-foreground">
-                  <MapPin className="h-3 w-3" /> {data.user.office}
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> {data.user.role === 'setter' ? 'Setter' : 'Closer'}</span>
+                <Link href={`/office/${encodeURIComponent(data.user.office)}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground">
+                  <MapPin className="h-3.5 w-3.5" /> {data.user.office}
                 </Link>
-                <span className="text-muted-foreground/50">{data.user.region}</span>
+                <span className="text-muted-foreground/40">{data.user.region}</span>
               </div>
             </>
           )}
@@ -75,21 +79,19 @@ export default function RepPage() {
       </div>
 
       {loading && (
-        <div className="space-y-4">
+        <div className="animate-fade-in space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-[88px] animate-pulse-subtle rounded-lg border border-border bg-card" />
-            ))}
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">{error}</div>
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>
       )}
 
       {data && !loading && data.user && (
-        <>
+        <div className="animate-fade-in space-y-8">
           {/* Setter Stats */}
           {data.user.role === 'setter' && data.stats && (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -121,37 +123,37 @@ export default function RepPage() {
           {/* Disposition Chart */}
           {data.user.role === 'closer' && Object.keys(data.dispositions).length > 0 && (
             <Section title="Dispositions" subtitle="How appointments resolved">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div className="h-60">
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={Object.entries(data.dispositions)
                           .filter(([k]) => !['LEAD'].includes(k))
                           .map(([k, v]) => ({ name: k, value: v as number }))}
-                        cx="50%" cy="50%" innerRadius={45} outerRadius={80}
-                        paddingAngle={2} dataKey="value" strokeWidth={0}
+                        cx="50%" cy="50%" innerRadius={50} outerRadius={85}
+                        paddingAngle={3} dataKey="value" strokeWidth={0}
                       >
                         {Object.entries(data.dispositions).map(([,], i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <RTooltip
-                        contentStyle={{ background: CHART_STYLE.tooltipBg, border: `1px solid ${CHART_STYLE.tooltipBorder}`, borderRadius: 8, color: CHART_STYLE.fg, fontSize: 12, fontFamily: 'var(--font-geist-mono)' }}
+                        contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.fg, fontSize: 12, fontFamily: 'var(--font-geist-mono)' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="space-y-1">
+                <div className="flex flex-col justify-center gap-1.5">
                   {Object.entries(data.dispositions)
                     .sort(([, a], [, b]) => (b as number) - (a as number))
                     .map(([key, val], i) => (
-                      <div key={key} className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="text-[13px] text-foreground/80">{key}</span>
+                      <div key={key} className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-2.5 transition-colors hover:bg-secondary/50">
+                        <div className="flex items-center gap-2.5">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="text-sm text-foreground/80">{key}</span>
                         </div>
-                        <span className="text-[13px] font-semibold font-mono text-foreground">{val as number}</span>
+                        <span className="text-sm font-semibold font-mono tabular-nums text-foreground">{val as number}</span>
                       </div>
                     ))}
                 </div>
@@ -163,7 +165,7 @@ export default function RepPage() {
           {data.sales && data.sales.length > 0 && (
             <Section title="QuickBase Sales" subtitle={`${data.sales.length} deal${data.sales.length !== 1 ? 's' : ''}`} noPadding>
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5 text-left font-medium">Date</th>
@@ -175,13 +177,13 @@ export default function RepPage() {
                   </thead>
                   <tbody>
                     {data.sales.map((s: any, i: number) => (
-                      <tr key={i} className="border-b border-border/50 transition-default hover:bg-secondary/30">
-                        <td className="py-2.5 px-5 font-mono text-[12px] text-foreground">{s.saleDate}</td>
-                        <td className="py-2.5 px-3 text-muted-foreground">{s.salesOffice}</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-foreground">{s.systemSizeKw.toFixed(1)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-foreground">${s.netPpw.toFixed(2)}</td>
-                        <td className="py-2.5 px-3">
-                          <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{s.status}</span>
+                      <tr key={i} className="border-b border-border/40 transition-colors hover:bg-secondary/30">
+                        <td className="py-3 px-5 font-mono tabular-nums text-[12px] text-foreground">{s.saleDate}</td>
+                        <td className="py-3 px-3 text-muted-foreground">{s.salesOffice}</td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-foreground">{s.systemSizeKw.toFixed(1)}</td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-foreground">${s.netPpw.toFixed(2)}</td>
+                        <td className="py-3 px-3">
+                          <span className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{s.status}</span>
                         </td>
                       </tr>
                     ))}
@@ -190,7 +192,7 @@ export default function RepPage() {
               </div>
             </Section>
           )}
-        </>
+        </div>
       )}
     </div>
   );

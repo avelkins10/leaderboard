@@ -57,6 +57,7 @@ const config: Config = {
         },
       },
       borderRadius: {
+        xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
@@ -66,13 +67,19 @@ const config: Config = {
         mono: ["var(--font-geist-mono)"],
       },
       keyframes: {
-        "pulse-subtle": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
+        "skeleton": {
+          "0%": { opacity: "0.4" },
+          "50%": { opacity: "0.15" },
+          "100%": { opacity: "0.4" },
+        },
+        "fade-in": {
+          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
-        "pulse-subtle": "pulse-subtle 2s ease-in-out infinite",
+        "skeleton": "skeleton 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.4s ease-out",
       },
     },
   },
