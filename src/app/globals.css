@@ -47,13 +47,82 @@
 }
 
 @layer utilities {
-  .text-balance { text-wrap: balance; }
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Skeleton shimmer effect */
+  .animate-skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--secondary)) 25%,
+      hsl(var(--secondary) / 0.5) 50%,
+      hsl(var(--secondary)) 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* Scrollable table with visible scroll indicator on mobile */
+  .scrollable-table {
+    -webkit-overflow-scrolling: touch;
+  }
+  .scrollable-table::-webkit-scrollbar {
+    height: 4px;
+  }
+  .scrollable-table::-webkit-scrollbar-track {
+    background: hsl(var(--secondary));
+    border-radius: 999px;
+  }
+  .scrollable-table::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 999px;
+  }
+
+  /* Sticky first column for tables */
+  .sticky-col-name {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+  .sticky-col-rank {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+
+  /* Ensure table rows inherit bg for sticky */
+  tr:hover .sticky-col-name,
+  tr:hover .sticky-col-rank {
+    background: hsl(var(--secondary) / 0.3);
+  }
+  thead .sticky-col-name,
+  thead .sticky-col-rank {
+    background: hsl(var(--secondary) / 0.3);
+    z-index: 2;
+  }
+  tfoot .sticky-col-name,
+  tfoot .sticky-col-rank {
+    background: hsl(var(--secondary) / 0.2);
+    z-index: 2;
+  }
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.3); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
 
 ::selection {
   background: hsl(var(--primary) / 0.15);

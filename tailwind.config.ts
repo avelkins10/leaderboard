@@ -77,9 +77,9 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        "skeleton-pulse": {
-          "0%, 100%": { opacity: "0.4" },
-          "50%": { opacity: "1" },
+        "skeleton-shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
         "revalidate-bar": {
           "0%": { transform: "scaleX(0)" },
@@ -89,7 +89,7 @@ const config: Config = {
       },
       animation: {
         enter: "enter 0.3s ease-out",
-        skeleton: "skeleton-pulse 2s ease-in-out infinite",
+        skeleton: "skeleton-shimmer 2s ease-in-out infinite",
         "revalidate-bar": "revalidate-bar 2s ease-out forwards",
       },
     },

@@ -17,6 +17,7 @@ const links = [
   {
     href: "/",
     label: "Dashboard",
+    shortLabel: "Home",
     icon: BarChart3,
     apiPrefix: "/api/scorecard",
     presetKey: "today" as const,
@@ -24,6 +25,7 @@ const links = [
   {
     href: "/office",
     label: "Offices",
+    shortLabel: "Offices",
     icon: Building2,
     apiPrefix: "/api/scorecard",
     presetKey: "this-week" as const,
@@ -31,6 +33,7 @@ const links = [
   {
     href: "/rep",
     label: "Reps",
+    shortLabel: "Reps",
     icon: Users,
     apiPrefix: "/api/scorecard",
     presetKey: "this-week" as const,
@@ -38,6 +41,7 @@ const links = [
   {
     href: "/quality",
     label: "Quality",
+    shortLabel: "Quality",
     icon: ClipboardCheck,
     apiPrefix: "/api/scorecard",
     presetKey: "this-week" as const,
@@ -45,6 +49,7 @@ const links = [
   {
     href: "/trends",
     label: "Trends",
+    shortLabel: "Trends",
     icon: TrendingUp,
     apiPrefix: "/api/trends",
     presetKey: "last-30" as const,
@@ -88,9 +93,7 @@ export function Nav() {
         >
           {links.map((l) => {
             const active =
-              l.href === "/"
-                ? path === "/"
-                : path.startsWith(l.href);
+              l.href === "/" ? path === "/" : path.startsWith(l.href);
             return (
               <Link
                 key={l.href}
@@ -106,7 +109,8 @@ export function Nav() {
                   className="h-4 w-4 shrink-0"
                   strokeWidth={active ? 2.25 : 1.5}
                 />
-                <span>{l.label}</span>
+                <span className="hidden sm:inline">{l.label}</span>
+                <span className="sm:hidden">{l.shortLabel}</span>
                 {active && (
                   <span className="absolute inset-x-3 sm:inset-x-4 -bottom-px h-[2px] rounded-full bg-foreground" />
                 )}

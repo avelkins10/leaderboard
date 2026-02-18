@@ -23,6 +23,23 @@ import {
   Clock,
   Calendar,
 } from "lucide-react";
+import {
+  formatDate,
+  formatCurrency,
+  formatKw,
+  formatNumber,
+} from "@/lib/format";
+
+const STATUS_COLORS: Record<string, string> = {
+  Active: "bg-primary/10 text-primary",
+  "Pending Install": "bg-info/10 text-info",
+  "Pending NTP": "bg-info/10 text-info",
+  Installed: "bg-primary/10 text-primary",
+  Cancelled: "bg-destructive/10 text-destructive",
+  "Pending Cancel": "bg-warning/10 text-warning",
+  "On Hold": "bg-warning/10 text-warning",
+  NTP: "bg-info/10 text-info",
+};
 
 const PIE_COLORS = [
   "hsl(152, 56%, 40%)",
@@ -294,24 +311,24 @@ export default function RepPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <MetricCard
                   label="Total Deals"
-                  value={data.closerQBStats.totalDeals}
+                  value={formatNumber(data.closerQBStats.totalDeals)}
                   color="green"
                   tooltip="Verified closed deals as closer"
                 />
                 <MetricCard
                   label="Total kW"
-                  value={`${data.closerQBStats.totalKw.toFixed(1)}`}
+                  value={formatKw(data.closerQBStats.totalKw)}
                   color="blue"
                   tooltip="Total kilowatts sold"
                 />
                 <MetricCard
                   label="Avg System"
-                  value={`${data.closerQBStats.avgSystemSize.toFixed(1)} kW`}
+                  value={`${formatKw(data.closerQBStats.avgSystemSize)} kW`}
                   tooltip="Average system size per deal"
                 />
                 <MetricCard
                   label="Avg PPW"
-                  value={`$${data.closerQBStats.avgPpw.toFixed(2)}`}
+                  value={formatCurrency(data.closerQBStats.avgPpw)}
                   tooltip="Average net price per watt"
                 />
               </div>
@@ -605,19 +622,21 @@ export default function RepPage() {
                         className="border-b border-border/60 transition-colors hover:bg-secondary/30"
                       >
                         <td className="py-3.5 px-6 font-mono tabular-nums text-xs text-foreground">
-                          {s.saleDate}
+                          {formatDate(s.saleDate)}
                         </td>
                         <td className="py-3.5 px-3 text-muted-foreground">
                           {s.salesOffice}
                         </td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums text-foreground">
-                          {s.systemSizeKw.toFixed(1)}
+                          {formatKw(s.systemSizeKw)}
                         </td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums text-foreground">
-                          ${s.netPpw.toFixed(2)}
+                          {formatCurrency(s.netPpw)}
                         </td>
                         <td className="py-3.5 px-3">
-                          <span className="rounded-md bg-secondary px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                          <span
+                            className={`rounded-md px-2 py-0.5 text-2xs font-medium ${STATUS_COLORS[s.status] || "bg-secondary text-muted-foreground"}`}
+                          >
                             {s.status}
                           </span>
                         </td>

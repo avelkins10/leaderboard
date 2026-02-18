@@ -22,7 +22,9 @@ import {
   Calendar,
   XCircle,
   TrendingUp,
+  Inbox,
 } from "lucide-react";
+import { formatNumber, formatKw, formatCurrency } from "@/lib/format";
 
 // ── Types ──
 interface ScorecardData {
@@ -347,7 +349,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <MetricCard
                 label="Appts Set"
-                value={data.summary.totalAppts}
+                value={formatNumber(data.summary.totalAppts)}
                 color="blue"
                 subtitle="Appointments"
                 icon={<Calendar className="h-5 w-5" />}
@@ -355,7 +357,7 @@ export default function Dashboard() {
               />
               <MetricCard
                 label="Closes"
-                value={data.summary.totalSales}
+                value={formatNumber(data.summary.totalSales)}
                 color="green"
                 subtitle="Active deals"
                 icon={<Target className="h-5 w-5" />}
@@ -363,7 +365,7 @@ export default function Dashboard() {
               />
               <MetricCard
                 label="kW Sold"
-                value={`${data.summary.totalKw.toFixed(1)}`}
+                value={formatKw(data.summary.totalKw)}
                 color="blue"
                 subtitle="Total kilowatts"
                 icon={<Zap className="h-5 w-5" />}
@@ -418,11 +420,17 @@ export default function Dashboard() {
               noPadding
             >
               {setterList.length === 0 ? (
-                <p className="px-6 py-16 text-center text-sm text-muted-foreground">
-                  No setter activity for this period
-                </p>
+                <div className="flex flex-col items-center justify-center px-6 py-16">
+                  <Inbox className="h-10 w-10 text-muted-foreground/20" />
+                  <p className="mt-3 text-sm font-medium text-muted-foreground">
+                    No activity yet this period
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">
+                    Check back later or change the date range
+                  </p>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto scrollable-table">
                   <table className="w-full min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
@@ -509,12 +517,15 @@ export default function Dashboard() {
                             : 0;
                         const wasteRate =
                           appts > 0
-                            ? Math.min(100, Math.round(
-                                (((s.outcomes?.NOSH || 0) +
-                                  (s.outcomes?.CANC || 0)) /
-                                  appts) *
-                                  100,
-                              ))
+                            ? Math.min(
+                                100,
+                                Math.round(
+                                  (((s.outcomes?.NOSH || 0) +
+                                    (s.outcomes?.CANC || 0)) /
+                                    appts) *
+                                    100,
+                                ),
+                              )
                             : 0;
                         // Attach computed fields for sorting
                         s.closeRate = closeRate;
@@ -523,7 +534,7 @@ export default function Dashboard() {
                         return (
                           <Fragment key={s.userId}>
                             <tr
-                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${isExpanded ? "bg-secondary/20" : ""}`}
+                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
                               onClick={() => toggleExpand(id)}
                             >
                               <td className="py-3 px-4 sm:px-6">
@@ -640,11 +651,17 @@ export default function Dashboard() {
               noPadding
             >
               {closerList.length === 0 ? (
-                <p className="px-6 py-16 text-center text-sm text-muted-foreground">
-                  No closer activity for this period
-                </p>
+                <div className="flex flex-col items-center justify-center px-6 py-16">
+                  <Inbox className="h-10 w-10 text-muted-foreground/20" />
+                  <p className="mt-3 text-sm font-medium text-muted-foreground">
+                    No activity yet this period
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">
+                    Check back later or change the date range
+                  </p>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto scrollable-table">
                   <table className="w-full min-w-[800px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
@@ -735,7 +752,7 @@ export default function Dashboard() {
                         return (
                           <Fragment key={c.userId}>
                             <tr
-                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${isExpanded ? "bg-secondary/20" : ""}`}
+                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
                               onClick={() => toggleExpand(id)}
                             >
                               <td className="py-3 px-4 sm:px-6">
@@ -778,12 +795,10 @@ export default function Dashboard() {
                                 {c.qbCloses || 0}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {(c.totalKw || 0).toFixed(1)}
+                                {formatKw(c.totalKw || 0)}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {c.avgPpw > 0
-                                  ? `$${c.avgPpw.toFixed(2)}`
-                                  : "--"}
+                                {c.avgPpw > 0 ? formatCurrency(c.avgPpw) : "--"}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
                                 {sits}
@@ -855,7 +870,7 @@ export default function Dashboard() {
               subtitle="Click any office for detailed breakdown"
               noPadding
             >
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto scrollable-table">
                 <table className="w-full min-w-[800px]">
                   <thead>
                     <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
@@ -963,16 +978,16 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td className="py-3 px-3 text-right font-semibold font-mono tabular-nums text-primary">
-                              {o.qbCloses}
+                              {formatNumber(o.qbCloses)}
                             </td>
                             <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {o.kw.toFixed(1)}
+                              {formatKw(o.kw)}
                             </td>
                             <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {o.totalAppts}
+                              {formatNumber(o.totalAppts)}
                             </td>
                             <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {o.totalSits}
+                              {formatNumber(o.totalSits)}
                             </td>
                             <td className="py-3 px-3 text-right">
                               {o.totalSits > 0 ? (
@@ -1119,16 +1134,20 @@ export default function Dashboard() {
                       <td className="py-3 px-4 sm:px-6" />
                       <td className="py-3 px-3 text-muted-foreground">Total</td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-primary">
-                        {data.summary.totalSales}
+                        {formatNumber(data.summary.totalSales)}
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {data.summary.totalKw.toFixed(1)}
+                        {formatKw(data.summary.totalKw)}
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {officeList.reduce((s, o) => s + o.totalAppts, 0)}
+                        {formatNumber(
+                          officeList.reduce((s, o) => s + o.totalAppts, 0),
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {officeList.reduce((s, o) => s + o.totalSits, 0)}
+                        {formatNumber(
+                          officeList.reduce((s, o) => s + o.totalSits, 0),
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right">
                         {data.summary.totalSits > 0 && (

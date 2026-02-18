@@ -70,9 +70,10 @@ export default function QualityPage() {
         const nosh = ad.NOSH || 0;
         const canc = ad.CANC || 0;
         const qbCloses = salesBySetter[s.name]?.deals || 0;
-        const sitRate = appt > 0 ? (sits / appt) * 100 : 0;
-        const closeRate = appt > 0 ? (qbCloses / appt) * 100 : 0;
-        const wasteRate = appt > 0 ? ((nosh + canc) / appt) * 100 : 0;
+        const sitRate = appt > 0 ? Math.min((sits / appt) * 100, 100) : 0;
+        const closeRate = appt > 0 ? Math.min((qbCloses / appt) * 100, 100) : 0;
+        const wasteRate =
+          appt > 0 ? Math.min(((nosh + canc) / appt) * 100, 100) : 0;
         return {
           ...s,
           appt,
@@ -95,7 +96,8 @@ export default function QualityPage() {
             d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
           const totalSits =
             d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
-          const sitRate = totalAppts > 0 ? (totalSits / totalAppts) * 100 : 0;
+          const sitRate =
+            totalAppts > 0 ? Math.min((totalSits / totalAppts) * 100, 100) : 0;
           return {
             name: name.split(" - ")[0],
             fullName: name,
@@ -293,9 +295,28 @@ export default function QualityPage() {
             noPadding
           >
             {setterAccountability.length === 0 ? (
-              <p className="px-6 py-20 text-center text-sm text-muted-foreground">
-                No setter data available
-              </p>
+              <div className="flex flex-col items-center justify-center px-6 py-20">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-10 w-10 text-muted-foreground/20"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+                <p className="mt-3 text-sm font-medium text-muted-foreground">
+                  No activity yet this period
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground/60">
+                  Check back later or change the date range
+                </p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
