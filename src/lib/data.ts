@@ -5,7 +5,6 @@
 
 import { getTypedLeaderboards, getUsers, type RepUser } from "./repcard";
 import { getSales, type QBSale } from "./quickbase";
-import { getActiveReps } from "./supabase-queries";
 import { OFFICE_MAPPING, teamIdToQBOffice, normalizeQBOffice } from "./config";
 
 // ── Cancel detection — IDENTICAL everywhere ──
@@ -396,13 +395,12 @@ export async function fetchScorecard(
   fromDate: string,
   toDate: string,
 ): Promise<ScorecardResult> {
-  const [closerBoards, setterBoards, users, sales, activeRepsByOffice] =
+  const [closerBoards, setterBoards, users, sales] =
     await Promise.all([
       getTypedLeaderboards("closer", fromDate, toDate),
       getTypedLeaderboards("setter", fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      getActiveReps(fromDate, toDate),
     ]);
 
   // Build user lookup
@@ -485,7 +483,26 @@ export async function fetchScorecard(
     };
   }
 
-  // Attach active reps
+  // Derive active reps from leaderboard data:
+  // Setter is active if they knocked doors (door_knocked_days >= 1)
+  // Closer is active if they sat appointments (SAT >= 1)
+  const activeRepsByOffice: Record<string, number> = {};
+  for (const s of allSetters) {
+    if ((s as any).DKD >= 1 || (s as any).door_knocked_days >= 1 || (s as any).DK > 0) {
+      const office = s.qbOffice;
+      if (office && office !== "Unknown") {
+        activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
+      }
+    }
+  }
+  for (const c of allClosers) {
+    if ((c as any).SAT >= 1 || (c as any).LEAD >= 1) {
+      const office = c.qbOffice;
+      if (office && office !== "Unknown") {
+        activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
+      }
+    }
+  }
   for (const [office, count] of Object.entries(activeRepsByOffice)) {
     getOrCreate(office).activeReps = count;
   }
