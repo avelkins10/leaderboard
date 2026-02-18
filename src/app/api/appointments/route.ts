@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getOfficeTimezone } from '@/lib/config';
+import { getOfficeTimezone, OFFICE_MAPPING } from '@/lib/config';
 import { type Appointment } from '@/lib/supabase-queries';
 import { getSetterAppointments, getCloserAppointments } from '@/lib/supabase-queries';
 
@@ -21,10 +21,19 @@ export async function GET(req: NextRequest) {
     } else if (closerId) {
       appointments = await getCloserAppointments(Number(closerId), from, to);
     } else if (office) {
+      // office param is QB office name — find matching RepCard team names
+      const repCardTeams: string[] = [];
+      for (const [, mapping] of Object.entries(OFFICE_MAPPING)) {
+        if (mapping.qbOffice === office) {
+          repCardTeams.push(mapping.name);
+        }
+      }
+      // Query by RepCard team names, or fall back to exact match
+      const teamsToQuery = repCardTeams.length > 0 ? repCardTeams : [office];
       const { data, error } = await supabaseAdmin
         .from('appointments')
         .select('*')
-        .eq('office_team', office)
+        .in('office_team', teamsToQuery)
         .gte('appointment_time', `${from}T00:00:00Z`)
         .lte('appointment_time', `${to}T23:59:59Z`)
         .order('appointment_time', { ascending: false });
