@@ -196,25 +196,45 @@ export async function getCloserAppointments(closerId: number, from: string, to: 
 }
 
 export async function getActiveRepsToday(): Promise<Record<string, number>> {
+  return getActiveReps();
+}
+
+export async function getActiveReps(from?: string, to?: string): Promise<Record<string, number>> {
   const results: Record<string, number> = {};
-  // Query all door_knocks from last 24h, then filter by office timezone
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabaseAdmin
+  
+  let query = supabaseAdmin
     .from('door_knocks')
-    .select('office_team, rep_id, knocked_at')
-    .gte('knocked_at', yesterday);
+    .select('office_team, rep_id, knocked_at');
+
+  if (from && to) {
+    // Date range mode — get all unique reps who knocked in the range
+    query = query.gte('knocked_at', from).lte('knocked_at', to + 'T23:59:59Z');
+  } else {
+    // Today mode — query last 24h then filter by office timezone
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte('knocked_at', yesterday);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
-  // For each office, figure out "today" in its timezone and only count matching knocks
   const byOffice: Record<string, Set<number>> = {};
   for (const row of data || []) {
     const office = row.office_team || '';
-    const tz = getOfficeTimezone(office);
-    const knockDate = new Date(row.knocked_at).toLocaleDateString('en-CA', { timeZone: tz });
-    const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
-    if (knockDate === todayDate) {
+    
+    if (from && to) {
+      // Date range — count anyone who knocked in the range
       if (!byOffice[office]) byOffice[office] = new Set();
       byOffice[office].add(row.rep_id);
+    } else {
+      // Today — timezone-aware filtering
+      const tz = getOfficeTimezone(office);
+      const knockDate = new Date(row.knocked_at).toLocaleDateString('en-CA', { timeZone: tz });
+      const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+      if (knockDate === todayDate) {
+        if (!byOffice[office]) byOffice[office] = new Set();
+        byOffice[office].add(row.rep_id);
+      }
     }
   }
 
@@ -222,6 +242,37 @@ export async function getActiveRepsToday(): Promise<Record<string, number>> {
     if (office) results[office] = reps.size;
   }
   return results;
+}
+
+// Get per-day active rep counts for an office over a date range
+export async function getDailyActiveReps(from: string, to: string, officeTeam?: string): Promise<Record<string, number>> {
+  let query = supabaseAdmin
+    .from('door_knocks')
+    .select('office_team, rep_id, knocked_at')
+    .gte('knocked_at', from)
+    .lte('knocked_at', to + 'T23:59:59Z');
+
+  if (officeTeam) {
+    query = query.eq('office_team', officeTeam);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // Group by date (in office timezone) → count unique reps
+  const byDate: Record<string, Set<number>> = {};
+  for (const row of data || []) {
+    const tz = getOfficeTimezone(row.office_team || '');
+    const knockDate = new Date(row.knocked_at).toLocaleDateString('en-CA', { timeZone: tz });
+    if (!byDate[knockDate]) byDate[knockDate] = new Set();
+    byDate[knockDate].add(row.rep_id);
+  }
+
+  const result: Record<string, number> = {};
+  for (const [date, reps] of Object.entries(byDate)) {
+    result[date] = reps.size;
+  }
+  return result;
 }
 
 export async function getContactTimeline(contactId: number): Promise<TimelineEvent[]> {

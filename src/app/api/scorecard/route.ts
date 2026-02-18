@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTypedLeaderboards, getUsers } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
-import { getActiveRepsToday } from '@/lib/supabase-queries';
+import { getActiveReps } from '@/lib/supabase-queries';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       getTypedLeaderboards('setter', fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      getActiveRepsToday(),
+      getActiveReps(fromDate, toDate),
     ]);
 
     // Build user lookup
