@@ -40,6 +40,7 @@ interface ScorecardData {
     avgSystemSize: number;
     avgPpw: number;
     cancelled: number;
+    rejected: number;
     cancelPct: number;
     totalAppts: number;
     totalSits: number;
@@ -497,6 +498,7 @@ export default function Dashboard() {
         const qbCloses = d.sales?.deals || 0;
         const kw = d.sales?.kw || 0;
         const cancelPct = d.sales?.cancelPct || 0;
+        const rejected = d.sales?.rejected || 0;
         const activeReps = d.activeReps || 0;
         const closeRate = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
         return {
@@ -507,6 +509,7 @@ export default function Dashboard() {
           totalSits,
           totalDoors,
           cancelPct,
+          rejected,
           activeReps,
           closeRate,
           setters: d.setters || [],
@@ -574,7 +577,7 @@ export default function Dashboard() {
                 label="Closes"
                 value={formatNumber(data.summary.totalSales)}
                 color="green"
-                subtitle={`${data.summary.cancelled} cancelled`}
+                subtitle={`${data.summary.cancelled} cxl · ${data.summary.rejected} rej`}
                 icon={<Target className="h-5 w-5" />}
                 tooltip="All QB deals this period"
               />

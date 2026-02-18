@@ -14,6 +14,10 @@ export function isCancel(status: string): boolean {
   return CANCEL_PATTERNS.some((p) => lower.includes(p));
 }
 
+export function isRejected(status: string): boolean {
+  return status.toLowerCase() === "rejected";
+}
+
 // ── PPW outlier detection — filter bad data from averages ──
 const PPW_MIN = 0.5;
 const PPW_MAX = 8.0;
@@ -90,6 +94,7 @@ export interface SalesAgg {
   kw: number;
   cancelled: number;
   cancelledKw: number;
+  rejected: number;
   ppwSum: number;
   ppwCount: number;
   office?: string;
@@ -103,6 +108,7 @@ export interface OfficeSummary {
     kw: number;
     cancelled: number;
     cancelledKw: number;
+    rejected: number;
     cancelPct: number;
   };
   activeReps: number;
@@ -117,6 +123,7 @@ export interface ScorecardResult {
     avgPpw: number;
     cancelled: number;
     cancelledKw: number;
+    rejected: number;
     cancelPct: number;
     totalAppts: number;
     totalSits: number;
@@ -165,6 +172,7 @@ function aggregateSales(sales: QBSale[]) {
     kw: 0,
     cancelled: 0,
     cancelledKw: 0,
+    rejected: 0,
     ppwSum: 0,
     ppwCount: 0,
   });
@@ -177,6 +185,7 @@ function aggregateSales(sales: QBSale[]) {
 
   for (const sale of sales) {
     const cancelled = isCancel(sale.status);
+    const rejected = isRejected(sale.status);
     const office = normalizeQBOffice(sale.salesOffice || "Unknown");
 
     // Office aggregation
@@ -192,6 +201,7 @@ function aggregateSales(sales: QBSale[]) {
         byOffice[office].ppwCount++;
       }
     }
+    if (rejected) byOffice[office].rejected++;
 
     // Closer: RepCard ID primary
     if (sale.closerRepCardId) {
@@ -209,6 +219,7 @@ function aggregateSales(sales: QBSale[]) {
           agg.ppwCount++;
         }
       }
+      if (rejected) agg.rejected++;
     }
 
     // Closer: name fallback
@@ -226,6 +237,7 @@ function aggregateSales(sales: QBSale[]) {
         byCloserName[closerName].ppwCount++;
       }
     }
+    if (rejected) byCloserName[closerName].rejected++;
 
     // Setter: RepCard ID primary
     if (sale.setterRepCardId) {
@@ -239,6 +251,7 @@ function aggregateSales(sales: QBSale[]) {
         agg.deals++;
         agg.kw += sale.systemSizeKw;
       }
+      if (rejected) agg.rejected++;
     }
 
     // Setter: name fallback
@@ -252,6 +265,7 @@ function aggregateSales(sales: QBSale[]) {
         bySetterName[setterName].deals++;
         bySetterName[setterName].kw += sale.systemSizeKw;
       }
+      if (rejected) bySetterName[setterName].rejected++;
     }
   }
 
@@ -443,7 +457,7 @@ export async function fetchScorecard(
       offices[office] = {
         setters: [],
         closers: [],
-        sales: { deals: 0, kw: 0, cancelled: 0, cancelledKw: 0, cancelPct: 0 },
+        sales: { deals: 0, kw: 0, cancelled: 0, cancelledKw: 0, rejected: 0, cancelPct: 0 },
         activeReps: 0,
       };
     return offices[office];
@@ -478,6 +492,7 @@ export async function fetchScorecard(
       kw: agg.kw + agg.cancelledKw,
       cancelled: agg.cancelled,
       cancelledKw: agg.cancelledKw,
+      rejected: agg.rejected,
       cancelPct:
         totalSold > 0 ? Math.round((agg.cancelled / totalSold) * 100) : 0,
     };
@@ -514,6 +529,7 @@ export async function fetchScorecard(
   // Summary
   const activeSales = sales.filter((s) => !isCancel(s.status));
   const cancelledSales = sales.filter((s) => isCancel(s.status));
+  const rejectedSales = sales.filter((s) => isRejected(s.status));
 
   const validPpwSales = activeSales.filter((s) => isValidPpw(s.netPpw));
 
@@ -534,6 +550,7 @@ export async function fetchScorecard(
           : 0,
       cancelled: cancelledSales.length,
       cancelledKw: cancelledSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
+      rejected: rejectedSales.length,
       cancelPct:
         sales.length > 0
           ? Math.round((cancelledSales.length / sales.length) * 100)
