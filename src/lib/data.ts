@@ -7,6 +7,15 @@ import { getTypedLeaderboards, getUsers, type RepUser } from "./repcard";
 import { getSales, type QBSale } from "./quickbase";
 import { OFFICE_MAPPING, teamIdToQBOffice, normalizeQBOffice } from "./config";
 
+// ── Name cleanup — strip "R - " recruit prefix ──
+export function cleanRepName(name: string): string {
+  return name.replace(/^R\s*-\s*/i, "").trim();
+}
+
+export function isRecruit(firstName: string): boolean {
+  return /^R\s*-\s*/i.test(firstName);
+}
+
 // ── Cancel detection — IDENTICAL everywhere ──
 const CANCEL_PATTERNS = ["cancelled", "pending cancel"];
 export function isCancel(status: string): boolean {
@@ -150,8 +159,9 @@ function processLeaderboard(lb: any, userMap: Record<number, any>): any[] {
       return {
         userId: s.item_id,
         name: user
-          ? `${user.firstName} ${user.lastName}`
+          ? cleanRepName(`${user.firstName} ${user.lastName}`)
           : `User #${s.item_id}`,
+        isRecruit: user ? isRecruit(user.firstName) : false,
         region: user?.office || OFFICE_MAPPING[s.office_id]?.name || "Unknown",
         team: user?.team || OFFICE_MAPPING[s.office_team_id]?.name || "Unknown",
         qbOffice: qbOffice || "Unknown",

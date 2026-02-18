@@ -820,7 +820,7 @@ export default function Dashboard() {
                                     onClick={(e) => e.stopPropagation()}
                                     className="font-medium text-foreground transition-colors hover:text-primary"
                                   >
-                                    {s.name}
+                                    {s.name}{s.isRecruit && <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">R</span>}
                                   </Link>
                                 </div>
                                 <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
@@ -1361,7 +1361,7 @@ export default function Dashboard() {
                                               }
                                               className="text-foreground hover:text-primary"
                                             >
-                                              {s.name}
+                                              {s.name}{s.isRecruit && <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">R</span>}
                                             </Link>
                                             <span className="font-mono tabular-nums text-info font-semibold">
                                               {s.APPT || 0} appts
