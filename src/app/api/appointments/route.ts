@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       // office param is QB office name — find matching RepCard team names
       const repCardTeams: string[] = [];
       for (const [, mapping] of Object.entries(OFFICE_MAPPING)) {
-        if (mapping.qbOffice === office) {
+        if (mapping.qbName === office) {
           repCardTeams.push(mapping.name);
         }
       }
