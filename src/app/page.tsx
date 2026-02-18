@@ -184,7 +184,7 @@ export default function Dashboard() {
     displayTo,
     setPreset,
     setCustomRange,
-  } = useDateRange("today");
+  } = useDateRange("this-week");
   const { data, error, isLoading } = useSWR<ScorecardData>(
     `/api/scorecard?from=${from}&to=${to}`,
     { refreshInterval: 60_000 },
