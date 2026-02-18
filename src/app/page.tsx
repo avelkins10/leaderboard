@@ -11,14 +11,13 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Target, Zap, ArrowRight } from 'lucide-react';
 
 const C = {
-  primary: 'hsl(152, 60%, 36%)',
-  barDefault: 'hsl(0, 0%, 82%)',
-  barTop: 'hsl(0, 0%, 18%)',
-  axis: 'hsl(0, 0%, 55%)',
-  fg: 'hsl(0, 0%, 9%)',
+  primary: 'hsl(152, 56%, 40%)',
+  barDefault: 'hsl(220, 13%, 87%)',
+  axis: 'hsl(220, 9%, 46%)',
+  fg: 'hsl(224, 71%, 4%)',
   card: 'hsl(0, 0%, 100%)',
-  border: 'hsl(0, 0%, 89%)',
-  gridLine: 'hsl(0, 0%, 94%)',
+  border: 'hsl(220, 13%, 87%)',
+  gridLine: 'hsl(220, 14%, 96%)',
 };
 
 interface ScorecardData {
@@ -35,14 +34,14 @@ interface ScorecardData {
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-muted ${className}`} />;
+  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
 }
 
 function LoadingSkeleton() {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-[120px]" />)}
+        {[1,2,3,4].map(i => <Skeleton key={i} className="h-28" />)}
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <Skeleton className="h-80 lg:col-span-2" />
@@ -81,7 +80,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Company-wide performance overview</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
@@ -95,16 +94,19 @@ export default function Dashboard() {
 
       {data && !loading && (
         <div className="animate-enter space-y-8">
-          {/* KPI Cards - dark inverted like KINNECT */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard label="Deals" value={data.summary.totalSales} color="green"
-              icon={<Target className="h-5 w-5" />} tooltip="Total closed deals from QuickBase" />
-            <MetricCard label="Kilowatts" value={`${data.summary.totalKw.toFixed(1)}`} color="blue"
-              icon={<Zap className="h-5 w-5" />} tooltip="Total kW sold across all offices" />
-            <MetricCard label="Avg System" value={`${data.summary.avgSystemSize.toFixed(1)} kW`}
-              tooltip="Average system size per deal" />
-            <MetricCard label="Net PPW" value={`$${data.summary.avgPpw.toFixed(2)}`}
-              tooltip="Average net price per watt" />
+          {/* KPI Cards -- dark cards like KINNECT */}
+          <div>
+            <p className="mb-3 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">Company Stats</p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <MetricCard label="Deals" value={data.summary.totalSales} color="green" subtitle="QB verified"
+                icon={<Target className="h-5 w-5" />} tooltip="Total closed deals from QuickBase" />
+              <MetricCard label="Kilowatts" value={`${data.summary.totalKw.toFixed(1)}`} color="blue" subtitle="Total kW sold"
+                icon={<Zap className="h-5 w-5" />} tooltip="Total kW sold across all offices" />
+              <MetricCard label="Avg System" value={`${data.summary.avgSystemSize.toFixed(1)} kW`} subtitle="Per deal"
+                tooltip="Average system size per deal" />
+              <MetricCard label="Net PPW" value={`$${data.summary.avgPpw.toFixed(2)}`} subtitle="Price per watt"
+                tooltip="Average net price per watt" />
+            </div>
           </div>
 
           {/* Chart + Top Closers */}
@@ -122,7 +124,7 @@ export default function Dashboard() {
                       />
                       <Bar dataKey="deals" radius={[0, 4, 4, 0]} maxBarSize={18}>
                         {chartData.map((_, i) => (
-                          <Cell key={i} fill={i === 0 ? C.barTop : C.barDefault} />
+                          <Cell key={i} fill={i === 0 ? C.primary : C.barDefault} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -142,10 +144,10 @@ export default function Dashboard() {
                       const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT) * 100 : 0;
                       return (
                         <Link key={c.userId} href={`/rep/${c.userId}`}
-                          className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/50">
+                          className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-secondary/50">
                           <div className="flex items-center gap-3.5">
                             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                              i === 0 ? 'bg-foreground text-card' : i < 3 ? 'bg-muted text-foreground' : 'text-muted-foreground/40'
+                              i === 0 ? 'bg-primary/15 text-primary' : i < 3 ? 'bg-secondary text-foreground' : 'bg-transparent text-muted-foreground/40'
                             }`}>{i + 1}</span>
                             <div className="min-w-0">
                               <div className="truncate text-[13px] font-medium text-foreground group-hover:text-primary transition-colors">{c.name}</div>
@@ -154,7 +156,7 @@ export default function Dashboard() {
                           </div>
                           <div className="flex items-center gap-4 shrink-0">
                             <span className="text-xs text-muted-foreground font-mono tabular-nums">{c.SAT || 0} sits</span>
-                            <span className="text-sm font-semibold font-mono tabular-nums text-foreground">{c.qbCloses || 0}</span>
+                            <span className="text-sm font-semibold font-mono tabular-nums text-primary">{c.qbCloses || 0}</span>
                             {(c.CLOS || 0) > (c.qbCloses || 0) && (
                               <span className="text-2xs font-mono text-warning">({c.CLOS})</span>
                             )}
@@ -173,7 +175,7 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border bg-muted/30 text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                  <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                     <th className="py-3 px-6 text-left font-medium">Office</th>
                     <th className="py-3 px-3 text-center font-medium">Active</th>
                     <th className="py-3 px-3 text-right font-medium">
@@ -201,7 +203,7 @@ export default function Dashboard() {
                     const sitClose = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
                     const activeReps = d.activeReps || 0;
                     return (
-                      <tr key={office} className={`border-b border-border transition-colors hover:bg-muted/30 ${qbCloses === 0 ? 'opacity-30' : ''}`}>
+                      <tr key={office} className={`border-b border-border/60 transition-colors hover:bg-secondary/30 ${qbCloses === 0 ? 'opacity-30' : ''}`}>
                         <td className="py-3.5 px-6">
                           <Link href={`/office/${encodeURIComponent(office)}`} className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary">
                             {office}
@@ -213,7 +215,7 @@ export default function Dashboard() {
                             activeReps > 0 ? 'bg-primary/10 text-primary' : 'text-muted-foreground/25'
                           }`}>{activeReps}</span>
                         </td>
-                        <td className="py-3.5 px-3 text-right font-semibold font-mono tabular-nums text-foreground">{qbCloses}</td>
+                        <td className="py-3.5 px-3 text-right font-semibold font-mono tabular-nums text-primary">{qbCloses}</td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{(d.sales?.kw || 0).toFixed(1)}</td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{totalDoors}</td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{totalAppts}</td>
@@ -225,19 +227,19 @@ export default function Dashboard() {
                           </span>
                         </td>
                         <td className="py-3.5 px-3 text-right">
-                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/20 font-mono">--</span>}
+                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="text-[13px] font-semibold bg-muted/20">
+                  <tr className="text-[13px] font-semibold bg-secondary/20">
                     <td className="py-3.5 px-6 text-muted-foreground">Total</td>
                     <td className="py-3.5 px-3 text-center font-mono text-muted-foreground">
                       {officeEntries.reduce((s, [, d]) => s + (d.activeReps || 0), 0)}
                     </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-foreground">{data.summary.totalSales}</td>
+                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-primary">{data.summary.totalSales}</td>
                     <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{data.summary.totalKw.toFixed(1)}</td>
                     <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.DK || 0), 0) || 0), 0)}</td>
                     <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.APPT || 0), 0) || 0), 0)}</td>
@@ -260,10 +262,10 @@ export default function Dashboard() {
                   .slice(0, 8)
                   .map((s, i) => (
                     <Link key={s.userId} href={`/rep/${s.userId}`}
-                      className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-muted/50">
+                      className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-secondary/50">
                       <div className="flex items-center gap-3.5">
                         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                          i === 0 ? 'bg-foreground text-card' : i < 3 ? 'bg-muted text-foreground' : 'text-muted-foreground/40'
+                          i === 0 ? 'bg-primary/15 text-primary' : i < 3 ? 'bg-secondary text-foreground' : 'bg-transparent text-muted-foreground/40'
                         }`}>{i + 1}</span>
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-medium text-foreground group-hover:text-primary transition-colors">{s.name}</div>
@@ -272,7 +274,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-4 font-mono tabular-nums shrink-0">
                         <span className="text-xs text-muted-foreground">{s.DK || 0} doors</span>
-                        <span className="text-xs font-semibold text-foreground">{s.APPT || 0} appts</span>
+                        <span className="text-xs font-semibold text-info">{s.APPT || 0} appts</span>
                         <span className="text-xs text-primary">{s.SITS || 0} sits</span>
                       </div>
                     </Link>
@@ -286,11 +288,11 @@ export default function Dashboard() {
                   .sort(([, a]: any, [, b]: any) => b.deals - a.deals)
                   .slice(0, 8)
                   .map(([name, d]: [string, any]) => (
-                    <div key={name} className="rounded-lg border border-border bg-muted/20 p-4 transition-all hover:bg-muted/50 hover:border-border">
+                    <div key={name} className="rounded-lg border border-border bg-secondary/30 p-4 transition-all hover:bg-secondary/60 hover:border-border">
                       <div className="truncate text-[13px] font-medium text-foreground">{name}</div>
                       <div className="truncate text-2xs text-muted-foreground mt-0.5">{d.office}</div>
                       <div className="mt-3 flex items-center gap-3 font-mono text-xs tabular-nums">
-                        <span className="font-semibold text-foreground">{d.deals} deals</span>
+                        <span className="font-semibold text-primary">{d.deals} deals</span>
                         <span className="text-muted-foreground">{d.kw.toFixed(1)} kW</span>
                       </div>
                     </div>
