@@ -509,12 +509,12 @@ export default function Dashboard() {
                             : 0;
                         const wasteRate =
                           appts > 0
-                            ? Math.round(
+                            ? Math.min(100, Math.round(
                                 (((s.outcomes?.NOSH || 0) +
                                   (s.outcomes?.CANC || 0)) /
                                   appts) *
                                   100,
-                              )
+                              ))
                             : 0;
                         // Attach computed fields for sorting
                         s.closeRate = closeRate;
