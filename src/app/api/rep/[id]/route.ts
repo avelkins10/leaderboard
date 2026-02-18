@@ -44,7 +44,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const closerStats = findInLB('Closer Leaderboard');
     const setterApptStats = findInLB('Setter Appointment Data');
     const closerApptStats = findInLB('Closer Appointment Data');
-    const role = setterStats ? 'setter' : closerStats ? 'closer' : 'unknown';
+    // Determine role — check RepCard role field first, then fall back to leaderboard presence
+    const rcRole = (user.role || '').toLowerCase();
+    const role = rcRole.includes('closer') || rcRole.includes('area director') || rcRole.includes('regional manager')
+      ? 'closer'
+      : rcRole.includes('setter')
+        ? 'setter'
+        : closerStats ? 'closer' : setterStats ? 'setter' : 'unknown';
 
     // User's appointments (from RepCard)
     const userAppts = appointments.filter(a => a.setter_id === userId || a.closer_id === userId);
@@ -66,13 +72,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       s.setterName?.toLowerCase().includes(fullName.toLowerCase())
     );
 
-    // Quality stats from Supabase
+    // Quality stats from Supabase — query as setter for setters, as closer for closers
     let qualityStats = null;
-    if (role === 'setter' || role === 'unknown') {
+    {
+      const idField = role === 'closer' ? 'closer_id' : 'setter_id';
       const { data: apptRows } = await supabaseAdmin
         .from('appointments')
         .select('has_power_bill, hours_to_appointment, is_quality')
-        .eq('setter_id', userId)
+        .eq(idField, userId)
         .gte('appointment_time', qualityFrom)
         .lte('appointment_time', qualityTo + 'T23:59:59');
 
@@ -97,9 +104,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .order('appointment_time', { ascending: false })
       .limit(50);
 
-    // Closer-specific QB stats
+    // Closer-specific QB stats — calculate if they have any closer sales
     let closerQBStats = null;
-    if (role === 'closer') {
+    {
       const closerSales = repSales.filter(s =>
         s.closerRepCardId === String(userId) ||
         s.closerName?.toLowerCase().includes(fullName.toLowerCase())
@@ -131,7 +138,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         image: user.image,
       },
       stats: role === 'setter' ? setterStats : closerStats,
+      setterStats: setterStats,
+      closerStats: closerStats,
       appointmentStats: role === 'setter' ? setterApptStats : closerApptStats,
+      setterApptStats: setterApptStats,
+      closerApptStats: closerApptStats,
       dispositions,
       qualityStats,
       closerQBStats,
