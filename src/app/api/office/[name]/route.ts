@@ -9,6 +9,7 @@ import {
   getOfficeSetterQualityStats,
   getOfficePartnerships,
 } from "@/lib/supabase-queries";
+import { isCancel, getMonday, getToday } from "@/lib/data";
 
 export async function GET(
   req: NextRequest,
@@ -115,35 +116,79 @@ export async function GET(
     const setterAppts = processLB(setterApptLB);
     const closerAppts = processLB(closerApptLB);
 
-    // Sales for this office
+    // Sales for this office — split active vs cancelled using shared isCancel()
     const officeSales = sales.filter((s) => s.salesOffice === officeName);
+    const activeOfficeSales = officeSales.filter((s) => !isCancel(s.status));
+    const cancelledOfficeSales = officeSales.filter((s) => isCancel(s.status));
 
-    // QB closes by closer/setter — indexed by both name and RepCard ID
-    const qbClosesByCloser: Record<string, number> = {};
+    // QB sales by closer/setter — indexed by both name and RepCard ID
+    // Track active + cancelled separately for consistent cancel %
+    type CloserAgg = {
+      deals: number;
+      cancelled: number;
+      kw: number;
+      ppwSum: number;
+      ppwCount: number;
+    };
+    const newCloserAgg = (): CloserAgg => ({
+      deals: 0,
+      cancelled: 0,
+      kw: 0,
+      ppwSum: 0,
+      ppwCount: 0,
+    });
+    const qbByCloserRC: Record<string, CloserAgg> = {};
+    const qbByCloserName: Record<string, CloserAgg> = {};
     const qbClosesBySetter: Record<string, number> = {};
-    const qbClosesByCloserRC: Record<string, number> = {};
     const qbClosesBySetterRC: Record<string, number> = {};
     for (const sale of officeSales) {
+      const cancelled = isCancel(sale.status);
       const closer = sale.closerName || "Unknown";
-      qbClosesByCloser[closer] = (qbClosesByCloser[closer] || 0) + 1;
+
+      if (!qbByCloserName[closer]) qbByCloserName[closer] = newCloserAgg();
+      if (cancelled) {
+        qbByCloserName[closer].cancelled++;
+      } else {
+        qbByCloserName[closer].deals++;
+        qbByCloserName[closer].kw += sale.systemSizeKw;
+        qbByCloserName[closer].ppwSum += sale.netPpw;
+        qbByCloserName[closer].ppwCount++;
+      }
+
       if (sale.closerRepCardId) {
-        qbClosesByCloserRC[sale.closerRepCardId] =
-          (qbClosesByCloserRC[sale.closerRepCardId] || 0) + 1;
+        if (!qbByCloserRC[sale.closerRepCardId])
+          qbByCloserRC[sale.closerRepCardId] = newCloserAgg();
+        if (cancelled) {
+          qbByCloserRC[sale.closerRepCardId].cancelled++;
+        } else {
+          qbByCloserRC[sale.closerRepCardId].deals++;
+          qbByCloserRC[sale.closerRepCardId].kw += sale.systemSizeKw;
+          qbByCloserRC[sale.closerRepCardId].ppwSum += sale.netPpw;
+          qbByCloserRC[sale.closerRepCardId].ppwCount++;
+        }
       }
       const setter = sale.setterName || "Unknown";
-      if (setter !== "Unknown") {
-        qbClosesBySetter[setter] = (qbClosesBySetter[setter] || 0) + 1;
-      }
-      if (sale.setterRepCardId) {
-        qbClosesBySetterRC[sale.setterRepCardId] =
-          (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
+      if (!cancelled) {
+        if (setter !== "Unknown")
+          qbClosesBySetter[setter] = (qbClosesBySetter[setter] || 0) + 1;
+        if (sale.setterRepCardId)
+          qbClosesBySetterRC[sale.setterRepCardId] =
+            (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
       }
     }
 
-    // Attach QB closes to closers — prefer RepCard ID, fallback to name
+    // Attach QB stats to closers — RepCard ID primary, name fallback
     for (const c of closers) {
-      c.qbCloses =
-        qbClosesByCloserRC[c.userId] || qbClosesByCloser[c.name] || 0;
+      const agg = qbByCloserRC[c.userId] || qbByCloserName[c.name];
+      c.qbCloses = agg?.deals || 0;
+      c.qbCancelled = agg?.cancelled || 0;
+      const total = c.qbCloses + c.qbCancelled;
+      c.cancelPct = total > 0 ? Math.round((c.qbCancelled / total) * 100) : 0;
+      c.totalKw = agg?.kw || 0;
+      c.avgPpw =
+        agg && agg.ppwCount > 0
+          ? Math.round((agg.ppwSum / agg.ppwCount) * 100) / 100
+          : 0;
     }
 
     // Build setter accountability by merging setter LB + setter appt data + QB closes + quality stats
@@ -193,7 +238,7 @@ export async function GET(
       (s: number, r: any) => s + (r.SAT || 0),
       0,
     );
-    const totalQBCloses = officeSales.length;
+    const totalQBCloses = activeOfficeSales.length;
     const totalRCClaims = closers.reduce(
       (s: number, r: any) => s + (r.CLOS || 0),
       0,
@@ -219,26 +264,23 @@ export async function GET(
       },
       partnerships,
       summary: {
-        deals: officeSales.length,
-        kw: officeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),
-        avgPpw:
+        deals: activeOfficeSales.length,
+        kw: activeOfficeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),
+        cancelled: cancelledOfficeSales.length,
+        cancelPct:
           officeSales.length > 0
-            ? officeSales.reduce((s, sale) => s + sale.netPpw, 0) /
-              officeSales.length
+            ? Math.round(
+                (cancelledOfficeSales.length / officeSales.length) * 100,
+              )
+            : 0,
+        avgPpw:
+          activeOfficeSales.length > 0
+            ? activeOfficeSales.reduce((s, sale) => s + sale.netPpw, 0) /
+              activeOfficeSales.length
             : 0,
       },
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-function getMonday(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().split("T")[0];
-}
-function getToday(): string {
-  return new Date().toISOString().split("T")[0];
 }

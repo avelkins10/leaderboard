@@ -1,36 +1,30 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useCallback, useMemo, Fragment } from "react";
 import useSWR, { preload } from "swr";
 import { fetcher } from "@/lib/swr";
 import Link from "next/link";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  Cell,
-} from "recharts";
 import { MetricCard } from "@/components/MetricCard";
 import { Section } from "@/components/Section";
 import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Tooltip } from "@/components/Tooltip";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Target, Zap, ArrowRight, Activity } from "lucide-react";
+import {
+  Target,
+  Zap,
+  ArrowRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  XCircle,
+  TrendingUp,
+} from "lucide-react";
 
-const C = {
-  primary: "hsl(152, 56%, 40%)",
-  barDefault: "hsl(220, 13%, 87%)",
-  axis: "hsl(220, 9%, 46%)",
-  fg: "hsl(224, 71%, 4%)",
-  card: "hsl(0, 0%, 100%)",
-  border: "hsl(220, 13%, 87%)",
-  gridLine: "hsl(220, 14%, 96%)",
-};
-
+// ── Types ──
 interface ScorecardData {
   period: { from: string; to: string };
   summary: {
@@ -38,52 +32,149 @@ interface ScorecardData {
     totalKw: number;
     avgSystemSize: number;
     avgPpw: number;
+    cancelled: number;
+    cancelPct: number;
+    totalAppts: number;
+    totalSits: number;
   };
   offices: Record<string, any>;
-  setterLeaderboard: any[];
-  closerLeaderboard: any[];
-  setterAppointments: any[];
+  allSetters: any[];
+  allClosers: any[];
   salesByOffice: Record<string, any>;
-  salesByCloser: Record<string, any>;
-  salesBySetter: Record<string, any>;
   activeRepsByOffice: Record<string, number>;
 }
 
+type TabKey = "setters" | "closers" | "offices";
+type SortDir = "asc" | "desc";
+interface SortState {
+  key: string;
+  dir: SortDir;
+}
+
+// ── Skeleton ──
 function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />
   );
 }
-
 function LoadingSkeleton() {
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {[1, 2, 3, 4, 5].map((i) => (
           <Skeleton key={i} className="h-28" />
         ))}
       </div>
-      <Skeleton className="h-96" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <Skeleton className="h-80 lg:col-span-3" />
-        <Skeleton className="h-80 lg:col-span-2" />
-      </div>
+      <Skeleton className="h-12" />
       <Skeleton className="h-96" />
     </div>
   );
 }
 
-function formatTimeAgo(isoStr: string): string {
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+// ── Sort helper ──
+function sortBy<T>(arr: T[], key: string, dir: SortDir): T[] {
+  return [...arr].sort((a: any, b: any) => {
+    const av = a[key] ?? 0;
+    const bv = b[key] ?? 0;
+    if (typeof av === "string" && typeof bv === "string")
+      return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    return dir === "asc" ? av - bv : bv - av;
+  });
 }
 
+// ── Sortable header component ──
+function SortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  tooltip,
+  align = "right",
+}: {
+  label: string;
+  sortKey: string;
+  sort: SortState;
+  onSort: (key: string) => void;
+  tooltip?: string;
+  align?: "left" | "right" | "center";
+}) {
+  const active = sort.key === sortKey;
+  const Icon = active
+    ? sort.dir === "asc"
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+  return (
+    <th
+      className={`py-3 px-3 font-medium cursor-pointer select-none transition-colors hover:text-foreground ${align === "left" ? "text-left" : align === "center" ? "text-center" : "text-right"} ${active ? "text-foreground" : ""}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <span
+        className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}
+      >
+        {label}
+        <Icon
+          className={`h-3 w-3 shrink-0 ${active ? "text-primary" : "text-muted-foreground/30"}`}
+        />
+        {tooltip && <Tooltip text={tooltip} />}
+      </span>
+    </th>
+  );
+}
+
+// ── Outcome breakdown component (expandable row content) ──
+function OutcomeRow({
+  outcomes,
+  type,
+}: {
+  outcomes: Record<string, number>;
+  type: "setter" | "closer";
+}) {
+  const items =
+    type === "setter"
+      ? [
+          { key: "CANC", label: "Cancel", color: "text-destructive" },
+          { key: "NOSH", label: "No Show", color: "text-warning" },
+          { key: "NTR", label: "Not Reached", color: "text-muted-foreground" },
+          { key: "RSCH", label: "Reschedule", color: "text-info" },
+          { key: "CF", label: "Credit Fail", color: "text-muted-foreground" },
+          { key: "SHAD", label: "Shade", color: "text-muted-foreground" },
+        ]
+      : [
+          { key: "NOCL", label: "No Close", color: "text-warning" },
+          { key: "CF", label: "Credit Fail", color: "text-muted-foreground" },
+          { key: "FUS", label: "Follow Up", color: "text-info" },
+          { key: "CANC", label: "Cancel", color: "text-destructive" },
+          { key: "NOSH", label: "No Show", color: "text-warning" },
+          { key: "RSCH", label: "Reschedule", color: "text-muted-foreground" },
+          { key: "SHAD", label: "Shade", color: "text-muted-foreground" },
+        ];
+
+  return (
+    <div className="flex flex-wrap gap-3 px-2 py-1">
+      {items
+        .filter((it) => (outcomes[it.key] || 0) > 0)
+        .map((it) => (
+          <span
+            key={it.key}
+            className={`inline-flex items-center gap-1.5 rounded-md bg-secondary/50 px-2.5 py-1 text-2xs font-medium ${it.color}`}
+          >
+            <span className="font-mono font-semibold tabular-nums">
+              {outcomes[it.key]}
+            </span>
+            {it.label}
+          </span>
+        ))}
+      {items.every((it) => (outcomes[it.key] || 0) === 0) && (
+        <span className="text-2xs text-muted-foreground/40">
+          No outcome data
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Main Dashboard ──
 export default function Dashboard() {
   const {
     preset,
@@ -98,10 +189,42 @@ export default function Dashboard() {
     `/api/scorecard?from=${from}&to=${to}`,
     { refreshInterval: 60_000 },
   );
-  const { data: activityData } = useSWR<{
-    feed: { type: string; time: string; text: string; office: string }[];
-  }>("/api/activity?limit=20", { refreshInterval: 30_000 });
 
+  // Tab state
+  const [tab, setTab] = useState<TabKey>("setters");
+
+  // Sort state per tab
+  const [setterSort, setSetterSort] = useState<SortState>({
+    key: "APPT",
+    dir: "desc",
+  });
+  const [closerSort, setCloserSort] = useState<SortState>({
+    key: "qbCloses",
+    dir: "desc",
+  });
+  const [officeSort, setOfficeSort] = useState<SortState>({
+    key: "qbCloses",
+    dir: "desc",
+  });
+
+  // Expanded rows
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Prefetch helpers
+  const prefetchRep = useCallback(
+    (id: number) => {
+      preload(`/api/rep/${id}?from=${from}&to=${to}`, fetcher);
+    },
+    [from, to],
+  );
   const prefetchOffice = useCallback(
     (name: string) => {
       preload(
@@ -111,42 +234,89 @@ export default function Dashboard() {
     },
     [from, to],
   );
-  const prefetchRep = useCallback(
-    (id: number) => {
-      preload(`/api/rep/${id}?from=${from}&to=${to}`, fetcher);
-    },
-    [from, to],
-  );
 
-  const officeEntries = data
-    ? Object.entries(data.offices).sort(
-        ([, a]: any, [, b]: any) =>
-          (b.sales?.deals || 0) - (a.sales?.deals || 0),
-      )
-    : [];
-  const chartData = officeEntries.map(([name, d]: [string, any]) => ({
-    name: name.split(" - ")[0],
-    deals: d.sales?.deals || 0,
-  }));
+  // Toggle sort direction or set new column
+  const handleSort = (
+    current: SortState,
+    setter: (s: SortState) => void,
+    key: string,
+  ) => {
+    if (current.key === key) {
+      setter({ key, dir: current.dir === "desc" ? "asc" : "desc" });
+    } else {
+      setter({ key, dir: "desc" });
+    }
+  };
 
-  // Build sorted setter list for the hero leaderboard
-  const setterHeroList = data
-    ? data.setterLeaderboard
-        .filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
-        .sort(
-          (a, b) => (b.DK || 0) - (a.DK || 0) || (b.APPT || 0) - (a.APPT || 0),
-        )
-    : [];
+  // ── Computed data ──
+  const setterList = useMemo(() => {
+    if (!data) return [];
+    return sortBy(
+      data.allSetters.filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0),
+      setterSort.key,
+      setterSort.dir,
+    );
+  }, [data, setterSort]);
+
+  const closerList = useMemo(() => {
+    if (!data) return [];
+    return sortBy(
+      data.allClosers.filter((c) => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0),
+      closerSort.key,
+      closerSort.dir,
+    );
+  }, [data, closerSort]);
+
+  const officeList = useMemo(() => {
+    if (!data) return [];
+    const entries = Object.entries(data.offices).map(
+      ([name, d]: [string, any]) => {
+        const totalDoors =
+          d.setters?.reduce((s: number, r: any) => s + (r.DK || 0), 0) || 0;
+        const totalAppts =
+          d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
+        const totalSits =
+          d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
+        const qbCloses = d.sales?.deals || 0;
+        const kw = d.sales?.kw || 0;
+        const cancelPct = d.sales?.cancelPct || 0;
+        const activeReps = d.activeReps || 0;
+        const closeRate = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
+        return {
+          name,
+          qbCloses,
+          kw,
+          totalAppts,
+          totalSits,
+          totalDoors,
+          cancelPct,
+          activeReps,
+          closeRate,
+          setters: d.setters || [],
+          closers: d.closers || [],
+        };
+      },
+    );
+    return sortBy(entries, officeSort.key, officeSort.dir);
+  }, [data, officeSort]);
+
+  // Company close rate
+  const companyCloseRate = useMemo(() => {
+    if (!data) return 0;
+    return data.summary.totalSits > 0
+      ? Math.round((data.summary.totalSales / data.summary.totalSits) * 100)
+      : 0;
+  }, [data]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Dashboard
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Company-wide performance overview
           </p>
         </div>
@@ -168,583 +338,816 @@ export default function Dashboard() {
       )}
 
       {data && !isLoading && (
-        <div className="animate-enter space-y-8">
-          {/* KPI Cards */}
+        <div className="animate-enter space-y-6 sm:space-y-8">
+          {/* ── KPI Cards ── */}
           <div>
             <p className="mb-3 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
               Company Stats
             </p>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <MetricCard
-                label="Deals"
+                label="Appts Set"
+                value={data.summary.totalAppts}
+                color="blue"
+                subtitle="Appointments"
+                icon={<Calendar className="h-5 w-5" />}
+                tooltip="Total appointments set by all setters"
+              />
+              <MetricCard
+                label="QB Closes"
                 value={data.summary.totalSales}
                 color="green"
-                subtitle="QB verified"
+                subtitle="Active deals"
                 icon={<Target className="h-5 w-5" />}
-                tooltip="Total closed deals from QuickBase"
+                tooltip="QuickBase verified closes (excludes cancels)"
               />
               <MetricCard
-                label="Kilowatts"
+                label="kW Sold"
                 value={`${data.summary.totalKw.toFixed(1)}`}
                 color="blue"
-                subtitle="Total kW sold"
+                subtitle="Total kilowatts"
                 icon={<Zap className="h-5 w-5" />}
-                tooltip="Total kW sold across all offices"
+                tooltip="Total kW sold across all active deals"
               />
               <MetricCard
-                label="Avg System"
-                value={`${data.summary.avgSystemSize.toFixed(1)} kW`}
-                subtitle="Per deal"
-                tooltip="Average system size per deal"
+                label="Close Rate"
+                value={`${companyCloseRate}%`}
+                subtitle="QB closes / sits"
+                icon={<TrendingUp className="h-5 w-5" />}
+                tooltip="Company-wide: QB closes / total sits"
               />
               <MetricCard
-                label="Net PPW"
-                value={`$${data.summary.avgPpw.toFixed(2)}`}
-                subtitle="Price per watt"
-                tooltip="Average net price per watt"
+                label="Cancel Rate"
+                value={`${data.summary.cancelPct}%`}
+                color={data.summary.cancelPct > 20 ? "red" : "default"}
+                subtitle={`${data.summary.cancelled} cancelled`}
+                icon={<XCircle className="h-5 w-5" />}
+                tooltip="Cancelled / (active + cancelled)"
               />
             </div>
           </div>
 
-          {/* SETTER HERO LEADERBOARD */}
-          <Section
-            title="Setter Leaderboard"
-            subtitle="Sorted by doors knocked — all setters with activity"
-            noPadding
-          >
-            {setterHeroList.length === 0 ? (
-              <p className="px-6 py-16 text-center text-sm text-muted-foreground">
-                No setter activity for this period
-              </p>
-            ) : (
+          {/* ── Tab Toggles ── */}
+          <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1 w-fit">
+            {(
+              [
+                { key: "setters", label: "Setters" },
+                { key: "closers", label: "Closers" },
+                { key: "offices", label: "Offices" },
+              ] as { key: TabKey; label: string }[]
+            ).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${
+                  tab === t.key
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── SETTER LEADERBOARD ── */}
+          {tab === "setters" && (
+            <Section
+              title="Setter Leaderboard"
+              subtitle={`${setterList.length} setters with activity`}
+              noPadding
+            >
+              {setterList.length === 0 ? (
+                <p className="px-6 py-16 text-center text-sm text-muted-foreground">
+                  No setter activity for this period
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                        <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                          #
+                        </th>
+                        <SortHeader
+                          label="Name"
+                          sortKey="name"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          align="left"
+                        />
+                        <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                          Office
+                        </th>
+                        <SortHeader
+                          label="Appts"
+                          sortKey="APPT"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="Appointments set"
+                        />
+                        <SortHeader
+                          label="Sits"
+                          sortKey="SITS"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="Appointments that sat"
+                        />
+                        <SortHeader
+                          label="QB Closes"
+                          sortKey="qbCloses"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="Verified closes from QuickBase"
+                        />
+                        <SortHeader
+                          label="Close %"
+                          sortKey="closeRate"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="QB closes / sits"
+                        />
+                        <SortHeader
+                          label="Avg Stars"
+                          sortKey="avgStars"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="Average appointment quality (1-3 stars)"
+                        />
+                        <SortHeader
+                          label="Waste %"
+                          sortKey="wasteRate"
+                          sort={setterSort}
+                          onSort={(k) =>
+                            handleSort(setterSort, setSetterSort, k)
+                          }
+                          tooltip="(No shows + Cancels) / Appointments"
+                        />
+                      </tr>
+                    </thead>
+                    <tbody className="text-[13px]">
+                      {setterList.map((s, i) => {
+                        const id = `setter-${s.userId}`;
+                        const isExpanded = expanded.has(id);
+                        const sits = s.SITS || 0;
+                        const appts = s.APPT || 0;
+                        const closeRate =
+                          sits > 0
+                            ? Math.round(((s.qbCloses || 0) / sits) * 100)
+                            : 0;
+                        const wasteRate =
+                          appts > 0
+                            ? Math.round(
+                                (((s.outcomes?.NOSH || 0) +
+                                  (s.outcomes?.CANC || 0)) /
+                                  appts) *
+                                  100,
+                              )
+                            : 0;
+                        // Attach computed fields for sorting
+                        s.closeRate = closeRate;
+                        s.wasteRate = wasteRate;
+                        s.avgStars = s.avgStars || 0;
+                        return (
+                          <Fragment key={s.userId}>
+                            <tr
+                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${isExpanded ? "bg-secondary/20" : ""}`}
+                              onClick={() => toggleExpand(id)}
+                            >
+                              <td className="py-3 px-4 sm:px-6">
+                                <span
+                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                    i === 0
+                                      ? "bg-primary/15 text-primary"
+                                      : i < 3
+                                        ? "bg-secondary text-foreground"
+                                        : "text-muted-foreground/40"
+                                  }`}
+                                >
+                                  {i + 1}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                                  )}
+                                  <Link
+                                    href={`/rep/${s.userId}`}
+                                    onMouseEnter={() => prefetchRep(s.userId)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-medium text-foreground transition-colors hover:text-primary"
+                                  >
+                                    {s.name}
+                                  </Link>
+                                </div>
+                                <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                  {s.qbOffice?.split(" - ")[0]}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                {s.qbOffice?.split(" - ")[0]}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">
+                                {appts}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {sits}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                {s.qbCloses || 0}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {sits > 0 ? (
+                                  <StatusBadge
+                                    value={closeRate}
+                                    good={35}
+                                    ok={25}
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {s.avgStars > 0
+                                  ? `${s.avgStars.toFixed(1)}`
+                                  : "--"}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {appts > 0 ? (
+                                  <span
+                                    className={`font-mono tabular-nums text-2xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
+                                  >
+                                    {wasteRate}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                            {isExpanded && s.outcomes && (
+                              <tr className="bg-secondary/10 border-b border-border/40">
+                                <td colSpan={9} className="py-3 px-6 sm:px-12">
+                                  <div className="flex items-center justify-between">
+                                    <OutcomeRow
+                                      outcomes={s.outcomes}
+                                      type="setter"
+                                    />
+                                    <Link
+                                      href={`/rep/${s.userId}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-2xs text-primary hover:underline shrink-0 ml-4 hidden sm:inline"
+                                    >
+                                      Full profile &rarr;
+                                    </Link>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* ── CLOSER LEADERBOARD ── */}
+          {tab === "closers" && (
+            <Section
+              title="Closer Leaderboard"
+              subtitle={`${closerList.length} closers with activity`}
+              noPadding
+            >
+              {closerList.length === 0 ? (
+                <p className="px-6 py-16 text-center text-sm text-muted-foreground">
+                  No closer activity for this period
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[800px]">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                        <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                          #
+                        </th>
+                        <SortHeader
+                          label="Name"
+                          sortKey="name"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          align="left"
+                        />
+                        <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                          Office
+                        </th>
+                        <SortHeader
+                          label="QB Closes"
+                          sortKey="qbCloses"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="Verified closes from QuickBase"
+                        />
+                        <SortHeader
+                          label="kW"
+                          sortKey="totalKw"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="Total kilowatts sold"
+                        />
+                        <SortHeader
+                          label="Avg PPW"
+                          sortKey="avgPpw"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="Average net price per watt"
+                        />
+                        <SortHeader
+                          label="Sits"
+                          sortKey="SAT"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="Appointments sat"
+                        />
+                        <SortHeader
+                          label="Close %"
+                          sortKey="sitCloseRate"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="QB closes / sits"
+                        />
+                        <SortHeader
+                          label="Cancel %"
+                          sortKey="cancelPct"
+                          sort={closerSort}
+                          onSort={(k) =>
+                            handleSort(closerSort, setCloserSort, k)
+                          }
+                          tooltip="Cancelled / (active + cancelled)"
+                        />
+                        <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                          Cancels
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[13px]">
+                      {closerList.map((c, i) => {
+                        const id = `closer-${c.userId}`;
+                        const isExpanded = expanded.has(id);
+                        const sits = c.SAT || 0;
+                        const sitCloseRate =
+                          sits > 0
+                            ? Math.round(((c.qbCloses || 0) / sits) * 100)
+                            : 0;
+                        c.sitCloseRate = sitCloseRate;
+                        return (
+                          <Fragment key={c.userId}>
+                            <tr
+                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${isExpanded ? "bg-secondary/20" : ""}`}
+                              onClick={() => toggleExpand(id)}
+                            >
+                              <td className="py-3 px-4 sm:px-6">
+                                <span
+                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                    i === 0
+                                      ? "bg-primary/15 text-primary"
+                                      : i < 3
+                                        ? "bg-secondary text-foreground"
+                                        : "text-muted-foreground/40"
+                                  }`}
+                                >
+                                  {i + 1}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                                  )}
+                                  <Link
+                                    href={`/rep/${c.userId}`}
+                                    onMouseEnter={() => prefetchRep(c.userId)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-medium text-foreground transition-colors hover:text-primary"
+                                  >
+                                    {c.name}
+                                  </Link>
+                                </div>
+                                <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                  {c.qbOffice?.split(" - ")[0]}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                {c.qbOffice?.split(" - ")[0]}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                {c.qbCloses || 0}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {(c.totalKw || 0).toFixed(1)}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {c.avgPpw > 0
+                                  ? `$${c.avgPpw.toFixed(2)}`
+                                  : "--"}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {sits}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {sits > 0 ? (
+                                  <StatusBadge
+                                    value={sitCloseRate}
+                                    good={35}
+                                    ok={25}
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {(c.qbCloses || 0) + (c.qbCancelled || 0) >
+                                0 ? (
+                                  <span
+                                    className={`font-mono tabular-nums text-2xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                  >
+                                    {c.cancelPct}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground hidden lg:table-cell">
+                                {c.qbCancelled || 0}
+                              </td>
+                            </tr>
+                            {isExpanded && c.outcomes && (
+                              <tr className="bg-secondary/10 border-b border-border/40">
+                                <td colSpan={10} className="py-3 px-6 sm:px-12">
+                                  <div className="flex items-center justify-between">
+                                    <OutcomeRow
+                                      outcomes={c.outcomes}
+                                      type="closer"
+                                    />
+                                    <Link
+                                      href={`/rep/${c.userId}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-2xs text-primary hover:underline shrink-0 ml-4 hidden sm:inline"
+                                    >
+                                      Full profile &rarr;
+                                    </Link>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* ── OFFICE LEADERBOARD ── */}
+          {tab === "offices" && (
+            <Section
+              title="Office Leaderboard"
+              subtitle="Click any office for detailed breakdown"
+              noPadding
+            >
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[800px]">
                   <thead>
                     <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                      <th className="py-3 px-6 text-left font-medium w-8">#</th>
-                      <th className="py-3 px-3 text-left font-medium">Name</th>
-                      <th className="py-3 px-3 text-left font-medium">
-                        Office
+                      <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                        #
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          Doors <Tooltip text="Total unique doors knocked" />
-                        </span>
-                      </th>
-                      <th className="py-3 px-3 text-right font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          Appts <Tooltip text="Appointments set" />
-                        </span>
-                      </th>
-                      <th className="py-3 px-3 text-right font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          Sits{" "}
-                          <Tooltip text="Appointments that sat (from RepCard Setter LB)" />
-                        </span>
-                      </th>
-                      <th className="py-3 px-3 text-right font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          QB Closes{" "}
-                          <Tooltip text="Verified closes from QuickBase" />
-                        </span>
-                      </th>
-                      <th className="py-3 px-3 text-right font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          D/QH <Tooltip text="Doors per quality hour" />
-                        </span>
-                      </th>
+                      <SortHeader
+                        label="Office"
+                        sortKey="name"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        align="left"
+                      />
+                      <SortHeader
+                        label="QB Closes"
+                        sortKey="qbCloses"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Verified closed deals"
+                      />
+                      <SortHeader
+                        label="kW"
+                        sortKey="kw"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Total kilowatts sold"
+                      />
+                      <SortHeader
+                        label="Appts"
+                        sortKey="totalAppts"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Appointments set"
+                      />
+                      <SortHeader
+                        label="Sits"
+                        sortKey="totalSits"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Appointments sat"
+                      />
+                      <SortHeader
+                        label="Close %"
+                        sortKey="closeRate"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="QB closes / sits"
+                      />
+                      <SortHeader
+                        label="Cancel %"
+                        sortKey="cancelPct"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Cancelled / (active + cancelled)"
+                      />
+                      <SortHeader
+                        label="Active"
+                        sortKey="activeReps"
+                        sort={officeSort}
+                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
+                        tooltip="Reps with door knocks"
+                        align="center"
+                      />
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
-                    {setterHeroList.map((s, i) => (
-                      <tr
-                        key={s.userId}
-                        className="border-b border-border/60 transition-colors hover:bg-secondary/30"
-                      >
-                        <td className="py-3.5 px-6">
-                          <span
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                              i === 0
-                                ? "bg-primary/15 text-primary"
-                                : i < 3
-                                  ? "bg-secondary text-foreground"
-                                  : "text-muted-foreground/40"
-                            }`}
-                          >
-                            {i + 1}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <Link
-                            href={`/rep/${s.userId}`}
-                            onMouseEnter={() => prefetchRep(s.userId)}
-                            className="font-medium text-foreground transition-colors hover:text-primary"
-                          >
-                            {s.name}
-                          </Link>
-                        </td>
-                        <td className="py-3.5 px-3 text-muted-foreground">
-                          {s.qbOffice?.split(" - ")[0]}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground text-lg">
-                          {s.DK || 0}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-info">
-                          {s.APPT || 0}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {s.SITS || 0}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                          {s.qbCloses || 0}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {s["D/QH"] ? s["D/QH"] : "--"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Section>
-
-          {/* Top Closers + Deals by Office chart */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-              <Section
-                title="Top Closers"
-                subtitle="Ranked by QB-verified closes"
-                noPadding
-              >
-                <div className="divide-y divide-border">
-                  {data.closerLeaderboard
-                    .filter((c) => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0)
-                    .sort((a, b) => (b.qbCloses || 0) - (a.qbCloses || 0))
-                    .slice(0, 8)
-                    .map((c, i) => {
-                      const sitClose =
-                        (c.SAT || 0) > 0
-                          ? ((c.qbCloses || 0) / c.SAT) * 100
-                          : 0;
+                    {officeList.map((o, i) => {
+                      const id = `office-${o.name}`;
+                      const isExpanded = expanded.has(id);
                       return (
-                        <Link
-                          key={c.userId}
-                          href={`/rep/${c.userId}`}
-                          onMouseEnter={() => prefetchRep(c.userId)}
-                          className="group flex items-center justify-between px-6 py-3 transition-colors hover:bg-secondary/50"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <span
-                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                                i === 0
-                                  ? "bg-primary/15 text-primary"
-                                  : i < 3
-                                    ? "bg-secondary text-foreground"
-                                    : "bg-transparent text-muted-foreground/40"
-                              }`}
-                            >
-                              {i + 1}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="truncate text-[13px] font-medium text-foreground group-hover:text-primary transition-colors">
-                                {c.name}
-                              </div>
-                              <div className="text-2xs text-muted-foreground">
-                                {c.qbOffice?.split(" - ")[0]}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 shrink-0">
-                            <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                              {c.SAT || 0} sits
-                            </span>
-                            <span className="text-sm font-semibold font-mono tabular-nums text-primary">
-                              {c.qbCloses || 0}
-                            </span>
-                            {(c.CLOS || 0) > (c.qbCloses || 0) && (
-                              <span className="text-2xs font-mono text-warning">
-                                ({c.CLOS})
+                        <Fragment key={o.name}>
+                          <tr
+                            className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${o.qbCloses === 0 ? "opacity-40" : ""} ${isExpanded ? "bg-secondary/20" : ""}`}
+                            onClick={() => toggleExpand(id)}
+                          >
+                            <td className="py-3 px-4 sm:px-6">
+                              <span
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                  i === 0
+                                    ? "bg-primary/15 text-primary"
+                                    : i < 3
+                                      ? "bg-secondary text-foreground"
+                                      : "text-muted-foreground/40"
+                                }`}
+                              >
+                                {i + 1}
                               </span>
-                            )}
-                            {sitClose > 0 && (
-                              <StatusBadge
-                                value={Math.round(sitClose)}
-                                good={35}
-                                ok={25}
-                              />
-                            )}
-                          </div>
-                        </Link>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                                )}
+                                <Link
+                                  href={`/office/${encodeURIComponent(o.name)}`}
+                                  onMouseEnter={() => prefetchOffice(o.name)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary"
+                                >
+                                  {o.name}
+                                  <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 transition-all group-hover/link:opacity-100 group-hover/link:translate-x-0 text-primary" />
+                                </Link>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-right font-semibold font-mono tabular-nums text-primary">
+                              {o.qbCloses}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {o.kw.toFixed(1)}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {o.totalAppts}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                              {o.totalSits}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {o.totalSits > 0 ? (
+                                <StatusBadge
+                                  value={Math.round(o.closeRate)}
+                                  good={35}
+                                  ok={25}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {o.cancelPct > 0 ? (
+                                <span
+                                  className={`font-mono tabular-nums text-2xs font-semibold ${o.cancelPct > 30 ? "text-destructive" : o.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                >
+                                  {o.cancelPct}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span
+                                className={`inline-flex min-w-[24px] items-center justify-center rounded-md px-1.5 py-0.5 text-2xs font-semibold font-mono ${
+                                  o.activeReps > 0
+                                    ? "bg-primary/10 text-primary"
+                                    : "text-muted-foreground/25"
+                                }`}
+                              >
+                                {o.activeReps}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-secondary/10 border-b border-border/40">
+                              <td colSpan={9} className="py-4 px-6 sm:px-12">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  {/* Top closers */}
+                                  <div>
+                                    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                                      Top Closers
+                                    </p>
+                                    <div className="space-y-1.5">
+                                      {o.closers
+                                        .sort(
+                                          (a: any, b: any) =>
+                                            (b.qbCloses || 0) -
+                                            (a.qbCloses || 0),
+                                        )
+                                        .slice(0, 3)
+                                        .map((c: any) => (
+                                          <div
+                                            key={c.userId}
+                                            className="flex items-center justify-between text-xs"
+                                          >
+                                            <Link
+                                              href={`/rep/${c.userId}`}
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                              className="text-foreground hover:text-primary"
+                                            >
+                                              {c.name}
+                                            </Link>
+                                            <span className="font-mono tabular-nums text-primary font-semibold">
+                                              {c.qbCloses || 0}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      {o.closers.length === 0 && (
+                                        <span className="text-2xs text-muted-foreground/40">
+                                          No closers
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Top setters */}
+                                  <div>
+                                    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                                      Top Setters
+                                    </p>
+                                    <div className="space-y-1.5">
+                                      {o.setters
+                                        .sort(
+                                          (a: any, b: any) =>
+                                            (b.APPT || 0) - (a.APPT || 0),
+                                        )
+                                        .slice(0, 3)
+                                        .map((s: any) => (
+                                          <div
+                                            key={s.userId}
+                                            className="flex items-center justify-between text-xs"
+                                          >
+                                            <Link
+                                              href={`/rep/${s.userId}`}
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                              className="text-foreground hover:text-primary"
+                                            >
+                                              {s.name}
+                                            </Link>
+                                            <span className="font-mono tabular-nums text-info font-semibold">
+                                              {s.APPT || 0} appts
+                                            </span>
+                                          </div>
+                                        ))}
+                                      {o.setters.length === 0 && (
+                                        <span className="text-2xs text-muted-foreground/40">
+                                          No setters
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+                                  <span className="text-2xs text-muted-foreground">
+                                    {o.setters.length} setters,{" "}
+                                    {o.closers.length} closers
+                                  </span>
+                                  <Link
+                                    href={`/office/${encodeURIComponent(o.name)}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-2xs text-primary hover:underline"
+                                  >
+                                    Full office page &rarr;
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
-                </div>
-              </Section>
-            </div>
-
-            <div className="lg:col-span-2">
-              <Section title="Deals by Office">
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      layout="vertical"
-                      margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
-                    >
-                      <XAxis
-                        type="number"
-                        tick={{
-                          fill: C.axis,
-                          fontSize: 10,
-                          fontFamily: "var(--font-jetbrains)",
-                        }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        tick={{
-                          fill: C.fg,
-                          fontSize: 11,
-                          fontFamily: "var(--font-inter)",
-                        }}
-                        width={95}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <RTooltip
-                        cursor={{ fill: C.gridLine }}
-                        contentStyle={{
-                          background: C.card,
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 8,
-                          color: C.fg,
-                          fontSize: 12,
-                          fontFamily: "var(--font-jetbrains)",
-                        }}
-                      />
-                      <Bar
-                        dataKey="deals"
-                        radius={[0, 4, 4, 0]}
-                        maxBarSize={18}
-                      >
-                        {chartData.map((_, i) => (
-                          <Cell
-                            key={i}
-                            fill={i === 0 ? C.primary : C.barDefault}
+                  </tbody>
+                  <tfoot>
+                    <tr className="text-[13px] font-semibold bg-secondary/20">
+                      <td className="py-3 px-4 sm:px-6" />
+                      <td className="py-3 px-3 text-muted-foreground">Total</td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-primary">
+                        {data.summary.totalSales}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                        {data.summary.totalKw.toFixed(1)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                        {officeList.reduce((s, o) => s + o.totalAppts, 0)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                        {officeList.reduce((s, o) => s + o.totalSits, 0)}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {data.summary.totalSits > 0 && (
+                          <StatusBadge
+                            value={companyCloseRate}
+                            good={35}
+                            ok={25}
                           />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Section>
-            </div>
-          </div>
-
-          {/* Office Scorecard */}
-          <Section
-            title="Office Scorecard"
-            subtitle="Click any office for detailed breakdown"
-            noPadding
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                    <th className="py-3 px-6 text-left font-medium">Office</th>
-                    <th className="py-3 px-3 text-center font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        Active{" "}
-                        <Tooltip text="Reps with door knocks in this period" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        QB Deals{" "}
-                        <Tooltip text="Verified closed deals from QuickBase" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        kW <Tooltip text="Total kilowatts sold" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        Doors <Tooltip text="Total unique doors knocked" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        Appts <Tooltip text="Appointments set" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        Sits{" "}
-                        <Tooltip text="Appointments sat (from Closer LB)" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        RC Claims{" "}
-                        <Tooltip text="RepCard self-reported closes" />
-                      </span>
-                    </th>
-                    <th className="py-3 px-3 text-right font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        Sit/Close{" "}
-                        <Tooltip text="QB Closes / Sits. Target: 35%+" />
-                      </span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="text-[13px]">
-                  {officeEntries.map(([office, d]: [string, any]) => {
-                    const totalDoors =
-                      d.setters?.reduce(
-                        (s: number, r: any) => s + (r.DK || 0),
-                        0,
-                      ) || 0;
-                    const totalAppts =
-                      d.setters?.reduce(
-                        (s: number, r: any) => s + (r.APPT || 0),
-                        0,
-                      ) || 0;
-                    const totalSits =
-                      d.closers?.reduce(
-                        (s: number, r: any) => s + (r.SAT || 0),
-                        0,
-                      ) || 0;
-                    const rcClaims =
-                      d.closers?.reduce(
-                        (s: number, r: any) => s + (r.CLOS || 0),
-                        0,
-                      ) || 0;
-                    const qbCloses = d.sales?.deals || 0;
-                    const sitClose =
-                      totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
-                    const activeReps = d.activeReps || 0;
-                    return (
-                      <tr
-                        key={office}
-                        className={`border-b border-border/60 transition-colors hover:bg-secondary/30 ${qbCloses === 0 ? "opacity-30" : ""}`}
-                      >
-                        <td className="py-3.5 px-6">
-                          <Link
-                            href={`/office/${encodeURIComponent(office)}`}
-                            onMouseEnter={() => prefetchOffice(office)}
-                            className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary"
-                          >
-                            {office}
-                            <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 transition-all group-hover/link:opacity-100 group-hover/link:translate-x-0 text-primary" />
-                          </Link>
-                        </td>
-                        <td className="py-3.5 px-3 text-center">
-                          <span
-                            className={`inline-flex min-w-[24px] items-center justify-center rounded-md px-1.5 py-0.5 text-2xs font-semibold font-mono ${
-                              activeReps > 0
-                                ? "bg-primary/10 text-primary"
-                                : "text-muted-foreground/25"
-                            }`}
-                          >
-                            {activeReps}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-semibold font-mono tabular-nums text-primary">
-                          {qbCloses}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {(d.sales?.kw || 0).toFixed(1)}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {totalDoors}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {totalAppts}
-                        </td>
-                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                          {totalSits}
-                        </td>
-                        <td className="py-3.5 px-3 text-right">
-                          <span
-                            className={`font-mono tabular-nums ${rcClaims > qbCloses ? "font-semibold text-warning" : "text-muted-foreground"}`}
-                          >
-                            {rcClaims}
-                            {rcClaims > qbCloses && (
-                              <span className="ml-1 text-2xs text-destructive">
-                                +{rcClaims - qbCloses}
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-3 text-right">
-                          {totalSits > 0 ? (
-                            <StatusBadge
-                              value={Math.round(sitClose)}
-                              good={35}
-                              ok={25}
-                            />
-                          ) : (
-                            <span className="text-muted-foreground/25 font-mono">
-                              --
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="text-[13px] font-semibold bg-secondary/20">
-                    <td className="py-3.5 px-6 text-muted-foreground">Total</td>
-                    <td className="py-3.5 px-3 text-center font-mono text-muted-foreground">
-                      {officeEntries.reduce(
-                        (s, [, d]) => s + (d.activeReps || 0),
-                        0,
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-primary">
-                      {data.summary.totalSales}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {data.summary.totalKw.toFixed(1)}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {officeEntries.reduce(
-                        (s, [, d]) =>
-                          s +
-                          (d.setters?.reduce(
-                            (a: number, r: any) => a + (r.DK || 0),
-                            0,
-                          ) || 0),
-                        0,
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {officeEntries.reduce(
-                        (s, [, d]) =>
-                          s +
-                          (d.setters?.reduce(
-                            (a: number, r: any) => a + (r.APPT || 0),
-                            0,
-                          ) || 0),
-                        0,
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {officeEntries.reduce(
-                        (s, [, d]) =>
-                          s +
-                          (d.closers?.reduce(
-                            (a: number, r: any) => a + (r.SAT || 0),
-                            0,
-                          ) || 0),
-                        0,
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                      {officeEntries.reduce(
-                        (s, [, d]) =>
-                          s +
-                          (d.closers?.reduce(
-                            (a: number, r: any) => a + (r.CLOS || 0),
-                            0,
-                          ) || 0),
-                        0,
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3" />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </Section>
-
-          {/* QB Sales by Closer */}
-          <Section
-            title="QB Sales by Closer"
-            subtitle="QuickBase verified deals"
-          >
-            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-              {Object.entries(data.salesByCloser)
-                .sort(([, a]: any, [, b]: any) => b.deals - a.deals)
-                .slice(0, 8)
-                .map(([name, d]: [string, any]) => (
-                  <div
-                    key={name}
-                    className="rounded-lg border border-border bg-secondary/30 p-4 transition-all hover:bg-secondary/60 hover:border-border"
-                  >
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                      {name}
-                    </div>
-                    <div className="truncate text-2xs text-muted-foreground mt-0.5">
-                      {d.office}
-                    </div>
-                    <div className="mt-3 flex items-center gap-3 font-mono text-xs tabular-nums">
-                      <span className="font-semibold text-primary">
-                        {d.deals} deals
-                      </span>
-                      <span className="text-muted-foreground">
-                        {d.kw.toFixed(1)} kW
-                      </span>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </Section>
-
-          {/* Activity Feed */}
-          {activityData?.feed && activityData.feed.length > 0 && (
-            <Section
-              title="Recent Activity"
-              subtitle="Live feed from the field"
-            >
-              <div className="space-y-1">
-                {activityData.feed.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-secondary/30"
-                  >
-                    <span
-                      className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
-                        item.type === "knock"
-                          ? "bg-secondary text-muted-foreground"
-                          : item.type === "appointment"
-                            ? "bg-info/10 text-info"
-                            : item.type === "conversion"
-                              ? "bg-primary/10 text-primary"
-                              : "bg-warning/10 text-warning"
-                      }`}
-                    >
-                      {item.type === "knock" ? (
-                        <Activity className="h-3 w-3" />
-                      ) : item.type === "appointment" ? (
-                        "A"
-                      ) : item.type === "conversion" ? (
-                        "$"
-                      ) : (
-                        "D"
-                      )}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] text-foreground truncate">
-                        {item.text}
-                      </div>
-                      <div className="flex items-center gap-2 text-2xs text-muted-foreground">
-                        <span>{formatTimeAgo(item.time)}</span>
-                        {item.office && (
-                          <>
-                            <span className="text-muted-foreground/30">|</span>
-                            <span>{item.office.split(" - ")[0]}</span>
-                          </>
                         )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                        {data.summary.cancelPct}%
+                      </td>
+                      <td className="py-3 px-3 text-center font-mono text-muted-foreground">
+                        {officeList.reduce((s, o) => s + o.activeReps, 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </Section>
           )}
