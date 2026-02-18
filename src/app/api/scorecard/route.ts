@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTypedLeaderboards, getUsers } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
+import { getActiveRepsToday } from '@/lib/supabase-queries';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -10,12 +11,12 @@ export async function GET(req: NextRequest) {
   const today = getToday();
 
   try {
-    const [closerBoards, setterBoards, setterBoardsToday, users, sales] = await Promise.all([
+    const [closerBoards, setterBoards, users, sales, activeRepsByOffice] = await Promise.all([
       getTypedLeaderboards('closer', fromDate, toDate),
       getTypedLeaderboards('setter', fromDate, toDate),
-      getTypedLeaderboards('setter', today, today),
       getUsers(),
       getSales(fromDate, toDate),
+      getActiveRepsToday(),
     ]);
 
     // Build user lookup
@@ -27,24 +28,11 @@ export async function GET(req: NextRequest) {
     const closerLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Leaderboard');
     const setterApptLB = setterBoards.find((lb: any) => lb.leaderboard_name === 'Setter Appointment Data');
     const closerApptLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Appointment Data');
-    const setterTodayLB = setterBoardsToday.find((lb: any) => lb.leaderboard_name === 'Setter Leaderboard');
 
     const setterStats = processLeaderboard(setterLB, userMap);
     const closerStats = processLeaderboard(closerLB, userMap);
     const setterApptStats = processLeaderboard(setterApptLB, userMap);
     const closerApptStats = processLeaderboard(closerApptLB, userMap);
-    const setterTodayStats = processLeaderboard(setterTodayLB, userMap);
-
-    // Active reps per office (setters with DK > 0 today)
-    const activeRepsByOffice: Record<string, number> = {};
-    for (const s of setterTodayStats) {
-      if ((s.DK || 0) > 0) {
-        const office = s.qbOffice;
-        if (office && office !== 'Unknown') {
-          activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
-        }
-      }
-    }
 
     // Process QB sales — index by both name and RepCard ID
     const salesByOffice: Record<string, { deals: number; kw: number; closers: Record<string, { deals: number; kw: number }> }> = {};
