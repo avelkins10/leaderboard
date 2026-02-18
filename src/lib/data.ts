@@ -6,6 +6,7 @@
 import { getTypedLeaderboards, getUsers, type RepUser } from "./repcard";
 import { getSales, type QBSale } from "./quickbase";
 import { OFFICE_MAPPING, teamIdToQBOffice, normalizeQBOffice } from "./config";
+import { supabaseAdmin } from "./supabase";
 
 // ── Name cleanup — strip "R - " recruit prefix ──
 export function cleanRepName(name: string): string {
@@ -473,10 +474,30 @@ export async function fetchScorecard(
     return offices[office];
   };
 
+  // Fetch avg star ratings per setter from Supabase
+  const { data: starRows } = await supabaseAdmin
+    .from("appointments")
+    .select("setter_id, star_rating")
+    .gte("appointment_time", fromDate)
+    .lte("appointment_time", toDate + "T23:59:59")
+    .not("star_rating", "is", null);
+
+  const starBySetter: Record<number, { sum: number; count: number }> = {};
+  for (const row of starRows || []) {
+    if (!row.setter_id) continue;
+    if (!starBySetter[row.setter_id]) starBySetter[row.setter_id] = { sum: 0, count: 0 };
+    starBySetter[row.setter_id].sum += row.star_rating;
+    starBySetter[row.setter_id].count++;
+  }
+
   // Process setters with QB attribution
   const allSetters: ProcessedSetter[] = [];
   for (const s of setterStats) {
     const setter = attachSetterQB(s, bySetterRC, bySetterName, setterApptMap);
+    const starData = starBySetter[setter.userId];
+    (setter as any).avgStars = starData
+      ? Math.round((starData.sum / starData.count) * 100) / 100
+      : 0;
     allSetters.push(setter);
     if (setter.qbOffice !== "Unknown") {
       getOrCreate(setter.qbOffice).setters.push(setter);
