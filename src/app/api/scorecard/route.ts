@@ -168,6 +168,12 @@ function buildOfficeScores(
     return offices[office];
   };
 
+  // Build lookup maps for appointment data by userId
+  const setterApptMap: Record<number, any> = {};
+  for (const sa of setterApptStats) setterApptMap[sa.userId] = sa;
+  const closerApptMap: Record<number, any> = {};
+  for (const ca of closerApptStats) closerApptMap[ca.userId] = ca;
+
   for (const s of setterStats) {
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
@@ -176,6 +182,18 @@ function buildOfficeScores(
     const qbData = salesBySetterRC[s.userId] || salesBySetter[s.name];
     s.qbCloses = qbData?.deals || 0;
     s.qbCancelled = qbData?.cancelled || 0;
+    // Merge appointment outcome breakdown (CANC, NOSH, NTR, RSCH, CF, SHAD)
+    const apptData = setterApptMap[s.userId];
+    if (apptData) {
+      s.outcomes = {
+        CANC: apptData.CANC || 0,
+        NOSH: apptData.NOSH || 0,
+        NTR: apptData.NTR || 0,
+        RSCH: apptData.RSCH || 0,
+        CF: apptData.CF || 0,
+        SHAD: apptData.SHAD || 0,
+      };
+    }
     o.setters.push(s);
   }
 
@@ -189,10 +207,24 @@ function buildOfficeScores(
     s.qbCancelled = qbData?.cancelled || 0;
     const totalSold = s.qbCloses + s.qbCancelled;
     s.cancelPct = totalSold > 0 ? Math.round((s.qbCancelled / totalSold) * 100) : 0;
+    // Merge appointment outcome breakdown
+    const apptData = closerApptMap[s.userId];
+    if (apptData) {
+      s.outcomes = {
+        CANC: apptData.CANC || 0,
+        NOSH: apptData.NOSH || 0,
+        NTR: apptData.NTR || 0,
+        RSCH: apptData.RSCH || 0,
+        CF: apptData.CF || 0,
+        SHAD: apptData.SHAD || 0,
+        FUS: apptData.FUS || 0,
+        NOCL: apptData.NOCL || 0,
+      };
+    }
     o.closers.push(s);
   }
 
-  // Attach setter appointment data (CANC, NOSH, etc.)
+  // Keep setterAppts/closerAppts arrays for backward compat
   for (const s of setterApptStats) {
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
