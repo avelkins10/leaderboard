@@ -200,7 +200,7 @@ export default function OfficePage() {
             />
           </div>
 
-          <Section title="Sales Funnel" subtitle="Doors to QB Closes">
+          <Section title="Sales Funnel" subtitle="Doors to Closes">
             <FunnelChart
               steps={[
                 {
@@ -219,7 +219,7 @@ export default function OfficePage() {
                   color: "hsl(262, 83%, 58%)",
                 },
                 {
-                  label: "QB Closes",
+                  label: "Closes",
                   value: data.funnel.qbCloses,
                   color: "hsl(152, 56%, 40%)",
                 },
@@ -229,7 +229,7 @@ export default function OfficePage() {
               <div className="mt-5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-[13px] text-warning">
                 {"RC Claims ("}
                 {data.funnel.rcClaims}
-                {") exceed QB Closes ("}
+                {") exceed Closes ("}
                 {data.funnel.qbCloses}
                 {") -- gap of "}
                 {data.funnel.rcClaims - data.funnel.qbCloses}
@@ -306,7 +306,7 @@ export default function OfficePage() {
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
-                          QB Closes{" "}
+                          Closes{" "}
                           <Tooltip text="Verified closes from QuickBase" />
                         </span>
                       </th>
@@ -496,7 +496,7 @@ export default function OfficePage() {
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
-                          QB Closes <Tooltip text="Verified from QuickBase" />
+                          Closes <Tooltip text="Verified from QuickBase" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
@@ -507,7 +507,7 @@ export default function OfficePage() {
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           Sit/Close%{" "}
-                          <Tooltip text="QB Closes / Sits. Target: 35%+" />
+                          <Tooltip text="Closes / Sits. Target: 35%+" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">

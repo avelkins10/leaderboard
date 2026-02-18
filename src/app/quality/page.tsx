@@ -331,7 +331,7 @@ export default function QualityPage() {
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
-                          QB Closes{" "}
+                          Closes{" "}
                           <Tooltip text="Verified closes from QuickBase" />
                         </span>
                       </th>
@@ -342,7 +342,7 @@ export default function QualityPage() {
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
-                          Close% <Tooltip text="QB Closes / Appointments Set" />
+                          Close% <Tooltip text="Closes / Appointments Set" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">

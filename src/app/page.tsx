@@ -354,7 +354,7 @@ export default function Dashboard() {
                 tooltip="Total appointments set by all setters"
               />
               <MetricCard
-                label="QB Closes"
+                label="Closes"
                 value={data.summary.totalSales}
                 color="green"
                 subtitle="Active deals"
@@ -460,7 +460,7 @@ export default function Dashboard() {
                           tooltip="Appointments that sat"
                         />
                         <SortHeader
-                          label="QB Closes"
+                          label="Closes"
                           sortKey="qbCloses"
                           sort={setterSort}
                           onSort={(k) =>
@@ -664,7 +664,7 @@ export default function Dashboard() {
                           Office
                         </th>
                         <SortHeader
-                          label="QB Closes"
+                          label="Closes"
                           sortKey="qbCloses"
                           sort={closerSort}
                           onSort={(k) =>
@@ -870,7 +870,7 @@ export default function Dashboard() {
                         align="left"
                       />
                       <SortHeader
-                        label="QB Closes"
+                        label="Closes"
                         sortKey="qbCloses"
                         sort={officeSort}
                         onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
