@@ -55,3 +55,34 @@ export function teamIdToQBOffice(teamId: number): string | null {
   if (!mapping || !mapping.active || mapping.qbName === '_regional_') return null;
   return mapping.qbName;
 }
+
+// Reverse lookup: QB office name → all RepCard team names that roll into it
+export function qbOfficeToRepCardTeams(qbOfficeName: string): string[] {
+  const teams: string[] = [];
+  for (const mapping of Object.values(OFFICE_MAPPING)) {
+    if (mapping.active && mapping.qbName === qbOfficeName) {
+      teams.push(mapping.name);
+    }
+  }
+  return teams;
+}
+
+// Map RepCard team NAME (not ID) to QB office name
+export function repCardTeamToQBOffice(teamName: string): string | null {
+  for (const mapping of Object.values(OFFICE_MAPPING)) {
+    if (mapping.active && mapping.name === teamName && mapping.qbName !== '_regional_') {
+      return mapping.qbName;
+    }
+  }
+  return null;
+}
+
+// Get timezone by RepCard team name OR QB office name
+export function getTimezoneForTeam(teamOrOfficeName: string): string {
+  for (const mapping of Object.values(OFFICE_MAPPING)) {
+    if (mapping.name === teamOrOfficeName || mapping.qbName === teamOrOfficeName) {
+      return mapping.timezone;
+    }
+  }
+  return 'America/New_York';
+}

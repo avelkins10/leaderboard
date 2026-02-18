@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabase';
-import { getOfficeTimezone } from './config';
+import { getTimezoneForTeam } from './config';
 
 // ── Types ──
 
@@ -148,7 +148,7 @@ export async function getCloserAppointmentStats(from: string, to: string): Promi
 }
 
 function mapAppointment(row: any): Appointment {
-  const tz = getOfficeTimezone(row.office_team || '');
+  const tz = getTimezoneForTeam(row.office_team || '');
   return {
     id: row.id,
     setter_id: row.setter_id,
@@ -228,7 +228,7 @@ export async function getActiveReps(from?: string, to?: string): Promise<Record<
       byOffice[office].add(row.rep_id);
     } else {
       // Today — timezone-aware filtering
-      const tz = getOfficeTimezone(office);
+      const tz = getTimezoneForTeam(office);
       const knockDate = new Date(row.knocked_at).toLocaleDateString('en-CA', { timeZone: tz });
       const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
       if (knockDate === todayDate) {
@@ -262,7 +262,7 @@ export async function getDailyActiveReps(from: string, to: string, officeTeam?: 
   // Group by date (in office timezone) → count unique reps
   const byDate: Record<string, Set<number>> = {};
   for (const row of data || []) {
-    const tz = getOfficeTimezone(row.office_team || '');
+    const tz = getTimezoneForTeam(row.office_team || '');
     const knockDate = new Date(row.knocked_at).toLocaleDateString('en-CA', { timeZone: tz });
     if (!byDate[knockDate]) byDate[knockDate] = new Set();
     byDate[knockDate].add(row.rep_id);

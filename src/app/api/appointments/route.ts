@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getOfficeTimezone, OFFICE_MAPPING } from '@/lib/config';
+import { getOfficeTimezone, qbOfficeToRepCardTeams, getTimezoneForTeam } from '@/lib/config';
 import { type Appointment } from '@/lib/supabase-queries';
 import { getSetterAppointments, getCloserAppointments } from '@/lib/supabase-queries';
 
@@ -21,14 +21,9 @@ export async function GET(req: NextRequest) {
     } else if (closerId) {
       appointments = await getCloserAppointments(Number(closerId), from, to);
     } else if (office) {
-      // office param is QB office name — find matching RepCard team names
-      const repCardTeams: string[] = [];
-      for (const [, mapping] of Object.entries(OFFICE_MAPPING)) {
-        if (mapping.qbName === office) {
-          repCardTeams.push(mapping.name);
-        }
-      }
-      // Query by RepCard team names, or fall back to exact match
+      // office param could be QB office name or RepCard team name — handle both
+      const repCardTeams = qbOfficeToRepCardTeams(office);
+      // Query by RepCard team names, or fall back to exact match (might be a RepCard team name directly)
       const teamsToQuery = repCardTeams.length > 0 ? repCardTeams : [office];
       const { data, error } = await supabaseAdmin
         .from('appointments')
@@ -66,7 +61,7 @@ export async function GET(req: NextRequest) {
 }
 
 function mapRow(row: any): Appointment {
-  const tz = getOfficeTimezone(row.office_team || '');
+  const tz = getTimezoneForTeam(row.office_team || '');
   return {
     id: row.id,
     setter_id: row.setter_id,
