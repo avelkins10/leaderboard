@@ -12,10 +12,25 @@ async function fetchPage(page: number) {
   return res.json();
 }
 
-function mapAppointment(appt: any) {
-  // List API has setter as direct field, webhook has contact.owner
+/** Paginate through a RepCard API endpoint and collect all records */
+async function fetchAllPages(baseUrl: string): Promise<any[]> {
+  const all: any[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    const res = await fetch(`${baseUrl}${sep}page=${page}&per_page=100`, {
+      headers: { 'x-api-key': REPCARD_API_KEY },
+    });
+    if (!res.ok) break;
+    const d = await res.json();
+    const items = d.result?.data || d.data || [];
+    all.push(...items);
+    if (items.length < 100) break;
+  }
+  return all;
+}
+
+function mapAppointment(appt: any, hasPowerBill: boolean = false) {
   const setter = appt.setter || appt.contact?.owner || appt.contact?.user || appt.user;
-  const owner = setter;
   const startAt = appt.startAt;
   const leadCreated = appt.contact?.createdAt || appt.createdAt;
 
@@ -24,6 +39,12 @@ function mapAppointment(appt: any) {
     const diff = (new Date(startAt).getTime() - new Date(leadCreated).getTime()) / 3600000;
     hoursToAppointment = (diff < 0 || diff > 8760) ? null : Math.round(diff * 100) / 100;
   }
+
+  // Power bill: check inline attachment OR external attachment lookup
+  const inlinePB = Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0;
+  const hasPB = inlinePB || hasPowerBill;
+  const within2days = hoursToAppointment !== null && hoursToAppointment > 0 && hoursToAppointment <= 48;
+  const starRating = hasPB && within2days ? 3 : hasPB ? 2 : 1;
 
   const contact = appt.contact || {};
   const address = contact.fullAddress ||
@@ -48,15 +69,10 @@ function mapAppointment(appt: any) {
     appointment_time: startAt ?? null,
     lead_created_at: leadCreated ?? null,
     hours_to_appointment: hoursToAppointment,
-    has_power_bill: Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0,
+    has_power_bill: hasPB,
     power_bill_urls: Array.isArray(appt.appointment_attachment) ? appt.appointment_attachment : [],
-    is_quality: (Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0) && (hoursToAppointment !== null && hoursToAppointment <= 48),
-    star_rating: (() => {
-      const hasPB = Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0;
-      if (hasPB && hoursToAppointment !== null && hoursToAppointment > 0 && hoursToAppointment <= 48) return 3;
-      if (hasPB) return 2;
-      return 1;
-    })(),
+    is_quality: hasPB && within2days,
+    star_rating: starRating,
     both_spouses_present: contact.both_spouses_present ?? null,
     disposition: appt.status?.title ?? null,
     disposition_category: appt.status?.category?.title ?? null,
@@ -72,10 +88,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const mode = searchParams.get('mode') || 'full'; // 'full' | 'power-bills-only'
+
+  // ── Step 1: Fetch power bill data from attachment endpoints ──
+  const [apptAttachments, custAttachments] = await Promise.all([
+    fetchAllPages('https://app.repcard.com/api/appointments/attachments?from_date=2026-01-01&to_date=2026-12-31'),
+    fetchAllPages('https://app.repcard.com/api/customers/attachments?from_date=2026-01-01&to_date=2026-12-31'),
+  ]);
+
+  // Map appointment IDs and customer IDs with power bills
+  const apptIdsWithPB = new Set<number>();
+  for (const a of apptAttachments) {
+    if (a.appointmentId) apptIdsWithPB.add(a.appointmentId);
+  }
+  const customerIdsWithPB = new Set<number>();
+  for (const a of custAttachments) {
+    if (a.customerId) customerIdsWithPB.add(a.customerId);
+  }
+
+  // If power-bills-only mode, just update existing Supabase records
+  if (mode === 'power-bills-only') {
+    const { data: allAppts } = await supabaseAdmin
+      .from('appointments')
+      .select('id, contact_id, has_power_bill, hours_to_appointment');
+
+    let updated = 0;
+    for (const appt of (allAppts || [])) {
+      const hasPB = apptIdsWithPB.has(appt.id) || customerIdsWithPB.has(appt.contact_id);
+      if (hasPB && !appt.has_power_bill) {
+        const hrs = appt.hours_to_appointment;
+        const within2days = hrs != null && hrs > 0 && hrs <= 48;
+        await supabaseAdmin.from('appointments').update({
+          has_power_bill: true,
+          is_quality: within2days,
+          star_rating: within2days ? 3 : 2,
+        }).eq('id', appt.id);
+        updated++;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      mode: 'power-bills-only',
+      apptAttachments: apptAttachments.length,
+      custAttachments: custAttachments.length,
+      uniqueApptIdsWithPB: apptIdsWithPB.size,
+      uniqueCustomerIdsWithPB: customerIdsWithPB.size,
+      updated,
+    });
+  }
+
+  // ── Step 2: Full backfill — fetch all appointments and upsert ──
   let totalFetched = 0;
   let total2026 = 0;
   let totalUpserted = 0;
-  let page = 150;
+  let page = 1;
   let hasMore = true;
 
   while (hasMore) {
@@ -96,8 +163,13 @@ export async function POST(req: NextRequest) {
     total2026 += appts2026.length;
 
     if (appts2026.length > 0) {
-      const mapped = appts2026.map(mapAppointment);
-      // Upsert in batches of 100
+      const mapped = appts2026.map((appt: any) => {
+        // Check if this appointment or its contact has a power bill from attachment endpoints
+        const contactId = appt.contact?.id;
+        const hasPB = apptIdsWithPB.has(appt.id) || (contactId && customerIdsWithPB.has(contactId));
+        return mapAppointment(appt, hasPB);
+      });
+
       const { error } = await supabaseAdmin
         .from('appointments')
         .upsert(mapped, { onConflict: 'id' });
@@ -109,15 +181,19 @@ export async function POST(req: NextRequest) {
     }
 
     page++;
-    // Stop if we've passed the last page or got fewer than 100
     if (items.length < 100 || page > totalPages) hasMore = false;
   }
 
   return NextResponse.json({
     success: true,
+    mode: 'full',
     totalFetched,
     total2026,
     totalUpserted,
-    pagesScanned: page - 150,
+    pagesScanned: page - 1,
+    apptAttachments: apptAttachments.length,
+    custAttachments: custAttachments.length,
+    uniqueApptIdsWithPB: apptIdsWithPB.size,
+    uniqueCustomerIdsWithPB: customerIdsWithPB.size,
   });
 }
