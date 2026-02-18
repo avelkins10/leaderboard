@@ -165,3 +165,51 @@ All user-facing times display in the rep's **local timezone**:
 | Adams | America/Los_Angeles |
 
 Timezone is determined by office via `getTimezoneForTeam()` or `getOfficeTimezone()`.
+
+## Setter/Closer Drill-Down (Appointment Outcomes)
+
+Every setter and closer object in the scorecard API now includes an `outcomes` field:
+
+**Setter outcomes:** `{ CANC, NOSH, NTR, RSCH, CF, SHAD }`
+**Closer outcomes:** `{ CANC, NOSH, NTR, RSCH, CF, SHAD, FUS, NOCL }`
+
+| Code | Meaning | Who owns it |
+|------|---------|-------------|
+| CANC | Cancelled appointment | Setter (bad set) |
+| NOSH | No show | Setter (bad set) |
+| NTR | Not reached / couldn't contact | Setter (bad info) |
+| RSCH | Reschedule | Setter (94% never get follow-up) |
+| CF | Credit fail | Neither (customer issue) |
+| SHAD | Shade DQ | Setter (should have screened) |
+| FUS | Follow up scheduled | Closer (treated as no-close) |
+| NOCL | No close | Closer (sat but didn't close) |
+
+**Frontend behavior:** Click on a setter's row → expand to show outcome breakdown.
+Example: Kaysen Stevens has 15 APPT, 3 SITS → expand shows 3 CANC, 3 NOSH, 7 NTR.
+This tells the story of *why* they have low sit rate.
+
+**Cancel % for closers:** `cancelPct` = (qbCancelled / (qbCloses + qbCancelled)) × 100
+Shown next to QB closes: "1 ✅ 2 ❌ (67%)"
+
+## API Response Shape (scorecard)
+
+Each setter/closer in `offices[name].setters[]` / `offices[name].closers[]` now has:
+```json
+{
+  "name": "Kaysen Stevens",
+  "userId": 12345,
+  "DK": 66, "APPT": 15, "SITS": 3, "SIT%": 20,
+  "qbCloses": 0, "qbCancelled": 0,
+  "outcomes": { "CANC": 3, "NOSH": 3, "NTR": 7, "RSCH": 0, "CF": 0, "SHAD": 0 }
+}
+```
+
+For closers:
+```json
+{
+  "name": "David Smith",
+  "userId": 174886,
+  "SAT": 5, "CLOS": 3, "qbCloses": 1, "qbCancelled": 2, "cancelPct": 67,
+  "outcomes": { "CANC": 0, "NOSH": 0, "NTR": 0, "CF": 1, "FUS": 1, "NOCL": 0, "SHAD": 0, "RSCH": 0 }
+}
+```
