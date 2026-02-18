@@ -1,6 +1,6 @@
 'use client';
 import { format, startOfWeek, endOfWeek, subWeeks, addDays } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface WeekPickerProps {
   weekOffset: number;
@@ -18,26 +18,36 @@ export function useWeekDates(weekOffset: number) {
 export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
-    <div className="flex items-center gap-2">
-      <Calendar className="w-4 h-4 text-gray-500" />
-      <span className="text-sm text-gray-300">
-        {format(weekStart, 'MMM d')} — {format(weekEnd, 'MMM d, yyyy')}
+    <div className="inline-flex items-center rounded-lg border border-border bg-card text-sm">
+      <button
+        onClick={() => setWeekOffset(w => w + 1)}
+        className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        aria-label="Previous week"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="flex h-9 min-w-[148px] items-center justify-center border-x border-border px-3 text-xs font-medium tabular-nums text-foreground font-mono">
+        {format(weekStart, 'MMM d')} &ndash; {format(weekEnd, 'MMM d')}
       </span>
-      <div className="flex items-center gap-1 ml-2">
-        <button onClick={() => setWeekOffset(w => w + 1)} className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition">
-          <ChevronLeft className="w-4 h-4" />
+      {weekOffset > 0 ? (
+        <button
+          onClick={() => setWeekOffset(w => w - 1)}
+          className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          aria-label="Next week"
+        >
+          <ChevronRight className="h-4 w-4" />
         </button>
-        {weekOffset > 0 && (
-          <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        )}
-        {weekOffset !== 0 && (
-          <button onClick={() => setWeekOffset(() => 0)} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition">
-            Today
-          </button>
-        )}
-      </div>
+      ) : (
+        <div className="h-9 w-9" />
+      )}
+      {weekOffset !== 0 && (
+        <button
+          onClick={() => setWeekOffset(() => 0)}
+          className="mr-1 rounded-md px-2.5 py-1 text-2xs font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          Today
+        </button>
+      )}
     </div>
   );
 }

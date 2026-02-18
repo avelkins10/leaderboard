@@ -1,26 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Legend, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, CartesianGrid } from 'recharts';
 import { Section } from '@/components/Section';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const OFFICE_COLORS: Record<string, string> = {
-  'Stevens': '#10b981',
-  'Bontrager': '#3b82f6',
-  'Molina': '#f59e0b',
-  'Douglass': '#ef4444',
-  'Elevate': '#8b5cf6',
-  'Allen': '#ec4899',
-  'Champagne': '#14b8a6',
-  'Adams': '#f97316',
+  'Stevens': 'hsl(152, 56%, 40%)',
+  'Bontrager': 'hsl(217, 91%, 60%)',
+  'Molina': 'hsl(38, 92%, 50%)',
+  'Douglass': 'hsl(346, 77%, 50%)',
+  'Elevate': 'hsl(262, 83%, 58%)',
+  'Allen': 'hsl(330, 76%, 58%)',
+  'Champagne': 'hsl(174, 72%, 50%)',
+  'Adams': 'hsl(24, 90%, 50%)',
+};
+
+const C = {
+  axis: 'hsl(220, 9%, 46%)',
+  fg: 'hsl(224, 71%, 4%)',
+  grid: 'hsl(220, 13%, 91%)',
+  card: 'hsl(0, 0%, 100%)',
+  border: 'hsl(220, 13%, 87%)',
 };
 
 function getColor(name: string): string {
   for (const [key, color] of Object.entries(OFFICE_COLORS)) {
     if (name.includes(key)) return color;
   }
-  return '#6b7280';
+  return 'hsl(220, 9%, 46%)';
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
 }
 
 export default function TrendsPage() {
@@ -40,7 +52,6 @@ export default function TrendsPage() {
         if (d.error) setError(d.error);
         else {
           setData(d);
-          // Select all offices by default
           const offices = new Set<string>();
           d.weeks?.forEach((w: any) => Object.keys(w.offices || {}).forEach(o => offices.add(o)));
           setSelectedOffices(offices);
@@ -50,7 +61,6 @@ export default function TrendsPage() {
       .finally(() => setLoading(false));
   }, [weeks]);
 
-  // Build chart data
   const allOffices = new Set<string>();
   data?.weeks?.forEach((w: any) => Object.keys(w.offices || {}).forEach((o: string) => allOffices.add(o)));
   const officeList = Array.from(allOffices).sort();
@@ -65,14 +75,12 @@ export default function TrendsPage() {
     return point;
   }) || [];
 
-  // Company-wide totals
   const companyData = data?.weeks?.map((w: any) => ({
     week: w.week,
     deals: w.totalDeals,
     kw: w.totalKw,
   })) || [];
 
-  // Trend detection
   const weeklyTrends = officeList.map(office => {
     if (!data?.weeks || data.weeks.length < 2) return { office, trend: 0, current: 0, previous: 0 };
     const current = data.weeks[data.weeks.length - 1]?.offices?.[office]?.[metric] || 0;
@@ -89,99 +97,116 @@ export default function TrendsPage() {
     });
   };
 
+  const metrics = ['deals', 'doors', 'sits', 'closes'] as const;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Trends & Analytics</h1>
-          <p className="text-gray-500 text-sm mt-1">Week-over-week performance tracking</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Metrics</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Week-over-week performance tracking</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="inline-flex items-center rounded-lg border border-border bg-card">
           {[4, 6, 8].map(w => (
             <button key={w} onClick={() => setWeeks(w)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition ${weeks === w ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
-              {w} weeks
+              className={`h-9 px-4 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                weeks === w ? 'bg-card-dark text-card-dark-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}>
+              {w}w
             </button>
           ))}
         </div>
       </div>
 
-      {loading && <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /><span className="ml-3 text-gray-400">Loading trends (fetching {weeks} weeks)...</span></div>}
-      {error && <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 text-red-300">Error: {error}</div>}
+      {loading && (
+        <div className="space-y-6">
+          <Skeleton className="h-52" />
+          <Skeleton className="h-80" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-sm text-destructive">{error}</div>
+      )}
 
       {data && !loading && (
-        <>
-          {/* Company-wide */}
-          <Section title="📈 Company-Wide Deals" subtitle="Total deals per week across all offices">
+        <div className="animate-enter space-y-8">
+          <Section title="Company Deals" subtitle="Total deals per week across all offices">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={companyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                  <XAxis dataKey="week" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <RTooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, color: '#fff' }} />
-                  <Line type="monotone" dataKey="deals" stroke="#10b981" strokeWidth={3} dot={{ r: 5 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                  <XAxis dataKey="week" tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
+                  <RTooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }} />
+                  <Line type="monotone" dataKey="deals" stroke="hsl(152, 56%, 40%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(152, 56%, 40%)' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Section>
 
-          {/* Metric Selector + Office Toggle */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-gray-500 text-sm mr-2">Metric:</span>
-            {(['deals', 'doors', 'sits', 'closes'] as const).map(m => (
-              <button key={m} onClick={() => setMetric(m)}
-                className={`px-3 py-1.5 rounded-lg text-sm capitalize transition ${metric === m ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
-                {m}
-              </button>
-            ))}
-            <span className="text-gray-600 mx-2">|</span>
-            <span className="text-gray-500 text-sm mr-2">Offices:</span>
-            {officeList.map(o => (
-              <button key={o} onClick={() => toggleOffice(o)}
-                className={`px-2 py-1 rounded text-xs transition border ${selectedOffices.has(o) ? 'border-gray-600 text-white' : 'border-gray-800 text-gray-600'}`}
-                style={selectedOffices.has(o) ? { backgroundColor: getColor(o) + '20', borderColor: getColor(o) + '40' } : {}}>
-                {o.split(' - ')[0]}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center rounded-lg border border-border bg-card">
+              {metrics.map(m => (
+                <button key={m} onClick={() => setMetric(m)}
+                  className={`h-9 px-3.5 text-xs font-medium capitalize transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                    metric === m ? 'bg-card-dark text-card-dark-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <span className="h-4 w-px bg-border" />
+            <div className="flex flex-wrap items-center gap-1.5">
+              {officeList.map(o => (
+                <button key={o} onClick={() => toggleOffice(o)}
+                  className={`rounded-lg px-2.5 py-1.5 text-2xs font-medium transition-all ${
+                    selectedOffices.has(o) ? 'text-foreground' : 'text-muted-foreground/30 hover:text-muted-foreground/50'
+                  }`}
+                  style={selectedOffices.has(o) ? { backgroundColor: getColor(o) + '15', color: getColor(o) } : {}}>
+                  {o.split(' - ')[0]}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Office Comparison Chart */}
-          <Section title={`📊 ${metric.charAt(0).toUpperCase() + metric.slice(1)} by Office`} subtitle="Click offices above to compare">
-            <div className="h-80">
+          <Section title={`${metric.charAt(0).toUpperCase() + metric.slice(1)} by Office`} subtitle="Toggle offices above to compare">
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                  <XAxis dataKey="week" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                  <RTooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, color: '#fff' }} />
-                  <Legend formatter={(v) => <span className="text-gray-300 text-xs">{(v as string).split(' - ')[0]}</span>} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
+                  <XAxis dataKey="week" tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
+                  <RTooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }} />
                   {officeList.filter(o => selectedOffices.has(o)).map(office => (
-                    <Line key={office} type="monotone" dataKey={office} stroke={getColor(office)} strokeWidth={2} dot={{ r: 4 }} />
+                    <Line key={office} type="monotone" dataKey={office} stroke={getColor(office)} strokeWidth={2} dot={{ r: 3 }} name={office.split(' - ')[0]} />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Section>
 
-          {/* Trend Summary */}
-          <Section title="📋 Week-over-Week Changes" subtitle={`${metric} compared to previous week`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Section title="Week-over-Week" subtitle={`${metric} compared to previous week`}>
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
               {weeklyTrends.map(t => (
-                <div key={t.office} className="flex items-center justify-between bg-gray-800/30 border border-gray-800 rounded-lg p-3">
+                <div key={t.office} className="flex items-center justify-between rounded-xl border border-border p-4 transition-all hover:bg-secondary/30">
                   <div>
-                    <div className="font-medium text-sm">{t.office.split(' - ')[0]}</div>
-                    <div className="text-gray-500 text-xs">{t.previous} → {t.current}</div>
+                    <div className="text-[13px] font-medium text-foreground">{t.office.split(' - ')[0]}</div>
+                    <div className="mt-1 text-xs font-mono tabular-nums text-muted-foreground">
+                      {t.previous} <span className="text-muted-foreground/30 mx-0.5">{'>'}</span> {t.current}
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-1 font-bold text-sm ${t.trend > 0 ? 'text-emerald-400' : t.trend < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                    {t.trend > 0 ? <TrendingUp className="w-4 h-4" /> : t.trend < 0 ? <TrendingDown className="w-4 h-4" /> : null}
+                  <div className={`flex items-center gap-1.5 text-sm font-semibold font-mono tabular-nums ${
+                    t.trend > 0 ? 'text-primary' : t.trend < 0 ? 'text-destructive' : 'text-muted-foreground'
+                  }`}>
+                    {t.trend > 0 ? <TrendingUp className="h-4 w-4" /> : t.trend < 0 ? <TrendingDown className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                     {t.trend > 0 ? '+' : ''}{t.trend.toFixed(0)}%
                   </div>
                 </div>
               ))}
             </div>
           </Section>
-        </>
+        </div>
       )}
     </div>
   );

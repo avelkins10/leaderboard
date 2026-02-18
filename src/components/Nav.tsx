@@ -1,36 +1,55 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, TrendingUp, Award, Zap } from 'lucide-react';
+import { BarChart3, ClipboardCheck, TrendingUp } from 'lucide-react';
 
 const links = [
-  { href: '/', label: 'Dashboard', icon: BarChart3 },
-  { href: '/quality', label: 'Quality', icon: Award },
-  { href: '/trends', label: 'Trends', icon: TrendingUp },
+  { href: '/', label: 'Leaderboard', icon: BarChart3 },
+  { href: '/quality', label: 'Reports', icon: ClipboardCheck },
+  { href: '/trends', label: 'Metrics', icon: TrendingUp },
 ];
 
 export function Nav() {
   const path = usePathname();
   return (
-    <nav className="sticky top-0 z-40 border-b border-gray-800 bg-gray-950/80 backdrop-blur-xl">
-      <div className="max-w-[1400px] mx-auto px-6 flex items-center h-14 gap-8">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight shrink-0">
-          <Zap className="w-5 h-5 text-yellow-400" />
-          <span>KIN Sales Intel</span>
-        </Link>
-        <div className="flex items-center gap-1">
+    <header className="sticky top-0 z-50 border-b border-border bg-card">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-center px-6 lg:px-10">
+        {/* Logo -- left-aligned, fixed width so nav stays centered */}
+        <div className="w-[180px] shrink-0">
+          <Link href="/" className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-70">
+            <Image src="/logo.png" alt="KIN" width={24} height={24} className="h-6 w-6" />
+            <span className="text-sm font-bold tracking-[-0.02em] text-foreground">KIN PULSE</span>
+          </Link>
+        </div>
+
+        {/* Centered nav links */}
+        <nav className="flex flex-1 items-center justify-center gap-1" role="navigation" aria-label="Main navigation">
           {links.map(l => {
             const active = l.href === '/' ? path === '/' : path.startsWith(l.href);
             return (
-              <Link key={l.href} href={l.href}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}>
-                <l.icon className="w-4 h-4" />
-                {l.label}
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`relative flex h-14 items-center gap-2 px-5 text-[13px] transition-colors ${
+                  active
+                    ? 'font-semibold text-foreground'
+                    : 'font-medium text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <l.icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.5} />
+                <span className="hidden sm:inline">{l.label}</span>
+                {active && (
+                  <span className="absolute inset-x-4 -bottom-px h-[2px] rounded-full bg-foreground" />
+                )}
               </Link>
             );
           })}
-        </div>
+        </nav>
+
+        {/* Right spacer to balance the logo */}
+        <div className="w-[180px] shrink-0" />
       </div>
-    </nav>
+    </header>
   );
 }

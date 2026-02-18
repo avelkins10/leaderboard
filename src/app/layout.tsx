@@ -1,30 +1,37 @@
-import type { Metadata } from "next";
-import localFont from "next/font/local";
+import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
 });
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "KIN Sales Intel",
-  description: "Sales performance dashboard for KIN Home",
+  title: "KIN PULSE",
+  description: "Real-time sales performance intelligence for KIN",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#FFFFFF",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-950 text-white min-h-screen`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased min-h-screen`}>
         <Nav />
-        <main className="max-w-[1400px] mx-auto px-6 py-6">
+        <main className="mx-auto max-w-[1440px] px-6 pb-24 pt-8 lg:px-10">
           {children}
         </main>
       </body>

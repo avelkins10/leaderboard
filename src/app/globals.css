@@ -2,22 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #030712;
-  --foreground: #f9fafb;
+@layer base {
+  :root {
+    --background: 220 14% 96%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --card-dark: 220 16% 10%;
+    --card-dark-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+    --primary: 152 56% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 13% 91%;
+    --secondary-foreground: 224 71% 4%;
+    --muted: 220 13% 91%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 13% 91%;
+    --accent-foreground: 224 71% 4%;
+    --destructive: 346 77% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 152 56% 40%;
+    --radius: 0.5rem;
+    --success: 152 56% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 224 71% 4%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+  }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-/* Custom scrollbar */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.3); }
 
-/* Smooth transitions */
-* { transition-property: background-color, border-color, color, opacity; transition-duration: 150ms; }
+::selection {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--foreground));
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

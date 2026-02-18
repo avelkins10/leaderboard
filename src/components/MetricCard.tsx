@@ -8,37 +8,43 @@ interface MetricCardProps {
   subtitle?: string;
   tooltip?: string;
   icon?: ReactNode;
-  trend?: number; // percentage change
+  trend?: number;
   color?: 'default' | 'green' | 'blue' | 'yellow' | 'red';
 }
 
-const colorMap = {
-  default: 'text-white',
-  green: 'text-emerald-400',
-  blue: 'text-blue-400',
-  yellow: 'text-yellow-400',
-  red: 'text-red-400',
+const subtitleAccent: Record<string, string> = {
+  default: 'text-card-dark-foreground/50',
+  green: 'text-primary',
+  blue: 'text-info',
+  yellow: 'text-warning',
+  red: 'text-destructive',
 };
 
 export function MetricCard({ label, value, subtitle, tooltip, icon, trend, color = 'default' }: MetricCardProps) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-all">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs uppercase tracking-wider font-medium">{label}</span>
+    <div className="relative overflow-hidden rounded-xl bg-card-dark p-5">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-card-dark-foreground/50">{label}</span>
           {tooltip && <Tooltip text={tooltip} />}
         </div>
-        {icon && <span className="text-gray-500">{icon}</span>}
+        {icon && <span className="text-card-dark-foreground/15">{icon}</span>}
       </div>
-      <div className={`text-3xl font-bold ${colorMap[color]}`}>{value}</div>
-      <div className="flex items-center gap-2 mt-1">
-        {subtitle && <span className="text-gray-500 text-sm">{subtitle}</span>}
-        {trend !== undefined && (
-          <span className={`text-xs font-medium ${trend > 0 ? 'text-emerald-400' : trend < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-            {trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} {Math.abs(trend).toFixed(0)}%
-          </span>
-        )}
+      <div className="mt-3">
+        <span className="text-[32px] font-semibold tracking-tight font-mono leading-none text-card-dark-foreground">
+          {value}
+        </span>
       </div>
+      {(subtitle || trend !== undefined) && (
+        <div className="mt-2 flex items-center gap-2">
+          {subtitle && <span className={`text-xs font-medium ${subtitleAccent[color]}`}>{subtitle}</span>}
+          {trend !== undefined && (
+            <span className={`text-[11px] font-semibold font-mono ${trend > 0 ? 'text-primary' : trend < 0 ? 'text-destructive' : 'text-card-dark-foreground/40'}`}>
+              {trend > 0 ? '+' : ''}{trend.toFixed(0)}%
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

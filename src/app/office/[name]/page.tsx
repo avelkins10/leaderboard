@@ -9,12 +9,16 @@ import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { FunnelChart } from '@/components/FunnelChart';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Tooltip } from '@/components/Tooltip';
-import { ArrowLeft, MapPin, Users, Target } from 'lucide-react';
+import { ArrowLeft, Target, Users } from 'lucide-react';
 
 function wasteColor(v: number) {
-  if (v >= 30) return 'bg-red-500/10 text-red-400 border-red-500/20';
-  if (v >= 15) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-  return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+  if (v >= 30) return 'bg-destructive/10 text-destructive';
+  if (v >= 15) return 'bg-warning/10 text-warning';
+  return 'bg-primary/10 text-primary';
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />;
 }
 
 export default function OfficePage() {
@@ -37,101 +41,111 @@ export default function OfficePage() {
   }, [officeName, from, to]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/" className="text-gray-500 hover:text-white text-sm flex items-center gap-1 mb-2 transition">
-            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          <Link href="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
           </Link>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
+          <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-foreground">
             {officeName}
             {data && (
-              <span className={`inline-flex items-center gap-1 text-sm font-medium px-2.5 py-1 rounded-full ${(data.activeReps || 0) > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-500'}`}>
-                {(data.activeReps || 0) > 0 ? '🟢' : '⚪'} {data.activeReps || 0} active today
+              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-2xs font-semibold ${
+                (data.activeReps || 0) > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${(data.activeReps || 0) > 0 ? 'bg-primary' : 'bg-muted-foreground'}`} />
+                {data.activeReps || 0} active
               </span>
             )}
           </h1>
-          {data && <p className="text-gray-500 text-sm mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> {data.region}</p>}
+          {data && <p className="mt-1 text-sm text-muted-foreground">{data.region}</p>}
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
-      {loading && <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /><span className="ml-3 text-gray-400">Loading...</span></div>}
-      {error && <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 text-red-300">Error: {error}</div>}
+      {loading && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-[120px]" />)}
+          </div>
+          <Skeleton className="h-64" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-sm text-destructive">{error}</div>
+      )}
 
       {data && !loading && (
-        <>
-          {/* Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <MetricCard label="QB Deals" value={data.summary.deals} color="green" icon={<Target className="w-5 h-5" />} />
+        <div className="animate-enter space-y-8">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <MetricCard label="QB Deals" value={data.summary.deals} color="green" icon={<Target className="h-5 w-5" />} />
             <MetricCard label="kW Sold" value={`${data.summary.kw.toFixed(1)}`} color="blue" />
             <MetricCard label="Avg PPW" value={`$${data.summary.avgPpw.toFixed(2)}`} />
-            <MetricCard label="Setters" value={data.setters.length} icon={<Users className="w-5 h-5" />} />
-            <MetricCard label="Closers" value={data.closers.length} icon={<Users className="w-5 h-5" />} />
+            <MetricCard label="Setters" value={data.setters.length} icon={<Users className="h-5 w-5" />} />
+            <MetricCard label="Closers" value={data.closers.length} icon={<Users className="h-5 w-5" />} />
           </div>
 
-          {/* Funnel */}
-          <Section title="📊 Sales Funnel" subtitle="Doors → Appointments → Sits → QB Closes">
+          <Section title="Sales Funnel" subtitle="Doors to QB Closes">
             <FunnelChart steps={[
-              { label: 'Doors Knocked', value: data.funnel.doors, color: '#6b7280' },
-              { label: 'Appointments Set', value: data.funnel.appointments, color: '#8b5cf6' },
-              { label: 'Appointments Sat', value: data.funnel.sits, color: '#3b82f6' },
-              { label: 'QB Closes', value: data.funnel.qbCloses, color: '#10b981' },
+              { label: 'Doors Knocked', value: data.funnel.doors, color: 'hsl(220, 9%, 46%)' },
+              { label: 'Appointments', value: data.funnel.appointments, color: 'hsl(217, 91%, 60%)' },
+              { label: 'Sits', value: data.funnel.sits, color: 'hsl(262, 83%, 58%)' },
+              { label: 'QB Closes', value: data.funnel.qbCloses, color: 'hsl(152, 56%, 40%)' },
             ]} />
             {data.funnel.rcClaims > data.funnel.qbCloses && (
-              <div className="mt-2 text-sm text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
-                ⚠ RC Claims ({data.funnel.rcClaims}) exceed QB Closes ({data.funnel.qbCloses}) — gap of {data.funnel.rcClaims - data.funnel.qbCloses}
+              <div className="mt-5 rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-[13px] text-warning">
+                {'RC Claims ('}{data.funnel.rcClaims}{') exceed QB Closes ('}{data.funnel.qbCloses}{') -- gap of '}{data.funnel.rcClaims - data.funnel.qbCloses}
               </div>
             )}
           </Section>
 
-          {/* Setter Accountability Table */}
-          <Section title="🚪 Setter Accountability" subtitle="Full funnel metrics per setter">
+          <Section title="Setter Accountability" noPadding>
             {data.setters.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No setter data for this period</p>
+              <p className="px-6 py-20 text-center text-sm text-muted-foreground">No setter data for this period</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-800 text-xs uppercase tracking-wider">
-                      <th className="text-left py-3 px-4">#</th>
-                      <th className="text-left py-3 px-2">Setter</th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Set <Tooltip text="Appointments Set (from RepCard)" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">No Show <Tooltip text="No Shows from Setter Appointment Data" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Cancel <Tooltip text="Cancellations from Setter Appointment Data" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Sits <Tooltip text="Appointments that were actually sat" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">QB Closes <Tooltip text="Verified closes from QuickBase" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Sit% <Tooltip text="Sits ÷ Appointments Set. Green: >50%, Yellow: 30-50%, Red: <30%" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Close% <Tooltip text="QB Closes ÷ Appointments Set. Green: >15%, Yellow: 8-15%, Red: <8%" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Waste% <Tooltip text="(No Shows + Cancels) ÷ Appointments Set. Green: <15%, Yellow: 15-30%, Red: >30%" /></div></th>
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                      <th className="py-3 px-6 text-left font-medium w-8">#</th>
+                      <th className="py-3 px-3 text-left font-medium">Setter</th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Set <Tooltip text="Appointments set via RepCard" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium">No Show</th>
+                      <th className="py-3 px-3 text-right font-medium">Cancel</th>
+                      <th className="py-3 px-3 text-right font-medium">Sits</th>
+                      <th className="py-3 px-3 text-right font-medium">QB Closes</th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Sit% <Tooltip text="Green: >50%, Yellow: 30-50%, Red: <30%" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Close% <Tooltip text="Green: >15%, Yellow: 8-15%, Red: <8%" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appts" /></span></th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="text-[13px]">
                     {data.setters
                       .sort((a: any, b: any) => (b.APPT || 0) - (a.APPT || 0))
                       .map((s: any, i: number) => (
-                        <tr key={s.userId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                          <td className="py-3 px-4 text-gray-500">{i + 1}</td>
-                          <td className="py-3 px-2">
-                            <Link href={`/rep/${s.userId}`} className="font-medium hover:text-blue-400 transition">{s.name}</Link>
+                        <tr key={s.userId} className="border-b border-border/60 transition-colors hover:bg-secondary/30">
+                          <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
+                          <td className="py-3.5 px-3">
+                            <Link href={`/rep/${s.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{s.name}</Link>
                           </td>
-                          <td className="text-right py-3 px-2 text-purple-400 font-bold">{s.APPT || 0}</td>
-                          <td className="text-right py-3 px-2 text-red-400">{s.nosh || 0}</td>
-                          <td className="text-right py-3 px-2 text-orange-400">{s.canc || 0}</td>
-                          <td className="text-right py-3 px-2 text-blue-400">{s.SITS || 0}</td>
-                          <td className="text-right py-3 px-2 text-emerald-400 font-bold">{s.qbCloses || 0}</td>
-                          <td className="text-right py-3 px-2">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : '-'}
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{s.APPT || 0}</td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">{s.nosh || 0}</td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">{s.canc || 0}</td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{s.SITS || 0}</td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">{s.qbCloses || 0}</td>
+                          <td className="py-3.5 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
                           </td>
-                          <td className="text-right py-3 px-2">
-                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : '-'}
+                          <td className="py-3.5 px-3 text-right">
+                            {(s.APPT || 0) > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
                           </td>
-                          <td className="text-right py-3 px-2">
+                          <td className="py-3.5 px-3 text-right">
                             {(s.APPT || 0) > 0 ? (
-                              <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium border ${wasteColor(Math.round(s.wasteRate))}`}>
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-semibold font-mono leading-none ${wasteColor(Math.round(s.wasteRate))}`}>
                                 {Math.round(s.wasteRate)}%
                               </span>
-                            ) : '-'}
+                            ) : <span className="text-muted-foreground/25 font-mono">--</span>}
                           </td>
                         </tr>
                       ))}
@@ -141,54 +155,53 @@ export default function OfficePage() {
             )}
           </Section>
 
-          {/* Closer Table */}
-          <Section title="🎯 Closers" subtitle="QB-verified closes vs RepCard claims">
+          <Section title="Closers" subtitle="QB-verified closes vs RepCard claims" noPadding>
             {data.closers.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No closer data for this period</p>
+              <p className="px-6 py-20 text-center text-sm text-muted-foreground">No closer data for this period</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-800 text-xs uppercase tracking-wider">
-                      <th className="text-left py-3 px-4">#</th>
-                      <th className="text-left py-3 px-2">Closer</th>
-                      <th className="text-right py-3 px-2">Leads</th>
-                      <th className="text-right py-3 px-2">Sat</th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">QB Closes <Tooltip text="Verified closes from QuickBase" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">RC Claims <Tooltip text="RepCard self-reported closes" /></div></th>
-                      <th className="text-right py-3 px-2"><div className="flex items-center justify-end gap-1">Sit/Close% <Tooltip text="QB Closes ÷ Sits" /></div></th>
-                      <th className="text-right py-3 px-2">CF</th>
-                      <th className="text-right py-3 px-2">Shade</th>
-                      <th className="text-right py-3 px-2">No Close</th>
-                      <th className="text-right py-3 px-2">Follow Up</th>
+                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                      <th className="py-3 px-6 text-left font-medium w-8">#</th>
+                      <th className="py-3 px-3 text-left font-medium">Closer</th>
+                      <th className="py-3 px-3 text-right font-medium">Leads</th>
+                      <th className="py-3 px-3 text-right font-medium">Sat</th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">QB Closes <Tooltip text="Verified from QuickBase" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium"><span className="inline-flex items-center gap-1">RC Claims <Tooltip text="RepCard self-reported" /></span></th>
+                      <th className="py-3 px-3 text-right font-medium">Sit/Close%</th>
+                      <th className="py-3 px-3 text-right font-medium">CF</th>
+                      <th className="py-3 px-3 text-right font-medium">No Close</th>
+                      <th className="py-3 px-3 text-right font-medium">Follow Up</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="text-[13px]">
                     {data.closers
                       .sort((a: any, b: any) => (b.qbCloses || 0) - (a.qbCloses || 0))
                       .map((c: any, i: number) => {
                         const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT * 100) : 0;
                         const gap = (c.CLOS || 0) - (c.qbCloses || 0);
                         return (
-                          <tr key={c.userId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                            <td className="py-3 px-4 text-gray-500">{i + 1}</td>
-                            <td className="py-3 px-2">
-                              <Link href={`/rep/${c.userId}`} className="font-medium hover:text-blue-400 transition">{c.name}</Link>
+                          <tr key={c.userId} className="border-b border-border/60 transition-colors hover:bg-secondary/30">
+                            <td className="py-3.5 px-6 text-muted-foreground/40 font-mono text-xs">{i + 1}</td>
+                            <td className="py-3.5 px-3">
+                              <Link href={`/rep/${c.userId}`} className="font-medium text-foreground transition-colors hover:text-primary">{c.name}</Link>
                             </td>
-                            <td className="text-right py-3 px-2">{c.LEAD || 0}</td>
-                            <td className="text-right py-3 px-2 text-blue-400">{c.SAT || 0}</td>
-                            <td className="text-right py-3 px-2 text-emerald-400 font-bold">{c.qbCloses || 0}</td>
-                            <td className="text-right py-3 px-2">
-                              <span className={gap > 0 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.LEAD || 0}</td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.SAT || 0}</td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">{c.qbCloses || 0}</td>
+                            <td className="py-3.5 px-3 text-right">
+                              <span className={`font-mono tabular-nums ${gap > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>
                                 {c.CLOS || 0}
-                                {gap > 0 && <span className="text-xs ml-1 text-red-400">+{gap}</span>}
+                                {gap > 0 && <span className="ml-1 text-2xs text-destructive">+{gap}</span>}
                               </span>
                             </td>
-                            <td className="text-right py-3 px-2">{sitClose > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : '-'}</td>
-                            <td className="text-right py-3 px-2 text-red-400">{c.CF || 0}</td>
-                            <td className="text-right py-3 px-2 text-gray-400">{c.SHAD || 0}</td>
-                            <td className="text-right py-3 px-2 text-yellow-400">{c.NOCL || 0}</td>
-                            <td className="text-right py-3 px-2 text-gray-400">{c.FUS || 0}</td>
+                            <td className="py-3.5 px-3 text-right">
+                              {sitClose > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-muted-foreground/25 font-mono">--</span>}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-destructive">{c.CF || 0}</td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning">{c.NOCL || 0}</td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">{c.FUS || 0}</td>
                           </tr>
                         );
                       })}
@@ -197,7 +210,7 @@ export default function OfficePage() {
               </div>
             )}
           </Section>
-        </>
+        </div>
       )}
     </div>
   );

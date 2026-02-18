@@ -1,17 +1,23 @@
 'use client';
 import { ReactNode } from 'react';
 
-export function Section({ title, subtitle, children, action }: { title: string; subtitle?: string; children: ReactNode; action?: ReactNode }) {
+export function Section({ title, subtitle, children, action, noPadding }: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  action?: ReactNode;
+  noPadding?: boolean;
+}) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between px-6 pt-5 pb-4">
         <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
-          {subtitle && <p className="text-gray-500 text-sm mt-0.5">{subtitle}</p>}
+          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action}
       </div>
-      <div className="p-6">{children}</div>
-    </div>
+      <div className={noPadding ? '' : 'px-6 pb-6'}>{children}</div>
+    </section>
   );
 }
