@@ -19,21 +19,32 @@ export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
     <div className="flex items-center gap-2">
-      <Calendar className="w-4 h-4 text-gray-500" />
-      <span className="text-sm text-gray-300">
+      <Calendar className="w-4 h-4 text-muted-foreground" />
+      <span className="text-sm text-foreground font-medium">
         {format(weekStart, 'MMM d')} — {format(weekEnd, 'MMM d, yyyy')}
       </span>
-      <div className="flex items-center gap-1 ml-2">
-        <button onClick={() => setWeekOffset(w => w + 1)} className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition">
-          <ChevronLeft className="w-4 h-4" />
+      <div className="flex items-center gap-1 ml-1">
+        <button
+          onClick={() => setWeekOffset(w => w + 1)}
+          className="p-1.5 bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="w-3.5 h-3.5 text-foreground" />
         </button>
         {weekOffset > 0 && (
-          <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition">
-            <ChevronRight className="w-4 h-4" />
+          <button
+            onClick={() => setWeekOffset(w => w - 1)}
+            className="p-1.5 bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+            aria-label="Next week"
+          >
+            <ChevronRight className="w-3.5 h-3.5 text-foreground" />
           </button>
         )}
         {weekOffset !== 0 && (
-          <button onClick={() => setWeekOffset(() => 0)} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium transition">
+          <button
+            onClick={() => setWeekOffset(() => 0)}
+            className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs font-medium transition-colors"
+          >
             Today
           </button>
         )}

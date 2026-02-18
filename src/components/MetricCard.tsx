@@ -8,34 +8,34 @@ interface MetricCardProps {
   subtitle?: string;
   tooltip?: string;
   icon?: ReactNode;
-  trend?: number; // percentage change
+  trend?: number;
   color?: 'default' | 'green' | 'blue' | 'yellow' | 'red';
 }
 
 const colorMap = {
-  default: 'text-white',
-  green: 'text-emerald-400',
-  blue: 'text-blue-400',
-  yellow: 'text-yellow-400',
-  red: 'text-red-400',
+  default: 'text-foreground',
+  green: 'text-primary',
+  blue: 'text-info',
+  yellow: 'text-warning',
+  red: 'text-destructive',
 };
 
 export function MetricCard({ label, value, subtitle, tooltip, icon, trend, color = 'default' }: MetricCardProps) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-all">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs uppercase tracking-wider font-medium">{label}</span>
+    <div className="bg-card border border-border rounded-lg p-4 hover:border-muted-foreground/20 transition-colors">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground text-xs uppercase tracking-wider font-medium">{label}</span>
           {tooltip && <Tooltip text={tooltip} />}
         </div>
-        {icon && <span className="text-gray-500">{icon}</span>}
+        {icon && <span className="text-muted-foreground/60">{icon}</span>}
       </div>
-      <div className={`text-3xl font-bold ${colorMap[color]}`}>{value}</div>
+      <div className={`text-2xl font-bold tracking-tight ${colorMap[color]}`}>{value}</div>
       <div className="flex items-center gap-2 mt-1">
-        {subtitle && <span className="text-gray-500 text-sm">{subtitle}</span>}
+        {subtitle && <span className="text-muted-foreground text-sm">{subtitle}</span>}
         {trend !== undefined && (
-          <span className={`text-xs font-medium ${trend > 0 ? 'text-emerald-400' : trend < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-            {trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} {Math.abs(trend).toFixed(0)}%
+          <span className={`text-xs font-medium ${trend > 0 ? 'text-primary' : trend < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {trend > 0 ? '+' : ''}{trend.toFixed(0)}%
           </span>
         )}
       </div>

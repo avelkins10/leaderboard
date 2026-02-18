@@ -3,16 +3,15 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Cell } from 'recharts';
 import { Section } from '@/components/Section';
-import { MetricCard } from '@/components/MetricCard';
 import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
 import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
-import { Award, BookOpen, Lightbulb } from 'lucide-react';
+import { Award, FileText, AlertTriangle } from 'lucide-react';
 
 function wasteColor(v: number) {
-  if (v >= 30) return 'bg-red-500/10 text-red-400 border-red-500/20';
-  if (v >= 15) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-  return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+  if (v >= 30) return 'bg-destructive/10 text-destructive border-destructive/20';
+  if (v >= 15) return 'bg-warning/10 text-warning border-warning/20';
+  return 'bg-primary/10 text-primary border-primary/20';
 }
 
 export default function QualityPage() {
@@ -32,7 +31,6 @@ export default function QualityPage() {
       .finally(() => setLoading(false));
   }, [from, to]);
 
-  // Build setter accountability by merging setter LB + setter appt data + QB closes
   const setterAccountability = (() => {
     if (!data) return [];
     const setterLB = data.setterLeaderboard || [];
@@ -59,7 +57,6 @@ export default function QualityPage() {
       .sort((a: any, b: any) => b.wasteRate - a.wasteRate);
   })();
 
-  // Office quality comparison
   const officeQuality = data ? Object.entries(data.offices).map(([name, d]: [string, any]) => {
     const totalAppts = d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
     const totalSits = d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
@@ -69,112 +66,130 @@ export default function QualityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Award className="w-6 h-6 text-yellow-400" /> Quality Metrics</h1>
-          <p className="text-gray-500 text-sm mt-1">Setter accountability & appointment quality</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
+            <Award className="w-5 h-5 text-primary" /> Quality Metrics
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Setter accountability & appointment quality</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
-      {loading && <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /><span className="ml-3 text-gray-400">Loading...</span></div>}
-      {error && <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 text-red-300">Error: {error}</div>}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+          <span className="ml-3 text-muted-foreground text-sm">Loading...</span>
+        </div>
+      )}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-sm">Error: {error}</div>
+      )}
 
       {data && !loading && (
         <>
           {/* Education Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-900/10 border border-emerald-800/30 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3"><Lightbulb className="w-5 h-5 text-emerald-400" /><h3 className="font-bold text-emerald-400">What is a Quality Appointment?</h3></div>
-              <p className="text-gray-300 text-sm leading-relaxed">A quality appointment has the <span className="text-white font-medium">power bill collected</span> AND is <span className="text-white font-medium">set within 48 hours</span>. These appointments sit 2-3x more often than non-quality ones.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm text-primary">Quality Appointment</h3>
+              </div>
+              <p className="text-foreground/70 text-xs leading-relaxed">A quality appointment has the <span className="text-foreground font-medium">power bill collected</span> AND is <span className="text-foreground font-medium">set within 48 hours</span>. These appointments sit 2-3x more often.</p>
             </div>
-            <div className="bg-gradient-to-br from-blue-900/30 to-blue-900/10 border border-blue-800/30 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3"><BookOpen className="w-5 h-5 text-blue-400" /><h3 className="font-bold text-blue-400">Why Waste Rate Matters</h3></div>
-              <p className="text-gray-300 text-sm leading-relaxed">No-shows and cancels waste closer time. A setter with <span className="text-red-400 font-medium">&gt;30% waste rate</span> needs coaching. Every wasted appointment = a lost opportunity + frustrated closer.</p>
+            <div className="bg-info/5 border border-info/10 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-info" />
+                <h3 className="font-semibold text-sm text-info">Why Waste Rate Matters</h3>
+              </div>
+              <p className="text-foreground/70 text-xs leading-relaxed">No-shows and cancels waste closer time. A setter with <span className="text-destructive font-medium">{'>'} 30% waste rate</span> needs coaching. Every wasted appointment = a lost opportunity.</p>
             </div>
-            <div className="bg-gradient-to-br from-yellow-900/30 to-yellow-900/10 border border-yellow-800/30 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3"><Award className="w-5 h-5 text-yellow-400" /><h3 className="font-bold text-yellow-400">Target Benchmarks</h3></div>
-              <p className="text-gray-300 text-sm leading-relaxed"><span className="text-emerald-400 font-medium">Sit Rate: 50%+</span> | <span className="text-emerald-400 font-medium">Close Rate: 15%+</span> | <span className="text-emerald-400 font-medium">Waste: &lt;15%</span>. These are the numbers that build careers.</p>
+            <div className="bg-warning/5 border border-warning/10 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Award className="w-4 h-4 text-warning" />
+                <h3 className="font-semibold text-sm text-warning">Target Benchmarks</h3>
+              </div>
+              <p className="text-foreground/70 text-xs leading-relaxed"><span className="text-primary font-medium">Sit Rate: 50%+</span> | <span className="text-primary font-medium">Close Rate: 15%+</span> | <span className="text-primary font-medium">Waste: {'<'}15%</span>. These are the numbers that build careers.</p>
             </div>
           </div>
 
           {/* Office Sit Rate Comparison */}
-          <Section title="🏢 Office Sit Rate Comparison" subtitle="Appointment → Sit conversion by office">
+          <Section title="Office Sit Rate Comparison" subtitle="Appointment to Sit conversion by office">
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={officeQuality} layout="vertical" margin={{ left: 20 }}>
-                  <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={(v) => `${v}%`} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: '#d1d5db', fontSize: 12 }} width={120} />
+                <BarChart data={officeQuality} layout="vertical" margin={{ left: 10 }}>
+                  <XAxis type="number" domain={[0, 100]} tick={{ fill: 'hsl(220, 9%, 46%)', fontSize: 11 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: 'hsl(0, 0%, 95%)', fontSize: 11 }} width={100} axisLine={false} tickLine={false} />
                   <RTooltip
-                    contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, color: '#fff' }}
+                    contentStyle={{ background: 'hsl(224, 10%, 8%)', border: '1px solid hsl(224, 10%, 14%)', borderRadius: 6, color: 'hsl(0, 0%, 95%)', fontSize: 12 }}
                     formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Sit Rate']}
                   />
-                  <Bar dataKey="sitRate" radius={[0, 6, 6, 0]}>
+                  <Bar dataKey="sitRate" radius={[0, 4, 4, 0]}>
                     {officeQuality.map((o, i) => (
-                      <Cell key={i} fill={o.sitRate >= 50 ? '#10b981' : o.sitRate >= 30 ? '#f59e0b' : '#ef4444'} />
+                      <Cell key={i} fill={o.sitRate >= 50 ? 'hsl(142, 71%, 45%)' : o.sitRate >= 30 ? 'hsl(38, 92%, 50%)' : 'hsl(0, 84%, 60%)'} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center text-xs">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg py-2"><span className="text-emerald-400 font-bold">50%+ = Great</span></div>
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg py-2"><span className="text-yellow-400 font-bold">30-49% = Watch</span></div>
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg py-2"><span className="text-red-400 font-bold">&lt;30% = Concern</span></div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-primary/10 border border-primary/20 rounded-md py-1.5"><span className="text-primary font-medium">50%+ = Great</span></div>
+              <div className="bg-warning/10 border border-warning/20 rounded-md py-1.5"><span className="text-warning font-medium">30-49% = Watch</span></div>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-md py-1.5"><span className="text-destructive font-medium">{'<'}30% = Concern</span></div>
             </div>
           </Section>
 
           {/* Setter Accountability Table */}
-          <Section title="👤 Setter Accountability" subtitle="Full funnel metrics — sorted by waste rate (worst first)">
+          <Section title="Setter Accountability" subtitle="Full funnel metrics -- sorted by waste rate (worst first)">
             {setterAccountability.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No setter data available for this period</p>
+              <p className="text-muted-foreground text-center py-8 text-sm">No setter data available for this period</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-800 text-xs uppercase tracking-wider">
-                      <th className="text-left py-3 px-4">#</th>
-                      <th className="text-left py-3 px-2">Setter</th>
-                      <th className="text-left py-3 px-2">Office</th>
-                      <th className="text-right py-3 px-2">Set</th>
-                      <th className="text-right py-3 px-2">No Show</th>
-                      <th className="text-right py-3 px-2">Cancel</th>
-                      <th className="text-right py-3 px-2">Sits</th>
-                      <th className="text-right py-3 px-2">QB Closes</th>
-                      <th className="text-right py-3 px-2">
-                        <div className="flex items-center justify-end gap-1">Sit% <Tooltip text="Sits ÷ Appointments Set" /></div>
+                    <tr className="text-muted-foreground border-b border-border text-[11px] uppercase tracking-wider">
+                      <th className="text-left py-3 px-5 font-medium">#</th>
+                      <th className="text-left py-3 px-2 font-medium">Setter</th>
+                      <th className="text-left py-3 px-2 font-medium">Office</th>
+                      <th className="text-right py-3 px-2 font-medium">Set</th>
+                      <th className="text-right py-3 px-2 font-medium">No Show</th>
+                      <th className="text-right py-3 px-2 font-medium">Cancel</th>
+                      <th className="text-right py-3 px-2 font-medium">Sits</th>
+                      <th className="text-right py-3 px-2 font-medium">QB Closes</th>
+                      <th className="text-right py-3 px-2 font-medium">
+                        <div className="flex items-center justify-end gap-1">Sit% <Tooltip text="Sits / Appointments Set" /></div>
                       </th>
-                      <th className="text-right py-3 px-2">
-                        <div className="flex items-center justify-end gap-1">Close% <Tooltip text="QB Closes ÷ Appointments Set" /></div>
+                      <th className="text-right py-3 px-2 font-medium">
+                        <div className="flex items-center justify-end gap-1">Close% <Tooltip text="QB Closes / Appointments Set" /></div>
                       </th>
-                      <th className="text-right py-3 px-2">
-                        <div className="flex items-center justify-end gap-1">Waste% <Tooltip text="(No Shows + Cancels) ÷ Appointments Set" /></div>
+                      <th className="text-right py-3 px-3 font-medium">
+                        <div className="flex items-center justify-end gap-1">Waste% <Tooltip text="(No Shows + Cancels) / Appointments Set" /></div>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {setterAccountability.map((s: any, i: number) => (
-                      <tr key={s.userId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                        <td className="py-3 px-4 text-gray-500">{i + 1}</td>
-                        <td className="py-3 px-2 font-medium">{s.name}</td>
-                        <td className="py-3 px-2 text-gray-500">{s.qbOffice?.split(' - ')[0] || s.team}</td>
-                        <td className="text-right py-3 px-2 text-purple-400 font-bold">{s.appt}</td>
-                        <td className="text-right py-3 px-2 text-red-400">{s.nosh}</td>
-                        <td className="text-right py-3 px-2 text-orange-400">{s.canc}</td>
-                        <td className="text-right py-3 px-2 text-blue-400">{s.sits}</td>
-                        <td className="text-right py-3 px-2 text-emerald-400 font-bold">{s.qbCloses}</td>
+                      <tr key={s.userId} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                        <td className="py-3 px-5 text-muted-foreground">{i + 1}</td>
+                        <td className="py-3 px-2 font-medium text-foreground">{s.name}</td>
+                        <td className="py-3 px-2 text-muted-foreground text-xs">{s.qbOffice?.split(' - ')[0] || s.team}</td>
+                        <td className="text-right py-3 px-2 text-info font-bold font-mono">{s.appt}</td>
+                        <td className="text-right py-3 px-2 text-destructive font-mono">{s.nosh}</td>
+                        <td className="text-right py-3 px-2 text-warning font-mono">{s.canc}</td>
+                        <td className="text-right py-3 px-2 text-info font-mono">{s.sits}</td>
+                        <td className="text-right py-3 px-2 text-primary font-bold font-mono">{s.qbCloses}</td>
                         <td className="text-right py-3 px-2">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : '-'}
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : <span className="text-muted-foreground/40">-</span>}
                         </td>
                         <td className="text-right py-3 px-2">
-                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : '-'}
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : <span className="text-muted-foreground/40">-</span>}
                         </td>
-                        <td className="text-right py-3 px-2">
+                        <td className="text-right py-3 px-3">
                           {s.appt > 0 ? (
-                            <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium border ${wasteColor(Math.round(s.wasteRate))}`}>
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium border ${wasteColor(Math.round(s.wasteRate))}`}>
                               {Math.round(s.wasteRate)}%
                             </span>
-                          ) : '-'}
+                          ) : <span className="text-muted-foreground/40">-</span>}
                         </td>
                       </tr>
                     ))}

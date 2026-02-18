@@ -7,10 +7,18 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RTooltip }
 import { Section } from '@/components/Section';
 import { MetricCard } from '@/components/MetricCard';
 import { WeekPicker, useWeekDates } from '@/components/WeekPicker';
-import { StatusBadge } from '@/components/StatusBadge';
-import { ArrowLeft, User, MapPin, Briefcase } from 'lucide-react';
+import { ArrowLeft, MapPin, Briefcase } from 'lucide-react';
 
-const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280', '#ec4899', '#14b8a6'];
+const PIE_COLORS = [
+  'hsl(142, 71%, 45%)',
+  'hsl(217, 91%, 60%)',
+  'hsl(38, 92%, 50%)',
+  'hsl(0, 84%, 60%)',
+  'hsl(262, 83%, 58%)',
+  'hsl(220, 9%, 46%)',
+  'hsl(330, 81%, 60%)',
+  'hsl(174, 72%, 56%)',
+];
 
 export default function RepPage() {
   const params = useParams();
@@ -33,25 +41,25 @@ export default function RepPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/" className="text-gray-500 hover:text-white text-sm flex items-center gap-1 mb-2 transition">
-            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          <Link href="/" className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-2 transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
           </Link>
           {data?.user && (
             <>
-              <h1 className="text-2xl font-bold flex items-center gap-3">
-                <span className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-lg font-bold">
+              <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
+                <span className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center text-base font-bold text-primary">
                   {data.user.name.charAt(0)}
                 </span>
                 {data.user.name}
               </h1>
-              <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
+              <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> {data.user.role === 'setter' ? 'Setter' : 'Closer'}</span>
-                <Link href={`/office/${encodeURIComponent(data.user.office)}`} className="flex items-center gap-1 hover:text-white transition">
+                <Link href={`/office/${encodeURIComponent(data.user.office)}`} className="flex items-center gap-1 hover:text-foreground transition-colors">
                   <MapPin className="w-3 h-3" /> {data.user.office}
                 </Link>
-                <span>{data.user.region}</span>
+                <span className="text-muted-foreground/60">{data.user.region}</span>
               </div>
             </>
           )}
@@ -59,14 +67,21 @@ export default function RepPage() {
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
 
-      {loading && <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /><span className="ml-3 text-gray-400">Loading...</span></div>}
-      {error && <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 text-red-300">Error: {error}</div>}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+          <span className="ml-3 text-muted-foreground text-sm">Loading...</span>
+        </div>
+      )}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive text-sm">Error: {error}</div>
+      )}
 
       {data && !loading && data.user && (
         <>
-          {/* Stats Cards */}
+          {/* Stats Cards - Setter */}
           {data.user.role === 'setter' && data.stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MetricCard label="Doors Knocked" value={data.stats.DK || 0} tooltip="Total unique doors knocked this period" />
               <MetricCard label="Appointments" value={data.stats.APPT || 0} color="blue" tooltip="Appointments set" />
               <MetricCard label="Sits" value={data.stats.SITS || 0} color="blue" tooltip="Appointments that were sat" />
@@ -78,8 +93,9 @@ export default function RepPage() {
             </div>
           )}
 
+          {/* Stats Cards - Closer */}
           {data.user.role === 'closer' && data.stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MetricCard label="Leads" value={data.stats.LEAD || 0} tooltip="Assigned leads" />
               <MetricCard label="Sits" value={data.stats.SAT || 0} color="blue" tooltip="Appointments sat" />
               <MetricCard label="Closes" value={data.stats.CLOS || 0} color="green" tooltip="Closed (Pending KCA)" />
@@ -93,37 +109,37 @@ export default function RepPage() {
 
           {/* Disposition Breakdown for Closers */}
           {data.user.role === 'closer' && Object.keys(data.dispositions).length > 0 && (
-            <Section title="📊 Disposition Breakdown" subtitle="How appointments resolved">
+            <Section title="Disposition Breakdown" subtitle="How appointments resolved">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="h-72">
+                <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={Object.entries(data.dispositions)
                           .filter(([k]) => !['LEAD'].includes(k))
                           .map(([k, v]) => ({ name: k, value: v as number }))}
-                        cx="50%" cy="50%" innerRadius={60} outerRadius={100}
+                        cx="50%" cy="50%" innerRadius={50} outerRadius={85}
                         paddingAngle={2} dataKey="value"
                       >
-                        {Object.entries(data.dispositions).map(([, ], i) => (
+                        {Object.entries(data.dispositions).map(([,], i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Legend formatter={(value) => <span className="text-gray-300 text-xs">{value}</span>} />
-                      <RTooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, color: '#fff' }} />
+                      <Legend formatter={(value) => <span className="text-foreground/70 text-xs">{value}</span>} />
+                      <RTooltip contentStyle={{ background: 'hsl(224, 10%, 8%)', border: '1px solid hsl(224, 10%, 14%)', borderRadius: 6, color: 'hsl(0, 0%, 95%)', fontSize: 12 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {Object.entries(data.dispositions)
                     .sort(([, a], [, b]) => (b as number) - (a as number))
                     .map(([key, val], i) => (
-                      <div key={key} className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg">
+                      <div key={key} className="flex items-center justify-between py-2 px-3 bg-secondary/50 rounded-md">
                         <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="text-sm text-gray-300">{key}</span>
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          <span className="text-sm text-foreground/80">{key}</span>
                         </div>
-                        <span className="font-bold text-sm">{val as number}</span>
+                        <span className="font-bold text-sm font-mono text-foreground">{val as number}</span>
                       </div>
                     ))}
                 </div>
@@ -133,26 +149,28 @@ export default function RepPage() {
 
           {/* QB Sales */}
           {data.sales && data.sales.length > 0 && (
-            <Section title="💰 QuickBase Sales" subtitle={`${data.sales.length} deals found`}>
-              <div className="overflow-x-auto">
+            <Section title="QuickBase Sales" subtitle={`${data.sales.length} deals found`}>
+              <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-800 text-xs uppercase tracking-wider">
-                      <th className="text-left py-3 px-4">Date</th>
-                      <th className="text-left py-3 px-2">Office</th>
-                      <th className="text-right py-3 px-2">System (kW)</th>
-                      <th className="text-right py-3 px-2">Net PPW</th>
-                      <th className="text-left py-3 px-2">Status</th>
+                    <tr className="text-muted-foreground border-b border-border text-[11px] uppercase tracking-wider">
+                      <th className="text-left py-3 px-5 font-medium">Date</th>
+                      <th className="text-left py-3 px-2 font-medium">Office</th>
+                      <th className="text-right py-3 px-2 font-medium">System (kW)</th>
+                      <th className="text-right py-3 px-2 font-medium">Net PPW</th>
+                      <th className="text-left py-3 px-3 font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.sales.map((s: any, i: number) => (
-                      <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                        <td className="py-3 px-4">{s.saleDate}</td>
-                        <td className="py-3 px-2 text-gray-400">{s.salesOffice}</td>
-                        <td className="text-right py-3 px-2">{s.systemSizeKw.toFixed(1)}</td>
-                        <td className="text-right py-3 px-2">${s.netPpw.toFixed(2)}</td>
-                        <td className="py-3 px-2"><span className="text-xs px-2 py-0.5 bg-gray-800 rounded-md">{s.status}</span></td>
+                      <tr key={i} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                        <td className="py-3 px-5 text-foreground font-mono text-xs">{s.saleDate}</td>
+                        <td className="py-3 px-2 text-muted-foreground">{s.salesOffice}</td>
+                        <td className="text-right py-3 px-2 font-mono text-foreground">{s.systemSizeKw.toFixed(1)}</td>
+                        <td className="text-right py-3 px-2 font-mono text-foreground">${s.netPpw.toFixed(2)}</td>
+                        <td className="py-3 px-3">
+                          <span className="text-xs px-1.5 py-0.5 bg-secondary border border-border rounded text-muted-foreground">{s.status}</span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

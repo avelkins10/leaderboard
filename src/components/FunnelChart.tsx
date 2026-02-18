@@ -13,15 +13,18 @@ export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
           : null;
         return (
           <div key={step.label}>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-gray-300">{step.label}</span>
+            <div className="flex items-center justify-between text-sm mb-1.5">
+              <span className="text-muted-foreground text-xs font-medium">{step.label}</span>
               <div className="flex items-center gap-3">
-                {convRate && <span className="text-gray-500 text-xs">{convRate}% conv.</span>}
-                <span className="font-bold" style={{ color: step.color }}>{step.value}</span>
+                {convRate && <span className="text-muted-foreground/60 text-xs">{convRate}% conv.</span>}
+                <span className="font-bold text-sm font-mono" style={{ color: step.color }}>{step.value}</span>
               </div>
             </div>
-            <div className="h-8 bg-gray-800 rounded-lg overflow-hidden">
-              <div className="h-full rounded-lg transition-all duration-500" style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: step.color, opacity: 0.8 }} />
+            <div className="h-7 bg-secondary rounded overflow-hidden">
+              <div
+                className="h-full rounded transition-all duration-500"
+                style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: step.color, opacity: 0.7 }}
+              />
             </div>
           </div>
         );
