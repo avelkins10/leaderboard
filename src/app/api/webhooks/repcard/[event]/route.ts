@@ -25,9 +25,27 @@ function extractDispositionCategory(disposition: string | null): string | null {
   return match ? match[1] : null;
 }
 
+function checkForPowerBill(payload: any): { hasPowerBill: boolean; urls: string[] } {
+  // Check appointment-level attachments first (primary source)
+  if (Array.isArray(payload.appointment_attachment) && payload.appointment_attachment.length > 0) {
+    return { hasPowerBill: true, urls: payload.appointment_attachment };
+  }
+  // Check contact/lead-level attachments
+  const contact = payload.contact || {};
+  if (contact.attachment && typeof contact.attachment === 'string' && contact.attachment.length > 0) {
+    return { hasPowerBill: true, urls: [contact.attachment] };
+  }
+  if (contact.latestAttachment && typeof contact.latestAttachment === 'string' && contact.latestAttachment.length > 0) {
+    return { hasPowerBill: true, urls: [contact.latestAttachment] };
+  }
+  if (contact.soloAttachment && typeof contact.soloAttachment === 'string' && contact.soloAttachment.length > 0) {
+    return { hasPowerBill: true, urls: [contact.soloAttachment] };
+  }
+  return { hasPowerBill: false, urls: [] };
+}
+
 function buildAppointmentUpsert(payload: any) {
-  const hasPowerBill =
-    Array.isArray(payload.appointment_attachment) && payload.appointment_attachment.length > 0;
+  const { hasPowerBill, urls: powerBillUrls } = checkForPowerBill(payload);
   const hoursToAppt = calcHoursToAppointment(
     payload.appt_start_time,
     payload.contact?.createdAt
@@ -54,7 +72,7 @@ function buildAppointmentUpsert(payload: any) {
     lead_created_at: payload.contact?.createdAt ?? null,
     hours_to_appointment: hoursToAppt,
     has_power_bill: hasPowerBill,
-    power_bill_urls: payload.appointment_attachment ?? [],
+    power_bill_urls: powerBillUrls,
     is_quality: isQuality,
     both_spouses_present: payload.contact?.both_spouses_present ?? null,
     qb_record_id: payload.contact?.qb_record_id ?? null,
@@ -147,6 +165,34 @@ async function handleDoorKnocked(payload: any) {
   if (error) console.error('door-knocked insert error:', error);
 }
 
+async function handleContactAttachmentUpdate(payload: any) {
+  // If the contact/lead payload has an attachment, find related appointments and update power bill
+  const contactId = payload.id;
+  const attachment = payload.attachment || payload.latestAttachment || payload.soloAttachment;
+  if (!contactId || !attachment || typeof attachment !== 'string' || attachment.length === 0) return;
+
+  // Find appointments for this contact that don't have a power bill
+  const { data: appts } = await supabaseAdmin
+    .from('appointments')
+    .select('id, hours_to_appointment')
+    .eq('contact_id', contactId)
+    .eq('has_power_bill', false);
+
+  if (!appts || appts.length === 0) return;
+
+  for (const appt of appts) {
+    const isQuality = appt.hours_to_appointment !== null && appt.hours_to_appointment > 0 && appt.hours_to_appointment <= 48;
+    await supabaseAdmin
+      .from('appointments')
+      .update({
+        has_power_bill: true,
+        power_bill_urls: [attachment],
+        is_quality: isQuality,
+      })
+      .eq('id', appt.id);
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { event: string } }
@@ -193,7 +239,8 @@ export async function POST(
         break;
       case 'status-changed':
       case 'contact-type-changed':
-        // Just logged above, no special processing yet
+        // Check if contact has attachments — if so, update any related appointments
+        await handleContactAttachmentUpdate(payload);
         break;
     }
   } catch (err) {
