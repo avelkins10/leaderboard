@@ -77,6 +77,37 @@ Supabase (real-time data store)
 
 5. **All times are timezone-aware** — Each office has a timezone. All user-facing times display in the rep's local timezone.
 
+## Deal Matching (QB ↔ RepCard)
+
+Every QB deal is matched to a RepCard appointment. 90% YTD match rate.
+
+**Matching chain (priority order):**
+1. **Phone** (84% of matches) — normalize both to 10 digits, exact match. Confidence: 0.95 if closer ID also matches, 0.8 otherwise.
+2. **Address** (3%) — normalize addresses, partial match on street number + name. Confidence: 0.85 with closer match.
+3. **Name + Date** (3%) — last name match + same closer + appointment within 30 days of sale. Confidence: 0.6.
+
+Phone normalization: strip non-digits, drop leading '1' if 11 digits, take last 10.
+Address normalization: lowercase, strip apt/unit/suite, abbreviate street types, strip zip.
+
+Matching logic: `src/lib/matching.ts`
+Match API: `POST /api/match/deals` (batch), `GET /api/match/deal/[qb_record_id]` (single)
+
+**Key principle:** A close only counts if it's in QuickBase. RepCard "Closed (Pending KCA)" is a claim, not verification.
+
+## Contact Lifecycle
+
+A contact flows through these stages (tracked across systems):
+
+```
+Door Knock (door_knocks) → Status: "Not Home" / "Appointment Scheduled" (lead_status_changes)
+  → Appointment Set (appointments) → Closer Assigned → Appointment Outcome (disposition)
+    → Status: "Signed" → "Pending KCA" (lead_status_changes)
+      → Contact Type: Lead → Customer (contact_type_changes)
+        → QB Deal Created (deal_matches links it all together)
+```
+
+Timeline API: `GET /api/contact/[id]` — returns chronological events from all tables.
+
 ## Directory Structure
 
 ```
@@ -85,6 +116,9 @@ src/
 │   ├── api/
 │   │   ├── appointments/route.ts   # Appointment drill-down (filter by setter, closer, office, disposition)
 │   │   ├── backfill/route.ts       # One-time data backfill endpoint
+│   │   ├── backfill/history/route.ts # Historical backfill from Neon DB
+│   │   ├── match/deals/route.ts    # Batch deal matching (QB ↔ RC)
+│   │   ├── match/deal/[id]/route.ts # Single deal full chain
 │   │   ├── contact/[id]/route.ts   # Contact timeline (full lifecycle)
 │   │   ├── cron/snapshot/route.ts  # Weekly snapshot (runs Monday 6am UTC)
 │   │   ├── office/[name]/route.ts  # Office detail page data
@@ -99,6 +133,7 @@ src/
 ├── components/                     # Shared UI components
 └── lib/
     ├── config.ts                   # Office mapping, timezones, env vars
+    ├── matching.ts                 # Phone/address normalization + matching
     ├── quickbase.ts                # QB API client
     ├── repcard.ts                  # RepCard API client
     ├── rep-roles.json              # RepCard role badges (seeded from Neon)

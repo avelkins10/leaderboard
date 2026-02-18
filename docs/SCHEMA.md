@@ -65,6 +65,82 @@ Raw webhook event log. Every webhook payload is stored here for debugging/replay
 | payload | jsonb | Full webhook payload |
 | created_at | timestamptz | Received time |
 
+### `deal_matches`
+Links QB projects to RepCard appointments. 90% YTD match rate.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigserial (PK) | Auto-increment |
+| qb_record_id | bigint (unique) | QB project Record ID (FID 3) |
+| appointment_id | bigint | RepCard appointment ID |
+| contact_id | bigint | RepCard contact/lead ID |
+| match_method | text | How matched: 'phone', 'address', 'name_date' |
+| match_confidence | float | 0.0–1.0 (0.95 = phone+closer match) |
+| qb_customer_name | text | Customer name from QB |
+| qb_customer_phone | text | Phone from QB |
+| qb_customer_address | text | Address from QB |
+| qb_closer_rc_id | text | Closer's RepCard ID from QB |
+| qb_setter_rc_id | text | Setter's RepCard ID from QB |
+| qb_sale_date | timestamptz | Sale date from QB |
+| qb_system_size_kw | float | System size |
+| qb_net_ppw | float | Net price per watt |
+| qb_sales_office | text | QB Sales Office name |
+| rc_contact_name | text | Contact name from RepCard |
+| rc_contact_phone | text | Phone from RepCard |
+| rc_contact_address | text | Address from RepCard |
+| rc_disposition | text | RepCard appointment disposition |
+| rc_appointment_time | timestamptz | Scheduled appointment time |
+| matched_at | timestamptz | When the match was created |
+
+### `lead_status_changes`
+Door knock outcomes and status transitions. 72K+ 2026 YTD records.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigserial (PK) | Auto-increment |
+| contact_id | bigint | RepCard contact ID |
+| rep_id | bigint | RepCard user ID who changed it |
+| rep_name | text | Rep full name |
+| old_status | text | Previous status (null if new) |
+| new_status | text | New status (Not Home, Not Interested, Appointment Scheduled, DQ-Shade, Signed, Pending KCA, etc.) |
+| office_team | text | RepCard team name |
+| changed_at | timestamptz | When status changed |
+| created_at | timestamptz | Record creation |
+
+### `contact_type_changes`
+Lead → Customer transitions (close signals from RepCard).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigserial (PK) | Auto-increment |
+| contact_id | bigint | RepCard contact ID |
+| contact_name | text | Contact full name |
+| contact_phone | text | Contact phone |
+| contact_address | text | Contact address |
+| old_type | text | Previous type (e.g., "Lead") |
+| new_type | text | New type (e.g., "Customer") |
+| old_type_id | int | RepCard type ID (1=Lead, 2=Customer) |
+| new_type_id | int | RepCard type ID |
+| closer_id | bigint | Closer RepCard user ID |
+| closer_name | text | Closer name |
+| setter_id | bigint | Setter RepCard user ID |
+| setter_name | text | Setter name |
+| office_team | text | RepCard team name |
+| changed_at | timestamptz | When type changed |
+
+### `attachments`
+Power bills and other uploaded files.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigserial (PK) | Auto-increment |
+| contact_id | bigint | RepCard contact ID |
+| appointment_id | bigint | Related appointment |
+| url | text | File URL |
+| source | text | 'appointment', 'contact', or 'lead' |
+| attachment_type | text | 'power_bill', 'contract', 'unknown' |
+| uploaded_at | timestamptz | When uploaded |
+
 ---
 
 ## QuickBase Fields We Use
