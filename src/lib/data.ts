@@ -484,27 +484,31 @@ export async function fetchScorecard(
   }
 
   // Derive active reps from leaderboard data:
-  // Setter is active if they knocked doors (door_knocked_days >= 1)
-  // Closer is active if they sat appointments (SAT >= 1)
+  // Active = knocked doors (DK > 0) OR sat appointments (SAT >= 1)
+  // Deduplicate: same person can appear as both setter and closer
   const activeRepsByOffice: Record<string, number> = {};
+  const activeRepsSeen: Record<string, Set<number>> = {};
   for (const s of allSetters) {
-    if ((s as any).DKD >= 1 || (s as any).door_knocked_days >= 1 || (s as any).DK > 0) {
+    if ((s as any).DK > 0) {
       const office = s.qbOffice;
       if (office && office !== "Unknown") {
-        activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
+        if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
+        activeRepsSeen[office].add(s.userId);
       }
     }
   }
   for (const c of allClosers) {
-    if ((c as any).SAT >= 1 || (c as any).LEAD >= 1) {
+    if ((c as any).SAT >= 1) {
       const office = c.qbOffice;
       if (office && office !== "Unknown") {
-        activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
+        if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
+        activeRepsSeen[office].add(c.userId);
       }
     }
   }
-  for (const [office, count] of Object.entries(activeRepsByOffice)) {
-    getOrCreate(office).activeReps = count;
+  for (const [office, ids] of Object.entries(activeRepsSeen)) {
+    activeRepsByOffice[office] = ids.size;
+    getOrCreate(office).activeReps = ids.size;
   }
 
   // Summary
