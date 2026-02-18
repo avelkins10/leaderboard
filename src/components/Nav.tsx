@@ -19,7 +19,7 @@ export function Nav() {
         <div className="w-[180px] shrink-0">
           <Link href="/" className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-70">
             <Image src="/logo.png" alt="KIN" width={24} height={24} className="h-6 w-6" />
-            <span className="text-sm font-bold tracking-[-0.02em] text-foreground">KINNECT</span>
+            <span className="text-sm font-bold tracking-[-0.02em] text-foreground">KIN PULSE</span>
           </Link>
         </div>
 
