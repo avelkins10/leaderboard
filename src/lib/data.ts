@@ -331,9 +331,9 @@ function attachSetterQB(
   bySetterName: Record<string, SalesAgg>,
   setterApptMap: Record<number, any>,
 ): ProcessedSetter {
-  // RepCard ID primary, name fallback
+  // RepCard ID primary, name fallback — a close is a close (active, cancelled, rejected all count)
   const qbData = bySetterRC[setter.userId] || bySetterName[setter.name];
-  setter.qbCloses = qbData?.deals || 0;
+  setter.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
   setter.qbCancelled = qbData?.cancelled || 0;
 
   // Merge outcomes from appointment data LB
@@ -357,9 +357,9 @@ function attachCloserQB(
   byCloserName: Record<string, SalesAgg & { office?: string }>,
   closerApptMap: Record<number, any>,
 ): ProcessedCloser {
-  // RepCard ID primary, name fallback
+  // RepCard ID primary, name fallback — a close is a close (active, cancelled, rejected all count)
   const qbData = byCloserRC[closer.userId] || byCloserName[closer.name];
-  closer.qbCloses = qbData?.deals || 0;
+  closer.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
   closer.qbCancelled = qbData?.cancelled || 0;
   closer.totalKw = qbData?.kw || 0;
   closer.avgPpw =
@@ -474,8 +474,8 @@ export async function fetchScorecard(
     const o = getOrCreate(office);
     const totalSold = agg.deals + agg.cancelled;
     o.sales = {
-      deals: agg.deals,
-      kw: agg.kw,
+      deals: agg.deals + agg.cancelled,
+      kw: agg.kw + agg.cancelledKw,
       cancelled: agg.cancelled,
       cancelledKw: agg.cancelledKw,
       cancelPct:
@@ -520,12 +520,12 @@ export async function fetchScorecard(
   return {
     period: { from: fromDate, to: toDate },
     summary: {
-      totalSales: activeSales.length,
-      totalKw: activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
+      totalSales: sales.length,
+      totalKw: sales.reduce((sum, s) => sum + s.systemSizeKw, 0),
       avgSystemSize:
-        activeSales.length > 0
-          ? activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0) /
-            activeSales.length
+        sales.length > 0
+          ? sales.reduce((sum, s) => sum + s.systemSizeKw, 0) /
+            sales.length
           : 0,
       avgPpw:
         validPpwSales.length > 0

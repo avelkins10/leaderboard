@@ -574,9 +574,9 @@ export default function Dashboard() {
                 label="Closes"
                 value={formatNumber(data.summary.totalSales)}
                 color="green"
-                subtitle="Active deals"
+                subtitle={`${data.summary.cancelled} cancelled`}
                 icon={<Target className="h-5 w-5" />}
-                tooltip="QuickBase verified closes (excludes cancels)"
+                tooltip="All QB deals (active + cancelled + rejected)"
               />
               <MetricCard
                 label="kW Sold"
@@ -584,7 +584,7 @@ export default function Dashboard() {
                 color="blue"
                 subtitle="Total kilowatts"
                 icon={<Zap className="h-5 w-5" />}
-                tooltip="Total kW sold across all active deals"
+                tooltip="Total kW sold across all deals"
               />
               <MetricCard
                 label="Close Rate"
@@ -599,7 +599,7 @@ export default function Dashboard() {
                 color={data.summary.cancelPct > 20 ? "red" : "default"}
                 subtitle={`${data.summary.cancelled} cancelled`}
                 icon={<XCircle className="h-5 w-5" />}
-                tooltip="Cancelled / (active + cancelled)"
+                tooltip="Cancelled / total closes"
               />
             </div>
           </div>
@@ -952,7 +952,7 @@ export default function Dashboard() {
                           onSort={(k) =>
                             handleSort(closerSort, setCloserSort, k)
                           }
-                          tooltip="Cancelled / (active + cancelled)"
+                          tooltip="Cancelled / total closes"
                         />
                         <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
                           Cancels
@@ -1149,7 +1149,7 @@ export default function Dashboard() {
                         sortKey="cancelPct"
                         sort={officeSort}
                         onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Cancelled / (active + cancelled)"
+                        tooltip="Cancelled / total closes"
                       />
                       <SortHeader
                         label="Active"
