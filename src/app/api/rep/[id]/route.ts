@@ -3,6 +3,7 @@ import { getLeaderboards, getUsers, getAppointments } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
 import { supabaseAdmin } from '@/lib/supabase';
+import repRoles from '@/lib/rep-roles.json';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const userId = Number(params.id);
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         team: user.team,
         region,
         role,
-        roleBadge: user.role,
+        roleBadge: (repRoles as Record<string, string>)[String(userId)] || user.jobTitle || null,
         jobTitle: user.jobTitle,
         status: user.status,
         image: user.image,
