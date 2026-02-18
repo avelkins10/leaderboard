@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTypedLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
-import { OFFICE_MAPPING, teamIdToQBOffice } from "@/lib/config";
+import { OFFICE_MAPPING, qbOfficeToRepCardTeams } from "@/lib/config";
+import {
+  getOfficeAppointmentBreakdown,
+  getActiveClosers,
+  getActiveSettersForOffice,
+  getOfficeSetterQualityStats,
+  getOfficePartnerships,
+} from "@/lib/supabase-queries";
 
 export async function GET(
   req: NextRequest,
@@ -11,20 +18,50 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const fromDate = searchParams.get("from") || getMonday();
   const toDate = searchParams.get("to") || getToday();
-  const today = getToday();
 
   try {
-    const needsToday = toDate >= today;
-    const [closerBoards, setterBoards, setterBoardsToday, users, sales] =
-      await Promise.all([
-        getTypedLeaderboards("closer", fromDate, toDate),
-        getTypedLeaderboards("setter", fromDate, toDate),
-        needsToday
-          ? getTypedLeaderboards("setter", today, today)
-          : Promise.resolve([]),
-        getUsers(),
-        getSales(fromDate, toDate),
-      ]);
+    // Get RepCard team names for this QB office (for Supabase queries)
+    const repCardTeamNames = qbOfficeToRepCardTeams(officeName);
+
+    const [
+      closerBoards,
+      setterBoards,
+      users,
+      sales,
+      apptBreakdown,
+      activeCloserCount,
+      activeSetterCount,
+      qualityStats,
+      partnerships,
+    ] = await Promise.all([
+      getTypedLeaderboards("closer", fromDate, toDate),
+      getTypedLeaderboards("setter", fromDate, toDate),
+      getUsers(),
+      getSales(fromDate, toDate),
+      repCardTeamNames.length > 0
+        ? getOfficeAppointmentBreakdown(repCardTeamNames, fromDate, toDate)
+        : Promise.resolve({
+            total: 0,
+            sat: 0,
+            no_show: 0,
+            canceled: 0,
+            rescheduled: 0,
+            scheduled: 0,
+            other: 0,
+          }),
+      repCardTeamNames.length > 0
+        ? getActiveClosers(repCardTeamNames, fromDate, toDate)
+        : Promise.resolve(0),
+      repCardTeamNames.length > 0
+        ? getActiveSettersForOffice(repCardTeamNames, fromDate, toDate)
+        : Promise.resolve(0),
+      repCardTeamNames.length > 0
+        ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate)
+        : Promise.resolve([]),
+      repCardTeamNames.length > 0
+        ? getOfficePartnerships(repCardTeamNames, fromDate, toDate)
+        : Promise.resolve([]),
+    ]);
 
     const userMap: Record<number, any> = {};
     for (const u of users) userMap[u.id] = u;
@@ -73,18 +110,10 @@ export async function GET(
     const closerApptLB = closerBoards.find(
       (lb: any) => lb.leaderboard_name === "Closer Appointment Data",
     );
-    const setterTodayLB = setterBoardsToday.find(
-      (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
-    );
-
     const setters = processLB(setterLB);
     const closers = processLB(closerLB);
     const setterAppts = processLB(setterApptLB);
     const closerAppts = processLB(closerApptLB);
-    const settersToday = processLB(setterTodayLB);
-
-    // Active reps today
-    const activeReps = settersToday.filter((s: any) => (s.DK || 0) > 0).length;
 
     // Sales for this office
     const officeSales = sales.filter((s) => s.salesOffice === officeName);
@@ -117,12 +146,17 @@ export async function GET(
         qbClosesByCloserRC[c.userId] || qbClosesByCloser[c.name] || 0;
     }
 
-    // Build setter accountability by merging setter LB + setter appt data + QB closes
+    // Build setter accountability by merging setter LB + setter appt data + QB closes + quality stats
     const setterApptMap: Record<number, any> = {};
     for (const sa of setterAppts) setterApptMap[sa.userId] = sa;
 
+    // Index quality stats by setter_id for merge
+    const qualityMap: Record<number, any> = {};
+    for (const qs of qualityStats) qualityMap[qs.setter_id] = qs;
+
     const setterAccountability = setters.map((s: any) => {
       const apptData = setterApptMap[s.userId] || {};
+      const quality = qualityMap[s.userId];
       const qbCloses =
         qbClosesBySetterRC[s.userId] || qbClosesBySetter[s.name] || 0;
       const appt = s.APPT || 0;
@@ -140,6 +174,9 @@ export async function GET(
         sitRate,
         closeRate,
         wasteRate,
+        avgStars: quality?.avg_stars || 0,
+        powerBillCount: quality?.power_bill_count || 0,
+        qualityCount: quality?.quality_count || 0,
       };
     });
 
@@ -170,14 +207,17 @@ export async function GET(
       closers,
       closerAppts,
       sales: officeSales,
-      activeReps,
+      activeSetters: activeSetterCount,
+      activeClosers: activeCloserCount,
       funnel: {
         doors: totalDoors,
         appointments: totalAppts,
         sits: totalSits,
         qbCloses: totalQBCloses,
         rcClaims: totalRCClaims,
+        breakdown: apptBreakdown,
       },
+      partnerships,
       summary: {
         deals: officeSales.length,
         kw: officeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),

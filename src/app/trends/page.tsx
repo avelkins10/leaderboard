@@ -49,9 +49,9 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 export default function TrendsPage() {
-  const [metric, setMetric] = useState<"deals" | "doors" | "sits" | "closes">(
-    "deals",
-  );
+  const [metric, setMetric] = useState<
+    "deals" | "doors" | "appts" | "sits" | "closes"
+  >("deals");
   const [selectedOffices, setSelectedOffices] = useState<Set<string>>(
     new Set(),
   );
@@ -124,7 +124,7 @@ export default function TrendsPage() {
     });
   };
 
-  const metrics = ["deals", "doors", "sits", "closes"] as const;
+  const metrics = ["deals", "doors", "appts", "sits", "closes"] as const;
 
   return (
     <div className="space-y-8">
