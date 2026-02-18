@@ -34,45 +34,55 @@ export async function GET(req: NextRequest) {
     const setterApptStats = processLeaderboard(setterApptLB, userMap);
     const closerApptStats = processLeaderboard(closerApptLB, userMap);
 
-    // Process QB sales — index by both name and RepCard ID
-    const salesByOffice: Record<string, { deals: number; kw: number; closers: Record<string, { deals: number; kw: number }> }> = {};
-    const salesByCloser: Record<string, { deals: number; kw: number; office: string }> = {};
-    const salesBySetter: Record<string, { deals: number; kw: number }> = {};
-    const salesByCloserRC: Record<string, { deals: number; kw: number; office: string }> = {};
-    const salesBySetterRC: Record<string, { deals: number; kw: number }> = {};
+    // Process QB sales — split active vs cancelled
+    const CANCEL_STATUSES = ['cancelled', 'pending cancel'];
+    const isCancel = (status: string) => CANCEL_STATUSES.some(cs => status.toLowerCase().includes(cs));
+
+    const activeSales = sales.filter(s => !isCancel(s.status));
+    const cancelledSales = sales.filter(s => isCancel(s.status));
+
+    type SalesAgg = { deals: number; kw: number; cancelled: number; cancelledKw: number; office?: string; closers?: Record<string, SalesAgg> };
+    const newAgg = (office?: string): SalesAgg => ({ deals: 0, kw: 0, cancelled: 0, cancelledKw: 0, ...(office ? { office } : {}) });
+
+    const salesByOffice: Record<string, SalesAgg> = {};
+    const salesByCloser: Record<string, SalesAgg> = {};
+    const salesBySetter: Record<string, SalesAgg> = {};
+    const salesByCloserRC: Record<string, SalesAgg> = {};
+    const salesBySetterRC: Record<string, SalesAgg> = {};
 
     for (const sale of sales) {
+      const cancelled = isCancel(sale.status);
       const office = sale.salesOffice || 'Unknown';
-      if (!salesByOffice[office]) salesByOffice[office] = { deals: 0, kw: 0, closers: {} };
-      salesByOffice[office].deals++;
-      salesByOffice[office].kw += sale.systemSizeKw;
+      if (!salesByOffice[office]) salesByOffice[office] = { ...newAgg(), closers: {} };
+      if (cancelled) { salesByOffice[office].cancelled++; salesByOffice[office].cancelledKw += sale.systemSizeKw; }
+      else { salesByOffice[office].deals++; salesByOffice[office].kw += sale.systemSizeKw; }
 
       const closer = sale.closerName || 'Unknown';
-      if (!salesByOffice[office].closers[closer]) salesByOffice[office].closers[closer] = { deals: 0, kw: 0 };
-      salesByOffice[office].closers[closer].deals++;
-      salesByOffice[office].closers[closer].kw += sale.systemSizeKw;
+      if (!salesByOffice[office].closers![closer]) salesByOffice[office].closers![closer] = newAgg();
+      if (cancelled) { salesByOffice[office].closers![closer].cancelled++; salesByOffice[office].closers![closer].cancelledKw += sale.systemSizeKw; }
+      else { salesByOffice[office].closers![closer].deals++; salesByOffice[office].closers![closer].kw += sale.systemSizeKw; }
 
-      if (!salesByCloser[closer]) salesByCloser[closer] = { deals: 0, kw: 0, office };
-      salesByCloser[closer].deals++;
-      salesByCloser[closer].kw += sale.systemSizeKw;
+      if (!salesByCloser[closer]) salesByCloser[closer] = { ...newAgg(), office };
+      if (cancelled) { salesByCloser[closer].cancelled++; salesByCloser[closer].cancelledKw += sale.systemSizeKw; }
+      else { salesByCloser[closer].deals++; salesByCloser[closer].kw += sale.systemSizeKw; }
 
       if (sale.closerRepCardId) {
-        if (!salesByCloserRC[sale.closerRepCardId]) salesByCloserRC[sale.closerRepCardId] = { deals: 0, kw: 0, office };
-        salesByCloserRC[sale.closerRepCardId].deals++;
-        salesByCloserRC[sale.closerRepCardId].kw += sale.systemSizeKw;
+        if (!salesByCloserRC[sale.closerRepCardId]) salesByCloserRC[sale.closerRepCardId] = { ...newAgg(), office };
+        if (cancelled) { salesByCloserRC[sale.closerRepCardId].cancelled++; salesByCloserRC[sale.closerRepCardId].cancelledKw += sale.systemSizeKw; }
+        else { salesByCloserRC[sale.closerRepCardId].deals++; salesByCloserRC[sale.closerRepCardId].kw += sale.systemSizeKw; }
       }
 
       const setter = sale.setterName || 'Unknown';
       if (setter !== 'Unknown') {
-        if (!salesBySetter[setter]) salesBySetter[setter] = { deals: 0, kw: 0 };
-        salesBySetter[setter].deals++;
-        salesBySetter[setter].kw += sale.systemSizeKw;
+        if (!salesBySetter[setter]) salesBySetter[setter] = newAgg();
+        if (cancelled) { salesBySetter[setter].cancelled++; salesBySetter[setter].cancelledKw += sale.systemSizeKw; }
+        else { salesBySetter[setter].deals++; salesBySetter[setter].kw += sale.systemSizeKw; }
       }
 
       if (sale.setterRepCardId) {
-        if (!salesBySetterRC[sale.setterRepCardId]) salesBySetterRC[sale.setterRepCardId] = { deals: 0, kw: 0 };
-        salesBySetterRC[sale.setterRepCardId].deals++;
-        salesBySetterRC[sale.setterRepCardId].kw += sale.systemSizeKw;
+        if (!salesBySetterRC[sale.setterRepCardId]) salesBySetterRC[sale.setterRepCardId] = newAgg();
+        if (cancelled) { salesBySetterRC[sale.setterRepCardId].cancelled++; salesBySetterRC[sale.setterRepCardId].cancelledKw += sale.systemSizeKw; }
+        else { salesBySetterRC[sale.setterRepCardId].deals++; salesBySetterRC[sale.setterRepCardId].kw += sale.systemSizeKw; }
       }
     }
 
@@ -82,10 +92,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       period: { from: fromDate, to: toDate },
       summary: {
-        totalSales: sales.length,
-        totalKw: sales.reduce((sum, s) => sum + s.systemSizeKw, 0),
-        avgSystemSize: sales.length > 0 ? sales.reduce((sum, s) => sum + s.systemSizeKw, 0) / sales.length : 0,
-        avgPpw: sales.length > 0 ? sales.reduce((sum, s) => sum + s.netPpw, 0) / sales.length : 0,
+        totalSales: activeSales.length,
+        totalKw: activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
+        avgSystemSize: activeSales.length > 0 ? activeSales.reduce((sum, s) => sum + s.systemSizeKw, 0) / activeSales.length : 0,
+        avgPpw: activeSales.length > 0 ? activeSales.reduce((sum, s) => sum + s.netPpw, 0) / activeSales.length : 0,
+        cancelled: cancelledSales.length,
+        cancelledKw: cancelledSales.reduce((sum, s) => sum + s.systemSizeKw, 0),
+        cancelPct: sales.length > 0 ? Math.round((cancelledSales.length / sales.length) * 100) : 0,
       },
       offices: officeScores,
       setterLeaderboard: setterStats,
@@ -162,6 +175,7 @@ function buildOfficeScores(
     // Attach QB closes to setter — prefer RepCard ID match, fallback to name
     const qbData = salesBySetterRC[s.userId] || salesBySetter[s.name];
     s.qbCloses = qbData?.deals || 0;
+    s.qbCancelled = qbData?.cancelled || 0;
     o.setters.push(s);
   }
 
@@ -172,6 +186,9 @@ function buildOfficeScores(
     // Attach QB closes to closer — prefer RepCard ID match, fallback to name
     const qbData = salesByCloserRC[s.userId] || salesByCloser[s.name];
     s.qbCloses = qbData?.deals || 0;
+    s.qbCancelled = qbData?.cancelled || 0;
+    const totalSold = s.qbCloses + s.qbCancelled;
+    s.cancelPct = totalSold > 0 ? Math.round((s.qbCancelled / totalSold) * 100) : 0;
     o.closers.push(s);
   }
 
@@ -190,7 +207,14 @@ function buildOfficeScores(
 
   for (const [office, data] of Object.entries(salesByOffice)) {
     const o = getOrCreate(office);
-    o.sales = { deals: data.deals, kw: data.kw };
+    const totalSold = data.deals + data.cancelled;
+    o.sales = {
+      deals: data.deals,
+      kw: data.kw,
+      cancelled: data.cancelled,
+      cancelledKw: data.cancelledKw,
+      cancelPct: totalSold > 0 ? Math.round((data.cancelled / totalSold) * 100) : 0,
+    };
   }
 
   for (const [office, count] of Object.entries(activeRepsByOffice)) {
