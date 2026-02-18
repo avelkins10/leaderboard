@@ -70,6 +70,11 @@ export async function getLeaderboards(fromDate: string, toDate: string): Promise
   return data.result;
 }
 
+export async function getTypedLeaderboards(type: 'closer' | 'setter', fromDate: string, toDate: string): Promise<Leaderboard[]> {
+  const data = await rcFetch('/leaderboards', { type, from_date: fromDate, to_date: toDate });
+  return data.result;
+}
+
 export interface Appointment {
   id: number;
   customer_id: number;

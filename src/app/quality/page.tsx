@@ -9,6 +9,12 @@ import { Tooltip } from '@/components/Tooltip';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Award, BookOpen, Lightbulb } from 'lucide-react';
 
+function wasteColor(v: number) {
+  if (v >= 30) return 'bg-red-500/10 text-red-400 border-red-500/20';
+  if (v >= 15) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+  return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+}
+
 export default function QualityPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -26,16 +32,32 @@ export default function QualityPage() {
       .finally(() => setLoading(false));
   }, [from, to]);
 
-  // Compute quality metrics from setter appointment data
-  const setterQuality = data?.setterAppointments
-    ?.filter((s: any) => (s.APPT || s.SET || 0) > 0)
-    ?.map((s: any) => {
-      const total = s.APPT || s.SET || 0;
-      const sits = s.SITS || s.SAT || 0;
-      const sitRate = total > 0 ? (sits / total * 100) : 0;
-      return { ...s, total, sits, sitRate };
-    })
-    ?.sort((a: any, b: any) => b.sitRate - a.sitRate) || [];
+  // Build setter accountability by merging setter LB + setter appt data + QB closes
+  const setterAccountability = (() => {
+    if (!data) return [];
+    const setterLB = data.setterLeaderboard || [];
+    const setterAppt = data.setterAppointments || [];
+    const salesBySetter = data.salesBySetter || {};
+
+    const apptMap: Record<number, any> = {};
+    for (const sa of setterAppt) apptMap[sa.userId] = sa;
+
+    return setterLB
+      .filter((s: any) => (s.APPT || 0) > 0 || (s.DK || 0) > 0)
+      .map((s: any) => {
+        const ad = apptMap[s.userId] || {};
+        const appt = s.APPT || 0;
+        const sits = s.SITS || 0;
+        const nosh = ad.NOSH || 0;
+        const canc = ad.CANC || 0;
+        const qbCloses = salesBySetter[s.name]?.deals || 0;
+        const sitRate = appt > 0 ? (sits / appt) * 100 : 0;
+        const closeRate = appt > 0 ? (qbCloses / appt) * 100 : 0;
+        const wasteRate = appt > 0 ? ((nosh + canc) / appt) * 100 : 0;
+        return { ...s, appt, sits, nosh, canc, qbCloses, sitRate, closeRate, wasteRate };
+      })
+      .sort((a: any, b: any) => b.wasteRate - a.wasteRate);
+  })();
 
   // Office quality comparison
   const officeQuality = data ? Object.entries(data.offices).map(([name, d]: [string, any]) => {
@@ -50,7 +72,7 @@ export default function QualityPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Award className="w-6 h-6 text-yellow-400" /> Quality Metrics</h1>
-          <p className="text-gray-500 text-sm mt-1">Understanding what makes a quality appointment</p>
+          <p className="text-gray-500 text-sm mt-1">Setter accountability & appointment quality</p>
         </div>
         <WeekPicker weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
       </div>
@@ -67,12 +89,12 @@ export default function QualityPage() {
               <p className="text-gray-300 text-sm leading-relaxed">A quality appointment has the <span className="text-white font-medium">power bill collected</span> AND is <span className="text-white font-medium">set within 48 hours</span>. These appointments sit 2-3x more often than non-quality ones.</p>
             </div>
             <div className="bg-gradient-to-br from-blue-900/30 to-blue-900/10 border border-blue-800/30 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3"><BookOpen className="w-5 h-5 text-blue-400" /><h3 className="font-bold text-blue-400">Why Sit Rate Matters</h3></div>
-              <p className="text-gray-300 text-sm leading-relaxed">Every appointment that doesn&apos;t sit is <span className="text-white font-medium">wasted closer time</span>. A 50% sit rate means half your closer&apos;s day is unproductive. Quality appointments fix this.</p>
+              <div className="flex items-center gap-2 mb-3"><BookOpen className="w-5 h-5 text-blue-400" /><h3 className="font-bold text-blue-400">Why Waste Rate Matters</h3></div>
+              <p className="text-gray-300 text-sm leading-relaxed">No-shows and cancels waste closer time. A setter with <span className="text-red-400 font-medium">&gt;30% waste rate</span> needs coaching. Every wasted appointment = a lost opportunity + frustrated closer.</p>
             </div>
             <div className="bg-gradient-to-br from-yellow-900/30 to-yellow-900/10 border border-yellow-800/30 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3"><Award className="w-5 h-5 text-yellow-400" /><h3 className="font-bold text-yellow-400">Target Benchmarks</h3></div>
-              <p className="text-gray-300 text-sm leading-relaxed"><span className="text-emerald-400 font-medium">Sit Rate: 50%+</span> of appointments should be sat. <span className="text-emerald-400 font-medium">Sit/Close: 35%+</span> of sits should close. These are the numbers that build careers.</p>
+              <p className="text-gray-300 text-sm leading-relaxed"><span className="text-emerald-400 font-medium">Sit Rate: 50%+</span> | <span className="text-emerald-400 font-medium">Close Rate: 15%+</span> | <span className="text-emerald-400 font-medium">Waste: &lt;15%</span>. These are the numbers that build careers.</p>
             </div>
           </div>
 
@@ -102,10 +124,10 @@ export default function QualityPage() {
             </div>
           </Section>
 
-          {/* Setter Quality Table */}
-          <Section title="👤 Setter Quality Scores" subtitle="Sit rate as a proxy for appointment quality">
-            {setterQuality.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No setter appointment data available for this period</p>
+          {/* Setter Accountability Table */}
+          <Section title="👤 Setter Accountability" subtitle="Full funnel metrics — sorted by waste rate (worst first)">
+            {setterAccountability.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No setter data available for this period</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -114,22 +136,46 @@ export default function QualityPage() {
                       <th className="text-left py-3 px-4">#</th>
                       <th className="text-left py-3 px-2">Setter</th>
                       <th className="text-left py-3 px-2">Office</th>
-                      <th className="text-right py-3 px-2">Appts Set</th>
+                      <th className="text-right py-3 px-2">Set</th>
+                      <th className="text-right py-3 px-2">No Show</th>
+                      <th className="text-right py-3 px-2">Cancel</th>
                       <th className="text-right py-3 px-2">Sits</th>
+                      <th className="text-right py-3 px-2">QB Closes</th>
                       <th className="text-right py-3 px-2">
-                        <div className="flex items-center justify-end gap-1">Sit Rate <Tooltip text="% of set appointments that were actually sat. Higher = better quality appointments." /></div>
+                        <div className="flex items-center justify-end gap-1">Sit% <Tooltip text="Sits ÷ Appointments Set" /></div>
+                      </th>
+                      <th className="text-right py-3 px-2">
+                        <div className="flex items-center justify-end gap-1">Close% <Tooltip text="QB Closes ÷ Appointments Set" /></div>
+                      </th>
+                      <th className="text-right py-3 px-2">
+                        <div className="flex items-center justify-end gap-1">Waste% <Tooltip text="(No Shows + Cancels) ÷ Appointments Set" /></div>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {setterQuality.map((s: any, i: number) => (
+                    {setterAccountability.map((s: any, i: number) => (
                       <tr key={s.userId} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                         <td className="py-3 px-4 text-gray-500">{i + 1}</td>
                         <td className="py-3 px-2 font-medium">{s.name}</td>
                         <td className="py-3 px-2 text-gray-500">{s.qbOffice?.split(' - ')[0] || s.team}</td>
-                        <td className="text-right py-3 px-2">{s.total}</td>
+                        <td className="text-right py-3 px-2 text-purple-400 font-bold">{s.appt}</td>
+                        <td className="text-right py-3 px-2 text-red-400">{s.nosh}</td>
+                        <td className="text-right py-3 px-2 text-orange-400">{s.canc}</td>
                         <td className="text-right py-3 px-2 text-blue-400">{s.sits}</td>
-                        <td className="text-right py-3 px-2"><StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /></td>
+                        <td className="text-right py-3 px-2 text-emerald-400 font-bold">{s.qbCloses}</td>
+                        <td className="text-right py-3 px-2">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.sitRate)} good={50} ok={30} /> : '-'}
+                        </td>
+                        <td className="text-right py-3 px-2">
+                          {s.appt > 0 ? <StatusBadge value={Math.round(s.closeRate)} good={15} ok={8} /> : '-'}
+                        </td>
+                        <td className="text-right py-3 px-2">
+                          {s.appt > 0 ? (
+                            <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium border ${wasteColor(Math.round(s.wasteRate))}`}>
+                              {Math.round(s.wasteRate)}%
+                            </span>
+                          ) : '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -16,8 +16,17 @@ interface ScorecardData {
   offices: Record<string, any>;
   setterLeaderboard: any[];
   closerLeaderboard: any[];
+  setterAppointments: any[];
   salesByOffice: Record<string, any>;
   salesByCloser: Record<string, any>;
+  salesBySetter: Record<string, any>;
+  activeRepsByOffice: Record<string, number>;
+}
+
+function wasteColor(value: number): string {
+  if (value >= 30) return 'bg-red-500/10 text-red-400 border-red-500/20';
+  if (value >= 15) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+  return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
 }
 
 export default function Dashboard() {
@@ -45,7 +54,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -104,68 +112,79 @@ export default function Dashboard() {
                 <thead>
                   <tr className="text-gray-400 border-b border-gray-800 text-xs uppercase tracking-wider">
                     <th className="text-left py-3 px-4">Office</th>
+                    <th className="text-center py-3 px-2">Active</th>
                     <th className="text-right py-3 px-2">
-                      <div className="flex items-center justify-end gap-1">Deals <Tooltip text="Closed deals from QuickBase" /></div>
+                      <div className="flex items-center justify-end gap-1">QB Deals <Tooltip text="Verified closed deals from QuickBase" /></div>
                     </th>
                     <th className="text-right py-3 px-2">kW</th>
-                    <th className="text-right py-3 px-2">
-                      <div className="flex items-center justify-end gap-1">Doors <Tooltip text="Total unique doors knocked by setters" /></div>
-                    </th>
+                    <th className="text-right py-3 px-2">Doors</th>
                     <th className="text-right py-3 px-2">Appts</th>
                     <th className="text-right py-3 px-2">Sits</th>
-                    <th className="text-right py-3 px-2">Closes</th>
                     <th className="text-right py-3 px-2">
-                      <div className="flex items-center justify-end gap-1">Sit/Close <Tooltip text="Of appointments that were sat, how many resulted in a close. Target: 35%+" /></div>
+                      <div className="flex items-center justify-end gap-1">QB Closes <Tooltip text="Verified closes from QuickBase" /></div>
                     </th>
                     <th className="text-right py-3 px-2">
-                      <div className="flex items-center justify-end gap-1">D/$ <Tooltip text="Doors knocked per deal closed. Lower is better." /></div>
+                      <div className="flex items-center justify-end gap-1">RC Claims <Tooltip text="RepCard self-reported closes (Pending KCA)" /></div>
+                    </th>
+                    <th className="text-right py-3 px-2">
+                      <div className="flex items-center justify-end gap-1">Sit/Close <Tooltip text="QB Closes ÷ Sits. Target: 35%+" /></div>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {officeEntries.map(([office, d]: [string, any], idx) => {
+                  {officeEntries.map(([office, d]: [string, any]) => {
                     const totalDoors = d.setters?.reduce((s: number, r: any) => s + (r.DK || 0), 0) || 0;
                     const totalAppts = d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
                     const totalSits = d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
-                    const totalCloses = d.closers?.reduce((s: number, r: any) => s + (r.CLOS || 0), 0) || 0;
-                    const sitClose = totalSits > 0 ? (totalCloses / totalSits) * 100 : 0;
-                    const dpd = d.sales?.deals > 0 ? totalDoors / d.sales.deals : 0;
-                    const deals = d.sales?.deals || 0;
+                    const rcClaims = d.closers?.reduce((s: number, r: any) => s + (r.CLOS || 0), 0) || 0;
+                    const qbCloses = d.sales?.deals || 0;
+                    const sitClose = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
+                    const activeReps = d.activeReps || 0;
                     return (
-                      <tr key={office} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${deals === 0 ? 'opacity-60' : ''}`}>
+                      <tr key={office} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${qbCloses === 0 ? 'opacity-60' : ''}`}>
                         <td className="py-3 px-4">
                           <Link href={`/office/${encodeURIComponent(office)}`} className="font-medium hover:text-blue-400 transition">
                             {office}
-                            {deals === 0 && <span className="ml-2 text-xs text-red-400">⚠ 0 deals</span>}
+                            {qbCloses === 0 && <span className="ml-2 text-xs text-red-400">⚠ 0 deals</span>}
                           </Link>
                         </td>
-                        <td className="text-right py-3 px-2 font-bold text-emerald-400">{deals}</td>
+                        <td className="text-center py-3 px-2">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${activeReps > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-500'}`}>
+                            {activeReps > 0 ? '🟢' : '⚪'} {activeReps}
+                          </span>
+                        </td>
+                        <td className="text-right py-3 px-2 font-bold text-emerald-400">{qbCloses}</td>
                         <td className="text-right py-3 px-2 text-gray-300">{(d.sales?.kw || 0).toFixed(1)}</td>
                         <td className="text-right py-3 px-2">{totalDoors}</td>
                         <td className="text-right py-3 px-2">{totalAppts}</td>
                         <td className="text-right py-3 px-2">{totalSits}</td>
-                        <td className="text-right py-3 px-2 font-bold text-blue-400">{totalCloses}</td>
+                        <td className="text-right py-3 px-2 font-bold text-emerald-400">{qbCloses}</td>
                         <td className="text-right py-3 px-2">
-                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-gray-600">-</span>}
+                          <span className={rcClaims > qbCloses ? 'text-yellow-400 font-bold' : 'text-gray-400'}>
+                            {rcClaims}
+                            {rcClaims > qbCloses && <span className="text-xs ml-1 text-red-400">+{rcClaims - qbCloses}</span>}
+                          </span>
                         </td>
                         <td className="text-right py-3 px-2">
-                          {dpd > 0 ? <span className={rateColor(200 - dpd, 100, 50)}>{dpd.toFixed(0)}</span> : <span className="text-gray-600">-</span>}
+                          {totalSits > 0 ? <StatusBadge value={Math.round(sitClose)} good={35} ok={25} /> : <span className="text-gray-600">-</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
-                {/* Totals row */}
                 <tfoot>
                   <tr className="border-t-2 border-gray-700 font-bold">
                     <td className="py-3 px-4 text-gray-300">TOTAL</td>
+                    <td className="text-center py-3 px-2 text-gray-400">
+                      {officeEntries.reduce((s, [, d]) => s + (d.activeReps || 0), 0)}
+                    </td>
                     <td className="text-right py-3 px-2 text-emerald-400">{data.summary.totalSales}</td>
                     <td className="text-right py-3 px-2">{data.summary.totalKw.toFixed(1)}</td>
                     <td className="text-right py-3 px-2">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.DK || 0), 0) || 0), 0)}</td>
                     <td className="text-right py-3 px-2">{officeEntries.reduce((s, [, d]) => s + (d.setters?.reduce((a: number, r: any) => a + (r.APPT || 0), 0) || 0), 0)}</td>
                     <td className="text-right py-3 px-2">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.SAT || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-2 text-blue-400">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.CLOS || 0), 0) || 0), 0)}</td>
-                    <td className="text-right py-3 px-2">-</td>
+                    <td className="text-right py-3 px-2 text-emerald-400">{data.summary.totalSales}</td>
+                    <td className="text-right py-3 px-2 text-gray-400">{officeEntries.reduce((s, [, d]) => s + (d.closers?.reduce((a: number, r: any) => a + (r.CLOS || 0), 0) || 0), 0)}</td>
                     <td className="text-right py-3 px-2">-</td>
                   </tr>
                 </tfoot>
@@ -175,29 +194,35 @@ export default function Dashboard() {
 
           {/* Top Performers */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Section title="🎯 Top Closers" subtitle="Ranked by closes">
+            <Section title="🎯 Top Closers" subtitle="Ranked by QB verified closes">
               <div className="space-y-1">
                 {data.closerLeaderboard
-                  .filter(c => (c.SAT || 0) > 0 || (c.CLOS || 0) > 0)
-                  .sort((a, b) => (b.CLOS || 0) - (a.CLOS || 0))
+                  .filter(c => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0)
+                  .sort((a, b) => (b.qbCloses || 0) - (a.qbCloses || 0))
                   .slice(0, 10)
-                  .map((c, i) => (
-                    <Link key={c.userId} href={`/rep/${c.userId}`}
-                      className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800/50 group">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-800 text-gray-500'}`}>{i + 1}</span>
-                        <div>
-                          <span className="font-medium group-hover:text-blue-400 transition">{c.name}</span>
-                          <span className="text-gray-600 text-xs ml-2">{c.qbOffice?.split(' - ')[0]}</span>
+                  .map((c, i) => {
+                    const sitClose = (c.SAT || 0) > 0 ? ((c.qbCloses || 0) / c.SAT) * 100 : 0;
+                    return (
+                      <Link key={c.userId} href={`/rep/${c.userId}`}
+                        className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800/50 group">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-800 text-gray-500'}`}>{i + 1}</span>
+                          <div>
+                            <span className="font-medium group-hover:text-blue-400 transition">{c.name}</span>
+                            <span className="text-gray-600 text-xs ml-2">{c.qbOffice?.split(' - ')[0]}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm">
-                        <span className="text-gray-500">{c.SAT || 0} sits</span>
-                        <span className="font-bold text-blue-400">{c.CLOS || 0}</span>
-                        {(c.SAT || 0) > 0 && <StatusBadge value={Math.round(((c.CLOS || 0) / c.SAT) * 100)} good={35} ok={25} />}
-                      </div>
-                    </Link>
-                  ))}
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-gray-500">{c.SAT || 0} sits</span>
+                          <span className="font-bold text-emerald-400">{c.qbCloses || 0} QB</span>
+                          {(c.CLOS || 0) > (c.qbCloses || 0) && (
+                            <span className="text-yellow-400 text-xs">({c.CLOS} claimed)</span>
+                          )}
+                          {sitClose > 0 && <StatusBadge value={Math.round(sitClose)} good={35} ok={25} />}
+                        </div>
+                      </Link>
+                    );
+                  })}
               </div>
             </Section>
 

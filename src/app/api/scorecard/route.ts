@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeaderboards, getUsers } from '@/lib/repcard';
+import { getTypedLeaderboards, getUsers } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
 
@@ -7,33 +7,46 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const fromDate = searchParams.get('from') || getMonday();
   const toDate = searchParams.get('to') || getToday();
+  const today = getToday();
 
   try {
-    const [leaderboards, users, sales] = await Promise.all([
-      getLeaderboards(fromDate, toDate),
+    const [closerBoards, setterBoards, setterBoardsToday, users, sales] = await Promise.all([
+      getTypedLeaderboards('closer', fromDate, toDate),
+      getTypedLeaderboards('setter', fromDate, toDate),
+      getTypedLeaderboards('setter', today, today),
       getUsers(),
       getSales(fromDate, toDate),
     ]);
 
     // Build user lookup
     const userMap: Record<number, any> = {};
-    for (const u of users) {
-      userMap[u.id] = u;
-    }
+    for (const u of users) userMap[u.id] = u;
 
     // Process leaderboards
-    const setterLB = leaderboards.find((lb: any) => lb.leaderboard_name === 'Setter Leaderboard');
-    const closerLB = leaderboards.find((lb: any) => lb.leaderboard_name === 'Closer Leaderboard');
-    const setterApptLB = leaderboards.find((lb: any) => lb.leaderboard_name === 'Setter Appointment Data');
-    const closerApptLB = leaderboards.find((lb: any) => lb.leaderboard_name === 'Closer Appointment Data');
+    const setterLB = setterBoards.find((lb: any) => lb.leaderboard_name === 'Setter Leaderboard');
+    const closerLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Leaderboard');
+    const setterApptLB = setterBoards.find((lb: any) => lb.leaderboard_name === 'Setter Appointment Data');
+    const closerApptLB = closerBoards.find((lb: any) => lb.leaderboard_name === 'Closer Appointment Data');
+    const setterTodayLB = setterBoardsToday.find((lb: any) => lb.leaderboard_name === 'Setter Leaderboard');
 
-    // Process setter stats
     const setterStats = processLeaderboard(setterLB, userMap);
     const closerStats = processLeaderboard(closerLB, userMap);
     const setterApptStats = processLeaderboard(setterApptLB, userMap);
     const closerApptStats = processLeaderboard(closerApptLB, userMap);
+    const setterTodayStats = processLeaderboard(setterTodayLB, userMap);
 
-    // Process QB sales by office
+    // Active reps per office (setters with DK > 0 today)
+    const activeRepsByOffice: Record<string, number> = {};
+    for (const s of setterTodayStats) {
+      if ((s.DK || 0) > 0) {
+        const office = s.qbOffice;
+        if (office && office !== 'Unknown') {
+          activeRepsByOffice[office] = (activeRepsByOffice[office] || 0) + 1;
+        }
+      }
+    }
+
+    // Process QB sales
     const salesByOffice: Record<string, { deals: number; kw: number; closers: Record<string, { deals: number; kw: number }> }> = {};
     const salesByCloser: Record<string, { deals: number; kw: number; office: string }> = {};
     const salesBySetter: Record<string, { deals: number; kw: number }> = {};
@@ -62,7 +75,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build office scorecards
-    const officeScores = buildOfficeScores(setterStats, closerStats, salesByOffice, userMap);
+    const officeScores = buildOfficeScores(setterStats, closerStats, setterApptStats, closerApptStats, salesByOffice, salesByCloser, salesBySetter, activeRepsByOffice);
 
     return NextResponse.json({
       period: { from: fromDate, to: toDate },
@@ -80,6 +93,7 @@ export async function GET(req: NextRequest) {
       salesByOffice,
       salesByCloser,
       salesBySetter,
+      activeRepsByOffice,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -112,7 +126,6 @@ function processLeaderboard(lb: any, userMap: Record<number, any>) {
       };
     })
     .filter((s: any) => {
-      // Filter to only active offices
       const mapping = OFFICE_MAPPING[s.teamId];
       return mapping?.active !== false;
     });
@@ -121,31 +134,64 @@ function processLeaderboard(lb: any, userMap: Record<number, any>) {
 function buildOfficeScores(
   setterStats: any[],
   closerStats: any[],
+  setterApptStats: any[],
+  closerApptStats: any[],
   salesByOffice: Record<string, any>,
-  _userMap: Record<number, any>
+  salesByCloser: Record<string, any>,
+  salesBySetter: Record<string, any>,
+  activeRepsByOffice: Record<string, number>
 ) {
   const offices: Record<string, any> = {};
 
-  // Aggregate setter stats by QB office
+  const getOrCreate = (office: string) => {
+    if (!offices[office]) offices[office] = {
+      setters: [], closers: [], setterAppts: [], closerAppts: [],
+      sales: { deals: 0, kw: 0 }, activeReps: 0,
+    };
+    return offices[office];
+  };
+
   for (const s of setterStats) {
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
-    if (!offices[office]) offices[office] = { setters: [], closers: [], sales: { deals: 0, kw: 0 } };
-    offices[office].setters.push(s);
+    const o = getOrCreate(office);
+    // Attach QB closes to setter
+    const qbData = salesBySetter[s.name];
+    s.qbCloses = qbData?.deals || 0;
+    o.setters.push(s);
   }
 
-  // Aggregate closer stats by QB office
   for (const s of closerStats) {
     const office = s.qbOffice;
     if (office === 'Unknown') continue;
-    if (!offices[office]) offices[office] = { setters: [], closers: [], sales: { deals: 0, kw: 0 } };
-    offices[office].closers.push(s);
+    const o = getOrCreate(office);
+    // Attach QB closes to closer
+    const qbData = salesByCloser[s.name];
+    s.qbCloses = qbData?.deals || 0;
+    o.closers.push(s);
   }
 
-  // Add sales data
+  // Attach setter appointment data (CANC, NOSH, etc.)
+  for (const s of setterApptStats) {
+    const office = s.qbOffice;
+    if (office === 'Unknown') continue;
+    getOrCreate(office).setterAppts.push(s);
+  }
+
+  for (const s of closerApptStats) {
+    const office = s.qbOffice;
+    if (office === 'Unknown') continue;
+    getOrCreate(office).closerAppts.push(s);
+  }
+
   for (const [office, data] of Object.entries(salesByOffice)) {
-    if (!offices[office]) offices[office] = { setters: [], closers: [], sales: { deals: 0, kw: 0 } };
-    offices[office].sales = { deals: data.deals, kw: data.kw };
+    const o = getOrCreate(office);
+    o.sales = { deals: data.deals, kw: data.kw };
+  }
+
+  for (const [office, count] of Object.entries(activeRepsByOffice)) {
+    const o = getOrCreate(office);
+    o.activeReps = count;
   }
 
   return offices;
