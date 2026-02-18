@@ -3,9 +3,6 @@ import { getTypedLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import { OFFICE_MAPPING, qbOfficeToRepCardTeams } from "@/lib/config";
 import {
-  getOfficeAppointmentBreakdown,
-  getActiveClosers,
-  getActiveSettersForOffice,
   getOfficeSetterQualityStats,
   getOfficePartnerships,
 } from "@/lib/supabase-queries";
@@ -29,9 +26,6 @@ export async function GET(
       setterBoards,
       users,
       sales,
-      apptBreakdown,
-      activeCloserCount,
-      activeSetterCount,
       qualityStats,
       partnerships,
     ] = await Promise.all([
@@ -39,23 +33,6 @@ export async function GET(
       getTypedLeaderboards("setter", fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      repCardTeamNames.length > 0
-        ? getOfficeAppointmentBreakdown(repCardTeamNames, fromDate, toDate)
-        : Promise.resolve({
-            total: 0,
-            sat: 0,
-            no_show: 0,
-            canceled: 0,
-            rescheduled: 0,
-            scheduled: 0,
-            other: 0,
-          }),
-      repCardTeamNames.length > 0
-        ? getActiveClosers(repCardTeamNames, fromDate, toDate)
-        : Promise.resolve(0),
-      repCardTeamNames.length > 0
-        ? getActiveSettersForOffice(repCardTeamNames, fromDate, toDate)
-        : Promise.resolve(0),
       repCardTeamNames.length > 0
         ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate)
         : Promise.resolve([]),
@@ -115,6 +92,49 @@ export async function GET(
     const closers = processLB(closerLB);
     const setterAppts = processLB(setterApptLB);
     const closerAppts = processLB(closerApptLB);
+
+    // Derive active rep counts from leaderboard data (DK > 0 for setters, SAT >= 1 for closers)
+    // Deduplicate: same person can be setter AND closer
+    const activeRepIds = new Set<number>();
+    const activeSetterIds = new Set<number>();
+    const activeCloserIds = new Set<number>();
+    for (const s of setters) {
+      if ((s.DK || 0) > 0) {
+        activeSetterIds.add(s.userId);
+        activeRepIds.add(s.userId);
+      }
+    }
+    for (const c of closers) {
+      if ((c.SAT || 0) >= 1) {
+        activeCloserIds.add(c.userId);
+        activeRepIds.add(c.userId);
+      }
+    }
+    const activeSetterCount = activeSetterIds.size;
+    const activeCloserCount = activeCloserIds.size;
+
+    // Derive appointment breakdown from leaderboard data
+    const apptBreakdown = {
+      total: setterAppts.reduce((s: number, r: any) => s + (r.APPT || 0), 0),
+      sat: closerAppts.reduce((s: number, r: any) => s + (r.SAT || 0), 0),
+      closed: closerAppts.reduce((s: number, r: any) => s + (r.CLOS || 0), 0),
+      closer_fault: closerAppts.reduce(
+        (s: number, r: any) => s + (r.NOCL || 0) + (r.FUS || 0),
+        0,
+      ),
+      setter_fault: closerAppts.reduce(
+        (s: number, r: any) => s + (r.CF || 0) + (r.SHAD || 0),
+        0,
+      ),
+      no_show: setterAppts.reduce((s: number, r: any) => s + (r.NOSH || 0), 0),
+      canceled: setterAppts.reduce((s: number, r: any) => s + (r.CANC || 0), 0),
+      rescheduled: setterAppts.reduce(
+        (s: number, r: any) => s + (r.RSCH || 0),
+        0,
+      ),
+      scheduled: 0, // leaderboard doesn't track pending separately
+      other: 0,
+    };
 
     // Sales for this office — split active vs cancelled using shared isCancel()
     const officeSales = sales.filter((s) => s.salesOffice === officeName);

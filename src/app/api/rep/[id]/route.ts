@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeaderboards, getUsers, getAppointments } from "@/lib/repcard";
+import { getLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
-import { OFFICE_MAPPING, teamIdToQBOffice } from "@/lib/config";
+import {
+  OFFICE_MAPPING,
+  REPCARD_API_KEY,
+  teamIdToQBOffice,
+} from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
 import { dispositionCategory } from "@/lib/supabase-queries";
 import {
@@ -28,11 +32,10 @@ export async function GET(
   const qualityTo = toDate;
 
   try {
-    const [leaderboards, users, sales, appointments] = await Promise.all([
+    const [leaderboards, users, sales] = await Promise.all([
       getLeaderboards(fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      getAppointments(fromDate, toDate),
     ]);
 
     const user = users.find((u) => u.id === userId);
@@ -75,10 +78,47 @@ export async function GET(
               ? "setter"
               : "unknown";
 
-    // User's appointments (from RepCard)
-    const userAppts = appointments.filter(
-      (a) => a.setter_id === userId || a.closer_id === userId,
-    );
+    // Fetch user-specific appointments from RepCard API (not all company appointments)
+    const filterParam =
+      role === "closer" ? `closer_ids=${userId}` : `setter_ids=${userId}`;
+    const rcUrl = `https://app.repcard.com/api/appointments?${filterParam}&from_date=${fromDate}&to_date=${toDate}&per_page=100`;
+    const rcRes = await fetch(rcUrl, {
+      headers: { "x-api-key": REPCARD_API_KEY },
+      next: { revalidate: 120 },
+    });
+
+    let userAppts: any[] = [];
+    if (rcRes.ok) {
+      const rcData = await rcRes.json();
+      const apptRows = rcData.result?.data || rcData.data || [];
+      userAppts = apptRows.map((a: any) => {
+        const statusTitle = a.status?.title || null;
+        const categoryTitle = a.status?.category?.title || null;
+        return {
+          id: a.id,
+          setter_id: a.setter?.id || null,
+          closer_id: a.closer?.id || null,
+          contact_name: a.contact?.fullName || a.contact?.name || null,
+          contact_address:
+            a.appointmentLocation ||
+            a.contact?.fullAddress ||
+            [a.contact?.address, a.contact?.city, a.contact?.state]
+              .filter(Boolean)
+              .join(", ") ||
+            null,
+          appointment_time: a.startAt || null,
+          disposition: statusTitle,
+          disposition_category: categoryTitle
+            ? categoryTitle.toLowerCase().replace(/\s+/g, "_")
+            : statusTitle
+              ? dispositionCategory(statusTitle)
+              : "scheduled",
+          setter_name: a.setter?.fullName || a.setter?.name || null,
+          closer_name: a.closer?.fullName || a.closer?.name || null,
+          office_team: a.setter?.team || null,
+        };
+      });
+    }
 
     // Disposition breakdown for closers
     const dispositions: Record<string, number> = {};
@@ -96,7 +136,7 @@ export async function GET(
       fullName,
     );
 
-    // Quality stats from Supabase — query as setter for setters, as closer for closers
+    // Quality stats from Supabase — webhook-computed star_rating / power_bill data
     let qualityStats = null;
     let qualityInsights = null;
     {
@@ -210,15 +250,14 @@ export async function GET(
       }
     }
 
-    // Appointment history from Supabase
-    const { data: appointmentHistory } = await supabaseAdmin
-      .from("appointments")
-      .select(
-        "id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name, star_rating",
+    // Appointment history from RepCard API (sorted by date descending, last 50)
+    const appointmentHistory = userAppts
+      .sort(
+        (a, b) =>
+          new Date(b.appointment_time).getTime() -
+          new Date(a.appointment_time).getTime(),
       )
-      .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
-      .order("appointment_time", { ascending: false })
-      .limit(50);
+      .slice(0, 50);
 
     // Closer QB stats — use shared computation from data.ts
     const closerQBStats =
@@ -252,7 +291,7 @@ export async function GET(
       qualityInsights,
       closerQBStats,
       appointments: userAppts,
-      appointmentHistory: appointmentHistory || [],
+      appointmentHistory,
       sales: repSales,
       period: { from: fromDate, to: toDate },
     });
