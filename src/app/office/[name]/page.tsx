@@ -169,7 +169,7 @@ export default function OfficePage() {
         <div className="animate-enter space-y-8">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <MetricCard
-              label="QB Deals"
+              label="Deals"
               value={data.summary.deals}
               color="green"
               icon={<Target className="h-5 w-5" />}
@@ -468,7 +468,7 @@ export default function OfficePage() {
 
           <Section
             title="Closers"
-            subtitle="QB-verified closes vs RepCard claims"
+            subtitle="Verified closes vs RepCard claims"
             noPadding
           >
             {data.closers.length === 0 ? (
@@ -641,7 +641,7 @@ export default function OfficePage() {
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           Closed{" "}
-                          <Tooltip text="Appointments dispositioned as Closed (RepCard, not QB-verified)" />
+                          <Tooltip text="Appointments dispositioned as Closed (RepCard, not verified)" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">

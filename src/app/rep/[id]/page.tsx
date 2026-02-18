@@ -149,7 +149,7 @@ export default function RepPage() {
                 label="Closes"
                 value={data.stats.CLOS || 0}
                 color="green"
-                tooltip="RepCard self-reported closes (not QB-verified)"
+                tooltip="RepCard self-reported closes (not verified)"
               />
               <MetricCard
                 label="Sit %"
@@ -188,7 +188,7 @@ export default function RepPage() {
                 label="Closes"
                 value={data.stats.CLOS || 0}
                 color="green"
-                tooltip="RepCard self-reported closes (not QB-verified)"
+                tooltip="RepCard self-reported closes (not verified)"
               />
               <MetricCard
                 label="Close %"
@@ -296,7 +296,7 @@ export default function RepPage() {
                   label="Total Deals"
                   value={data.closerQBStats.totalDeals}
                   color="green"
-                  tooltip="QB-verified closed deals as closer"
+                  tooltip="Verified closed deals as closer"
                 />
                 <MetricCard
                   label="Total kW"
