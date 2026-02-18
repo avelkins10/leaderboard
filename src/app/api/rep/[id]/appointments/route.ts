@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
-import { supabaseAdmin } from "@/lib/supabase";
-import { dispositionCategory } from "@/lib/supabase-queries";
+import { REPCARD_API_KEY } from "@/lib/config";
 import { getRepSales, getMonday, getToday } from "@/lib/data";
+
+// Map RepCard status to a disposition category for badge coloring
+function dispositionCategory(status?: string | null): string {
+  if (!status) return "scheduled";
+  const lower = status.toLowerCase();
+  if (lower.includes("closed") || lower.includes("signed")) return "closed";
+  if (lower.includes("no show")) return "noshow";
+  if (lower.includes("cancel")) return "cancel";
+  if (lower.includes("reschedule") || lower.includes("follow up"))
+    return "reschedule";
+  if (lower.includes("not reached") || lower.includes("no answer"))
+    return "notreached";
+  if (lower.includes("credit fail") || lower.includes("credit")) return "cf";
+  if (lower.includes("shade") || lower.includes("shading")) return "shade";
+  if (
+    lower.includes("no close") ||
+    lower.includes("no interest") ||
+    lower.includes("not interested")
+  )
+    return "noclose";
+  return "other";
+}
 
 export async function GET(
   req: NextRequest,
@@ -32,24 +53,45 @@ export async function GET(
       rcRole.includes("regional manager");
     const role = isCloser ? "closer" : "setter";
 
-    // Fetch appointments from Supabase
-    const idField = role === "closer" ? "closer_id" : "setter_id";
-    const { data: apptRows, error: apptError } = await supabaseAdmin
-      .from("appointments")
-      .select(
-        "id, contact_name, contact_address, appointment_time, disposition, has_power_bill, hours_to_appointment, is_quality, star_rating, setter_name, closer_name, office_team",
-      )
-      .eq(idField, userId)
-      .gte("appointment_time", `${fromDate}T00:00:00Z`)
-      .lte("appointment_time", `${toDate}T23:59:59Z`)
-      .order("appointment_time", { ascending: false });
+    // Fetch appointments from RepCard API directly (with setter_ids / closer_ids filter)
+    const filterParam =
+      role === "closer"
+        ? `closer_ids=${userId}`
+        : `setter_ids=${userId}`;
 
-    if (apptError) throw apptError;
+    const rcUrl = `https://app.repcard.com/api/appointments?${filterParam}&from_date=${fromDate}&to_date=${toDate}&per_page=100`;
+    const rcRes = await fetch(rcUrl, {
+      headers: { "x-api-key": REPCARD_API_KEY },
+      next: { revalidate: 120 },
+    });
 
-    const appointments = (apptRows || []).map((a) => ({
-      ...a,
-      disposition_category: dispositionCategory(a.disposition),
-    }));
+    let appointments: any[] = [];
+    if (rcRes.ok) {
+      const rcData = await rcRes.json();
+      const apptRows = rcData.result?.data || rcData.data || [];
+      appointments = apptRows.map((a: any) => {
+        const statusTitle = a.status?.title || null;
+        return {
+          id: a.id,
+          contact_name: a.contact?.fullName || a.contact?.name || null,
+          contact_address:
+            a.appointmentLocation ||
+            a.contact?.fullAddress ||
+            [a.contact?.address, a.contact?.city, a.contact?.state]
+              .filter(Boolean)
+              .join(", ") ||
+            null,
+          appointment_time: a.startAt || null,
+          disposition: statusTitle,
+          disposition_category: dispositionCategory(statusTitle),
+          star_rating: a.contact?.rating ?? null,
+          setter_name: a.setter?.fullName || a.setter?.name || null,
+          closer_name: a.closer?.fullName || a.closer?.name || null,
+          has_power_bill: a.contact?.hasPowerBill ?? null,
+          office_team: a.setter?.team || null,
+        };
+      });
+    }
 
     // QB sales attributed to this rep
     const fullName = `${user.firstName} ${user.lastName}`;
