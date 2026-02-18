@@ -30,11 +30,14 @@ export interface QBSale {
   netPpw: number;
   state: string;
   status: string;
+  closerRepCardId: string;
+  setterRepCardId: string;
 }
 
 // FIDs: 522=Sale Date, 517=Closer Name, 337=Setter Name, 339=Sales Office,
-//       13=System Size kW, 543=Net PPW, 189=State, 255=Status
-const SALE_FIELDS = [522, 517, 337, 339, 13, 543, 189, 255];
+//       13=System Size kW, 543=Net PPW, 189=State, 255=Status,
+//       2277=Related Closer repcard_id, 2279=Related Setter repcard_id
+const SALE_FIELDS = [522, 517, 337, 339, 13, 543, 189, 255, 2277, 2279];
 
 export async function getSales(fromDate: string, toDate: string): Promise<QBSale[]> {
   const data = await qbQuery(
@@ -52,6 +55,8 @@ export async function getSales(fromDate: string, toDate: string): Promise<QBSale
     netPpw: parseFloat(r['543']?.value || 0),
     state: r['189']?.value || '',
     status: r['255']?.value || '',
+    closerRepCardId: r['2277']?.value || '',
+    setterRepCardId: r['2279']?.value || '',
   }));
 }
 

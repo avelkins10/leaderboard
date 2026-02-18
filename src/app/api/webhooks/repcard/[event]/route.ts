@@ -112,6 +112,24 @@ async function handleCloserUpdate(payload: any) {
 }
 
 async function handleDoorKnocked(payload: any) {
+  // Dedup: skip if same contact_id + rep_id within last 60 seconds
+  const contactId = payload.id ?? null;
+  const repId = payload.user?.id ?? null;
+  if (contactId && repId) {
+    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    const { data: existing } = await supabaseAdmin
+      .from('door_knocks')
+      .select('id')
+      .eq('contact_id', contactId)
+      .eq('rep_id', repId)
+      .gte('knocked_at', cutoff)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      console.log(`Skipping duplicate door knock: contact=${contactId} rep=${repId}`);
+      return;
+    }
+  }
+
   const { error } = await supabaseAdmin.from('door_knocks').insert({
     contact_id: payload.id ?? null,
     rep_id: payload.user?.id ?? null,

@@ -64,21 +64,29 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
     // Sales for this office
     const officeSales = sales.filter(s => s.salesOffice === officeName);
 
-    // QB closes by closer name
+    // QB closes by closer/setter — indexed by both name and RepCard ID
     const qbClosesByCloser: Record<string, number> = {};
     const qbClosesBySetter: Record<string, number> = {};
+    const qbClosesByCloserRC: Record<string, number> = {};
+    const qbClosesBySetterRC: Record<string, number> = {};
     for (const sale of officeSales) {
       const closer = sale.closerName || 'Unknown';
       qbClosesByCloser[closer] = (qbClosesByCloser[closer] || 0) + 1;
+      if (sale.closerRepCardId) {
+        qbClosesByCloserRC[sale.closerRepCardId] = (qbClosesByCloserRC[sale.closerRepCardId] || 0) + 1;
+      }
       const setter = sale.setterName || 'Unknown';
       if (setter !== 'Unknown') {
         qbClosesBySetter[setter] = (qbClosesBySetter[setter] || 0) + 1;
       }
+      if (sale.setterRepCardId) {
+        qbClosesBySetterRC[sale.setterRepCardId] = (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
+      }
     }
 
-    // Attach QB closes to closers
+    // Attach QB closes to closers — prefer RepCard ID, fallback to name
     for (const c of closers) {
-      c.qbCloses = qbClosesByCloser[c.name] || 0;
+      c.qbCloses = qbClosesByCloserRC[c.userId] || qbClosesByCloser[c.name] || 0;
     }
 
     // Build setter accountability by merging setter LB + setter appt data + QB closes
@@ -87,7 +95,7 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
 
     const setterAccountability = setters.map((s: any) => {
       const apptData = setterApptMap[s.userId] || {};
-      const qbCloses = qbClosesBySetter[s.name] || 0;
+      const qbCloses = qbClosesBySetterRC[s.userId] || qbClosesBySetter[s.name] || 0;
       const appt = s.APPT || 0;
       const sits = s.SITS || 0;
       const nosh = apptData.NOSH || 0;
