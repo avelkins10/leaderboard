@@ -372,9 +372,9 @@ export default function Dashboard() {
               <MetricCard
                 label="Close Rate"
                 value={`${companyCloseRate}%`}
-                subtitle="QB closes / sits"
+                subtitle="Closes / sits"
                 icon={<TrendingUp className="h-5 w-5" />}
-                tooltip="Company-wide: QB closes / total sits"
+                tooltip="Company-wide: Closes / total sits"
               />
               <MetricCard
                 label="Cancel Rate"
@@ -475,7 +475,7 @@ export default function Dashboard() {
                           onSort={(k) =>
                             handleSort(setterSort, setSetterSort, k)
                           }
-                          tooltip="QB closes / sits"
+                          tooltip="Closes / sits"
                         />
                         <SortHeader
                           label="Avg Stars"
@@ -706,7 +706,7 @@ export default function Dashboard() {
                           onSort={(k) =>
                             handleSort(closerSort, setCloserSort, k)
                           }
-                          tooltip="QB closes / sits"
+                          tooltip="Closes / sits"
                         />
                         <SortHeader
                           label="Cancel %"
@@ -902,7 +902,7 @@ export default function Dashboard() {
                         sortKey="closeRate"
                         sort={officeSort}
                         onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="QB closes / sits"
+                        tooltip="Closes / sits"
                       />
                       <SortHeader
                         label="Cancel %"
