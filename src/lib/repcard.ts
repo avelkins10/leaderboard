@@ -26,6 +26,8 @@ export interface RepUser {
   officeTeamId: number;
   jobTitle: string;
   status: string;
+  image: string;
+  role: string;
 }
 
 export async function getUsers(): Promise<RepUser[]> {

@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLeaderboards, getUsers, getAppointments } from '@/lib/repcard';
 import { getSales } from '@/lib/quickbase';
 import { OFFICE_MAPPING, teamIdToQBOffice } from '@/lib/config';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const userId = Number(params.id);
   const { searchParams } = new URL(req.url);
   const fromDate = searchParams.get('from') || getMonday();
   const toDate = searchParams.get('to') || getToday();
+  const qualityRange = searchParams.get('qualityRange') || 'week'; // 'week' | 'ytd'
+
+  // Quality stats date range
+  const qualityFrom = qualityRange === 'ytd' ? `${new Date().getFullYear()}-01-01` : fromDate;
+  const qualityTo = toDate;
 
   try {
     const [leaderboards, users, sales, appointments] = await Promise.all([
@@ -40,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const closerApptStats = findInLB('Closer Appointment Data');
     const role = setterStats ? 'setter' : closerStats ? 'closer' : 'unknown';
 
-    // User's appointments
+    // User's appointments (from RepCard)
     const userAppts = appointments.filter(a => a.setter_id === userId || a.closer_id === userId);
 
     // Disposition breakdown for closers
@@ -51,12 +57,64 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
-    // QB sales for this rep
+    // QB sales — match by RepCard ID first, name fallback
     const fullName = `${user.firstName} ${user.lastName}`;
     const repSales = sales.filter(s =>
+      s.closerRepCardId === String(userId) ||
+      s.setterRepCardId === String(userId) ||
       s.closerName?.toLowerCase().includes(fullName.toLowerCase()) ||
       s.setterName?.toLowerCase().includes(fullName.toLowerCase())
     );
+
+    // Quality stats from Supabase
+    let qualityStats = null;
+    if (role === 'setter' || role === 'unknown') {
+      const { data: apptRows } = await supabaseAdmin
+        .from('appointments')
+        .select('has_power_bill, hours_to_appointment, is_quality')
+        .eq('setter_id', userId)
+        .gte('appointment_time', qualityFrom)
+        .lte('appointment_time', qualityTo + 'T23:59:59');
+
+      if (apptRows && apptRows.length > 0) {
+        const total = apptRows.length;
+        const withPowerBill = apptRows.filter(a => a.has_power_bill === true).length;
+        const within48hrs = apptRows.filter(a => a.hours_to_appointment != null && a.hours_to_appointment > 0 && a.hours_to_appointment <= 48).length;
+        const threeStarCount = apptRows.filter(a => a.is_quality === true).length;
+        const twoStarCount = apptRows.filter(a => a.has_power_bill === true && (a.hours_to_appointment == null || a.hours_to_appointment > 48)).length;
+        const oneStarCount = total - threeStarCount - twoStarCount;
+        const avgStars = total > 0 ? Math.round(((threeStarCount * 3 + twoStarCount * 2 + oneStarCount * 1) / total) * 100) / 100 : 0;
+
+        qualityStats = { total, withPowerBill, within48hrs, threeStarCount, twoStarCount, oneStarCount, avgStars, range: qualityRange };
+      }
+    }
+
+    // Appointment history from Supabase
+    const { data: appointmentHistory } = await supabaseAdmin
+      .from('appointments')
+      .select('id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name')
+      .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
+      .order('appointment_time', { ascending: false })
+      .limit(50);
+
+    // Closer-specific QB stats
+    let closerQBStats = null;
+    if (role === 'closer') {
+      const closerSales = repSales.filter(s =>
+        s.closerRepCardId === String(userId) ||
+        s.closerName?.toLowerCase().includes(fullName.toLowerCase())
+      );
+      if (closerSales.length > 0) {
+        const totalDeals = closerSales.length;
+        const totalKw = Math.round(closerSales.reduce((sum, s) => sum + (s.systemSizeKw || 0), 0) * 100) / 100;
+        const avgSystemSize = Math.round((totalKw / totalDeals) * 100) / 100;
+        const salesWithPpw = closerSales.filter(s => s.netPpw > 0);
+        const avgPpw = salesWithPpw.length > 0
+          ? Math.round((salesWithPpw.reduce((sum, s) => sum + s.netPpw, 0) / salesWithPpw.length) * 100) / 100
+          : 0;
+        closerQBStats = { totalDeals, totalKw, avgSystemSize, avgPpw };
+      }
+    }
 
     return NextResponse.json({
       user: {
@@ -67,13 +125,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         team: user.team,
         region,
         role,
+        roleBadge: user.role,
         jobTitle: user.jobTitle,
         status: user.status,
+        image: user.image,
       },
       stats: role === 'setter' ? setterStats : closerStats,
       appointmentStats: role === 'setter' ? setterApptStats : closerApptStats,
       dispositions,
+      qualityStats,
+      closerQBStats,
       appointments: userAppts,
+      appointmentHistory: appointmentHistory || [],
       sales: repSales,
       period: { from: fromDate, to: toDate },
     });
