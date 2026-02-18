@@ -149,7 +149,7 @@ export default function RepPage() {
                 label="Closes"
                 value={data.stats.CLOS || 0}
                 color="green"
-                tooltip="Closed (Pending KCA)"
+                tooltip="RepCard self-reported closes (not QB-verified)"
               />
               <MetricCard
                 label="Sit %"
@@ -188,7 +188,7 @@ export default function RepPage() {
                 label="Closes"
                 value={data.stats.CLOS || 0}
                 color="green"
-                tooltip="Closed (Pending KCA)"
+                tooltip="RepCard self-reported closes (not QB-verified)"
               />
               <MetricCard
                 label="Close %"
@@ -296,19 +296,23 @@ export default function RepPage() {
                   label="Total Deals"
                   value={data.closerQBStats.totalDeals}
                   color="green"
+                  tooltip="QB-verified closed deals as closer"
                 />
                 <MetricCard
                   label="Total kW"
                   value={`${data.closerQBStats.totalKw.toFixed(1)}`}
                   color="blue"
+                  tooltip="Total kilowatts sold"
                 />
                 <MetricCard
                   label="Avg System"
                   value={`${data.closerQBStats.avgSystemSize.toFixed(1)} kW`}
+                  tooltip="Average system size per deal"
                 />
                 <MetricCard
                   label="Avg PPW"
                   value={`$${data.closerQBStats.avgPpw.toFixed(2)}`}
+                  tooltip="Average net price per watt"
                 />
               </div>
             </Section>
@@ -377,17 +381,17 @@ export default function RepPage() {
                   <div className="mt-2 space-y-1.5">
                     {[
                       {
-                        label: "3-star",
+                        label: "3★ PB + 48hr",
                         count: data.qualityStats.threeStarCount,
                         color: "text-primary",
                       },
                       {
-                        label: "2-star",
+                        label: "2★ PB only",
                         count: data.qualityStats.twoStarCount,
                         color: "text-warning",
                       },
                       {
-                        label: "1-star",
+                        label: "1★ No PB",
                         count: data.qualityStats.oneStarCount,
                         color: "text-destructive",
                       },
@@ -406,6 +410,165 @@ export default function RepPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </Section>
+          )}
+
+          {data.user.role === "setter" && data.qualityInsights && (
+            <Section
+              title="Quality Insights"
+              subtitle="How appointment quality impacts sit rates"
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {/* Power Bill Impact */}
+                {data.qualityInsights.sitRate_withPB !== null &&
+                  data.qualityInsights.sitRate_withoutPB !== null && (
+                    <div className="rounded-xl border border-border bg-secondary/30 p-5">
+                      <h4 className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Power Bill Impact
+                      </h4>
+                      <div className="mt-4 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground">
+                            With PB
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-primary">
+                              {data.qualityInsights.sitRate_withPB}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_withPB} appts)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground">
+                            Without PB
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-destructive">
+                              {data.qualityInsights.sitRate_withoutPB}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_withoutPB} appts)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {data.qualityInsights.sitRate_withPB >
+                        data.qualityInsights.sitRate_withoutPB && (
+                        <div className="mt-3 rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
+                          +
+                          {(
+                            data.qualityInsights.sitRate_withPB -
+                            data.qualityInsights.sitRate_withoutPB
+                          ).toFixed(0)}
+                          % higher sit rate with power bill
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Scheduling Speed Impact */}
+                {data.qualityInsights.sitRate_within48 !== null &&
+                  data.qualityInsights.sitRate_over48 !== null && (
+                    <div className="rounded-xl border border-border bg-secondary/30 p-5">
+                      <h4 className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Scheduling Speed
+                      </h4>
+                      <div className="mt-4 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground">
+                            Within 48hrs
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-primary">
+                              {data.qualityInsights.sitRate_within48}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_within48} appts)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground">
+                            Over 48hrs
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-destructive">
+                              {data.qualityInsights.sitRate_over48}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_over48} appts)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {data.qualityInsights.sitRate_within48 >
+                        data.qualityInsights.sitRate_over48 && (
+                        <div className="mt-3 rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
+                          +
+                          {(
+                            data.qualityInsights.sitRate_within48 -
+                            data.qualityInsights.sitRate_over48
+                          ).toFixed(0)}
+                          % higher sit rate when set within 48hrs
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Star Rating Impact */}
+                {(data.qualityInsights.sitRate_3star !== null ||
+                  data.qualityInsights.sitRate_2star !== null ||
+                  data.qualityInsights.sitRate_1star !== null) && (
+                  <div className="rounded-xl border border-border bg-secondary/30 p-5">
+                    <h4 className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      Star Rating Impact
+                    </h4>
+                    <div className="mt-4 space-y-2.5">
+                      {data.qualityInsights.sitRate_3star !== null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-primary">3★</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-primary">
+                              {data.qualityInsights.sitRate_3star}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_3star} appts)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {data.qualityInsights.sitRate_2star !== null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-warning">2★</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-warning">
+                              {data.qualityInsights.sitRate_2star}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_2star} appts)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {data.qualityInsights.sitRate_1star !== null && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-destructive">1★</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold font-mono tabular-nums text-destructive">
+                              {data.qualityInsights.sitRate_1star}%
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              ({data.qualityInsights.n_1star} appts)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </Section>
           )}
@@ -490,6 +653,12 @@ export default function RepPage() {
                       <th className="py-3 px-3 text-center font-medium">
                         Power Bill
                       </th>
+                      <th className="py-3 px-3 text-center font-medium">
+                        Stars
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        Lead Time
+                      </th>
                       <th className="py-3 px-3 text-left font-medium">
                         {data.user.role === "setter" ? "Closer" : "Setter"}
                       </th>
@@ -545,6 +714,35 @@ export default function RepPage() {
                         <td className="py-3.5 px-3 text-center">
                           {a.has_power_bill ? (
                             <span className="text-primary">&#10003;</span>
+                          ) : (
+                            <span className="text-muted-foreground/25">-</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3 text-center font-mono tabular-nums text-xs">
+                          {a.star_rating ? (
+                            <span
+                              className={
+                                a.star_rating === 3
+                                  ? "text-primary"
+                                  : a.star_rating === 2
+                                    ? "text-warning"
+                                    : "text-destructive"
+                              }
+                            >
+                              {a.star_rating}★
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/25">-</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3 text-right font-mono tabular-nums text-xs text-muted-foreground">
+                          {a.hours_to_appointment &&
+                          a.hours_to_appointment > 0 ? (
+                            a.hours_to_appointment < 24 ? (
+                              `${Math.round(a.hours_to_appointment)}h`
+                            ) : (
+                              `${Math.round(a.hours_to_appointment / 24)}d`
+                            )
                           ) : (
                             <span className="text-muted-foreground/25">-</span>
                           )}

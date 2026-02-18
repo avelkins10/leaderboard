@@ -227,12 +227,21 @@ export default function Dashboard() {
                         Office
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Doors
+                        <span className="inline-flex items-center gap-1">
+                          Doors <Tooltip text="Total unique doors knocked" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Appts
+                        <span className="inline-flex items-center gap-1">
+                          Appts <Tooltip text="Appointments set" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sits</th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Sits{" "}
+                          <Tooltip text="Appointments that sat (from RepCard Setter LB)" />
+                        </span>
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           QB Closes{" "}
@@ -446,7 +455,10 @@ export default function Dashboard() {
                   <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                     <th className="py-3 px-6 text-left font-medium">Office</th>
                     <th className="py-3 px-3 text-center font-medium">
-                      Active
+                      <span className="inline-flex items-center gap-1">
+                        Active{" "}
+                        <Tooltip text="Reps with door knocks in this period" />
+                      </span>
                     </th>
                     <th className="py-3 px-3 text-right font-medium">
                       <span className="inline-flex items-center gap-1">
@@ -454,10 +466,27 @@ export default function Dashboard() {
                         <Tooltip text="Verified closed deals from QuickBase" />
                       </span>
                     </th>
-                    <th className="py-3 px-3 text-right font-medium">kW</th>
-                    <th className="py-3 px-3 text-right font-medium">Doors</th>
-                    <th className="py-3 px-3 text-right font-medium">Appts</th>
-                    <th className="py-3 px-3 text-right font-medium">Sits</th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        kW <Tooltip text="Total kilowatts sold" />
+                      </span>
+                    </th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        Doors <Tooltip text="Total unique doors knocked" />
+                      </span>
+                    </th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        Appts <Tooltip text="Appointments set" />
+                      </span>
+                    </th>
+                    <th className="py-3 px-3 text-right font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        Sits{" "}
+                        <Tooltip text="Appointments sat (from Closer LB)" />
+                      </span>
+                    </th>
                     <th className="py-3 px-3 text-right font-medium">
                       <span className="inline-flex items-center gap-1">
                         RC Claims{" "}

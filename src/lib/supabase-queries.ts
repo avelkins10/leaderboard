@@ -70,7 +70,7 @@ export interface TimelineEvent {
 
 // ── Helpers ──
 
-function dispositionCategory(d: string | null): string {
+export function dispositionCategory(d: string | null): string {
   if (!d) return "unknown";
   const lower = d.toLowerCase();
   // Check "no close" before "close" — "no close" contains "close" but is a distinct disposition
@@ -334,6 +334,9 @@ export async function getDailyActiveReps(
 export interface AppointmentBreakdown {
   total: number;
   sat: number;
+  closed: number;
+  closer_fault: number;
+  setter_fault: number;
   no_show: number;
   canceled: number;
   rescheduled: number;
@@ -357,6 +360,9 @@ export async function getOfficeAppointmentBreakdown(
   const result: AppointmentBreakdown = {
     total: 0,
     sat: 0,
+    closed: 0,
+    closer_fault: 0,
+    setter_fault: 0,
     no_show: 0,
     canceled: 0,
     rescheduled: 0,
@@ -365,19 +371,37 @@ export async function getOfficeAppointmentBreakdown(
   };
   for (const row of data || []) {
     result.total++;
-    const d = (row.disposition || "").toLowerCase();
-    if (!row.disposition) {
-      result.scheduled++;
-    } else if (d.includes("close") || d === "closed" || d.includes("sat")) {
-      result.sat++;
-    } else if (d.includes("no show") || d.includes("no_show")) {
-      result.no_show++;
-    } else if (d.includes("cancel")) {
-      result.canceled++;
-    } else if (d.includes("reschedule")) {
-      result.rescheduled++;
-    } else {
-      result.other++;
+    const cat = dispositionCategory(row.disposition);
+    switch (cat) {
+      case "unknown":
+        result.scheduled++;
+        break;
+      case "closed":
+        result.sat++;
+        result.closed++;
+        break;
+      case "no_close":
+      case "one_legger":
+      case "follow_up":
+        result.sat++;
+        result.closer_fault++;
+        break;
+      case "credit_fail":
+      case "shade":
+        result.sat++;
+        result.setter_fault++;
+        break;
+      case "no_show":
+        result.no_show++;
+        break;
+      case "canceled":
+        result.canceled++;
+        break;
+      case "reschedule":
+        result.rescheduled++;
+        break;
+      default:
+        result.other++;
     }
   }
   return result;
@@ -481,11 +505,21 @@ export async function getOfficePartnerships(
       };
     }
     map[key].total_appts++;
-    const d = (row.disposition || "").toLowerCase();
-    if (d.includes("close") || d === "closed" || d.includes("sat")) {
+    const cat = dispositionCategory(row.disposition);
+    // "sat" = closer showed up (all dispositioned except no_show, canceled, reschedule, unknown)
+    if (
+      [
+        "closed",
+        "no_close",
+        "one_legger",
+        "follow_up",
+        "credit_fail",
+        "shade",
+      ].includes(cat)
+    ) {
       map[key].sat++;
     }
-    if (d.includes("close") || d === "closed") {
+    if (cat === "closed") {
       map[key].closed++;
     }
   }

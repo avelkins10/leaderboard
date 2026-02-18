@@ -3,6 +3,7 @@ import { getLeaderboards, getUsers, getAppointments } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import { OFFICE_MAPPING, teamIdToQBOffice } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
+import { dispositionCategory } from "@/lib/supabase-queries";
 import repRoles from "@/lib/rep-roles.json";
 
 export async function GET(
@@ -35,14 +36,16 @@ export async function GET(
       getAppointments(fromDate, toDate),
       supabaseAdmin
         .from("appointments")
-        .select("has_power_bill, hours_to_appointment, is_quality")
+        .select(
+          "has_power_bill, hours_to_appointment, is_quality, disposition, star_rating",
+        )
         .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
         .gte("appointment_time", qualityFrom)
         .lte("appointment_time", qualityTo + "T23:59:59"),
       supabaseAdmin
         .from("appointments")
         .select(
-          "id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name",
+          "id, contact_name, contact_address, appointment_time, disposition, disposition_category, has_power_bill, hours_to_appointment, is_quality, setter_notes, closer_name, setter_name, star_rating",
         )
         .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
         .order("appointment_time", { ascending: false })
@@ -154,6 +157,65 @@ export async function GET(
       };
     }
 
+    // Quality insights — sit rate by quality factors
+    let qualityInsights = null;
+    if (qualityRows && qualityRows.length > 0) {
+      const SAT_CATS = new Set([
+        "closed",
+        "no_close",
+        "one_legger",
+        "follow_up",
+        "credit_fail",
+        "shade",
+      ]);
+      const isSat = (row: any) =>
+        SAT_CATS.has(dispositionCategory(row.disposition));
+      const hasDisposition = (row: any) =>
+        dispositionCategory(row.disposition) !== "unknown";
+
+      // Only count rows with a disposition (exclude scheduled/pending)
+      const dispositioned = qualityRows.filter(hasDisposition);
+
+      const withPB = dispositioned.filter((a) => a.has_power_bill === true);
+      const withoutPB = dispositioned.filter((a) => a.has_power_bill !== true);
+      const within48 = dispositioned.filter(
+        (a) =>
+          a.hours_to_appointment != null &&
+          a.hours_to_appointment > 0 &&
+          a.hours_to_appointment <= 48,
+      );
+      const over48 = dispositioned.filter(
+        (a) => a.hours_to_appointment != null && a.hours_to_appointment > 48,
+      );
+      const star3 = dispositioned.filter((a) => a.star_rating === 3);
+      const star2 = dispositioned.filter((a) => a.star_rating === 2);
+      const star1 = dispositioned.filter((a) => a.star_rating === 1);
+
+      const rate = (arr: any[]) =>
+        arr.length > 0
+          ? Math.round((arr.filter(isSat).length / arr.length) * 1000) / 10
+          : 0;
+      const MIN_SAMPLE = 3;
+
+      qualityInsights = {
+        sitRate_withPB: withPB.length >= MIN_SAMPLE ? rate(withPB) : null,
+        sitRate_withoutPB:
+          withoutPB.length >= MIN_SAMPLE ? rate(withoutPB) : null,
+        n_withPB: withPB.length,
+        n_withoutPB: withoutPB.length,
+        sitRate_within48: within48.length >= MIN_SAMPLE ? rate(within48) : null,
+        sitRate_over48: over48.length >= MIN_SAMPLE ? rate(over48) : null,
+        n_within48: within48.length,
+        n_over48: over48.length,
+        sitRate_3star: star3.length >= MIN_SAMPLE ? rate(star3) : null,
+        sitRate_2star: star2.length >= MIN_SAMPLE ? rate(star2) : null,
+        sitRate_1star: star1.length >= MIN_SAMPLE ? rate(star1) : null,
+        n_3star: star3.length,
+        n_2star: star2.length,
+        n_1star: star1.length,
+      };
+    }
+
     // Closer-specific QB stats — calculate if they have any closer sales
     let closerQBStats = null;
     {
@@ -208,6 +270,7 @@ export async function GET(
       closerApptStats: closerApptStats,
       dispositions,
       qualityStats,
+      qualityInsights,
       closerQBStats,
       appointments: userAppts,
       appointmentHistory: appointmentHistory || [],

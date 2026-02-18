@@ -147,7 +147,7 @@ export default function QualityPage() {
 
       {data && !isLoading && (
         <div className="animate-enter space-y-8">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-5">
               <h3 className="text-2xs font-semibold uppercase tracking-widest text-primary">
                 Quality Appointment
@@ -186,6 +186,19 @@ export default function QualityPage() {
                 <span className="font-medium text-primary">
                   {"Waste: <15%"}
                 </span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-secondary/30 p-5">
+              <h3 className="text-2xs font-semibold uppercase tracking-widest text-foreground">
+                Star Rating System
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                <span className="font-medium text-primary">3★</span> = Power
+                bill + set within 48hrs.{" "}
+                <span className="font-medium text-warning">2★</span> = Power
+                bill only.{" "}
+                <span className="font-medium text-destructive">1★</span> = No
+                power bill. Higher stars = higher sit rates.
               </p>
             </div>
           </div>
@@ -295,16 +308,32 @@ export default function QualityPage() {
                       <th className="py-3 px-3 text-left font-medium">
                         Office
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Set</th>
                       <th className="py-3 px-3 text-right font-medium">
-                        No Show
+                        <span className="inline-flex items-center gap-1">
+                          Set <Tooltip text="Appointments set via RepCard" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
-                        Cancel
+                        <span className="inline-flex items-center gap-1">
+                          No Show{" "}
+                          <Tooltip text="Closer didn't meet homeowner" />
+                        </span>
                       </th>
-                      <th className="py-3 px-3 text-right font-medium">Sits</th>
                       <th className="py-3 px-3 text-right font-medium">
-                        QB Closes
+                        <span className="inline-flex items-center gap-1">
+                          Cancel <Tooltip text="Appointment cancelled" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Sits <Tooltip text="Appointments that sat" />
+                        </span>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          QB Closes{" "}
+                          <Tooltip text="Verified closes from QuickBase" />
+                        </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
