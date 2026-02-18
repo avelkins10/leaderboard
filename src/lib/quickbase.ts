@@ -52,7 +52,7 @@ export async function getSales(
   const data = await qbQuery(
     QB_PROJECTS_TABLE,
     SALE_FIELDS,
-    `{522.AF.${fromDate}}AND{522.BF.${toDate}}`,
+    `{522.OAF.${fromDate}}AND{522.OBF.${toDate}}`,
   );
 
   return (data.data || []).map((r: any) => ({
