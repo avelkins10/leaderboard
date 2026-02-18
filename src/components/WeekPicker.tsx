@@ -18,21 +18,21 @@ export function useWeekDates(weekOffset: number) {
 export function WeekPicker({ weekOffset, setWeekOffset }: WeekPickerProps) {
   const { weekStart, weekEnd } = useWeekDates(weekOffset);
   return (
-    <div className="inline-flex items-center rounded-lg border border-border/50 bg-card text-sm">
+    <div className="inline-flex items-center rounded-lg border border-border bg-card text-sm">
       <button
         onClick={() => setWeekOffset(w => w + 1)}
-        className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         aria-label="Previous week"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
-      <span className="flex h-9 min-w-[148px] items-center justify-center border-x border-border/50 px-3 text-xs font-medium tabular-nums text-foreground font-mono">
+      <span className="flex h-9 min-w-[152px] items-center justify-center border-x border-border px-3 text-xs font-medium tabular-nums text-foreground font-mono">
         {format(weekStart, 'MMM d')} &ndash; {format(weekEnd, 'MMM d')}
       </span>
       {weekOffset > 0 ? (
         <button
           onClick={() => setWeekOffset(w => w - 1)}
-          className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="Next week"
         >
           <ChevronRight className="h-4 w-4" />

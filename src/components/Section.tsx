@@ -9,10 +9,10 @@ export function Section({ title, subtitle, children, action, noPadding }: {
   noPadding?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border/50 bg-card">
-      <div className="flex items-center justify-between px-6 pt-6 pb-5">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between px-6 pt-5 pb-4">
         <div>
-          <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
+          <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-foreground">{title}</h2>
           {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action}

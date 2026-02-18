@@ -6,10 +6,10 @@ import { Section } from '@/components/Section';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const OFFICE_COLORS: Record<string, string> = {
-  'Stevens': 'hsl(160, 84%, 39%)',
+  'Stevens': 'hsl(152, 60%, 36%)',
   'Bontrager': 'hsl(217, 91%, 60%)',
   'Molina': 'hsl(38, 92%, 50%)',
-  'Douglass': 'hsl(0, 84%, 60%)',
+  'Douglass': 'hsl(0, 72%, 51%)',
   'Elevate': 'hsl(262, 83%, 58%)',
   'Allen': 'hsl(330, 76%, 58%)',
   'Champagne': 'hsl(174, 72%, 50%)',
@@ -17,22 +17,22 @@ const OFFICE_COLORS: Record<string, string> = {
 };
 
 const C = {
-  axis: 'hsl(0, 0%, 40%)',
-  fg: 'hsl(0, 0%, 95%)',
-  grid: 'hsl(0, 0%, 8%)',
-  card: 'hsl(0, 0%, 5%)',
-  border: 'hsl(0, 0%, 10%)',
+  axis: 'hsl(0, 0%, 55%)',
+  fg: 'hsl(0, 0%, 9%)',
+  grid: 'hsl(0, 0%, 92%)',
+  card: 'hsl(0, 0%, 100%)',
+  border: 'hsl(0, 0%, 89%)',
 };
 
 function getColor(name: string): string {
   for (const [key, color] of Object.entries(OFFICE_COLORS)) {
     if (name.includes(key)) return color;
   }
-  return 'hsl(0, 0%, 45%)';
+  return 'hsl(0, 0%, 55%)';
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-skeleton rounded-xl bg-foreground/[0.03] ${className}`} />;
+  return <div className={`animate-skeleton rounded-xl bg-muted ${className}`} />;
 }
 
 export default function TrendsPage() {
@@ -101,17 +101,16 @@ export default function TrendsPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">Trends</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">Trends</h1>
           <p className="mt-1 text-sm text-muted-foreground">Week-over-week performance tracking</p>
         </div>
-        <div className="inline-flex items-center rounded-lg border border-border/50 bg-card">
+        <div className="inline-flex items-center rounded-lg border border-border bg-card">
           {[4, 6, 8].map(w => (
             <button key={w} onClick={() => setWeeks(w)}
               className={`h-9 px-4 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                weeks === w ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'
+                weeks === w ? 'bg-foreground text-card' : 'text-muted-foreground hover:text-foreground'
               }`}>
               {w}w
             </button>
@@ -132,7 +131,6 @@ export default function TrendsPage() {
 
       {data && !loading && (
         <div className="animate-enter space-y-8">
-          {/* Company Total */}
           <Section title="Company Deals" subtitle="Total deals per week across all offices">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
@@ -141,19 +139,18 @@ export default function TrendsPage() {
                   <XAxis dataKey="week" tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: C.axis, fontSize: 10, fontFamily: 'var(--font-jetbrains)' }} axisLine={false} tickLine={false} />
                   <RTooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.fg, fontSize: 12, fontFamily: 'var(--font-jetbrains)' }} />
-                  <Line type="monotone" dataKey="deals" stroke="hsl(160, 84%, 39%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(160, 84%, 39%)' }} />
+                  <Line type="monotone" dataKey="deals" stroke="hsl(152, 60%, 36%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(152, 60%, 36%)' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Section>
 
-          {/* Controls */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center rounded-lg border border-border/50 bg-card">
+            <div className="inline-flex items-center rounded-lg border border-border bg-card">
               {metrics.map(m => (
                 <button key={m} onClick={() => setMetric(m)}
                   className={`h-9 px-3.5 text-xs font-medium capitalize transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                    metric === m ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    metric === m ? 'bg-foreground text-card' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   {m}
                 </button>
@@ -164,7 +161,7 @@ export default function TrendsPage() {
               {officeList.map(o => (
                 <button key={o} onClick={() => toggleOffice(o)}
                   className={`rounded-lg px-2.5 py-1.5 text-2xs font-medium transition-all ${
-                    selectedOffices.has(o) ? 'text-foreground' : 'text-muted-foreground/25 hover:text-muted-foreground/50'
+                    selectedOffices.has(o) ? 'text-foreground' : 'text-muted-foreground/30 hover:text-muted-foreground/50'
                   }`}
                   style={selectedOffices.has(o) ? { backgroundColor: getColor(o) + '15', color: getColor(o) } : {}}>
                   {o.split(' - ')[0]}
@@ -173,7 +170,6 @@ export default function TrendsPage() {
             </div>
           </div>
 
-          {/* Office Comparison */}
           <Section title={`${metric.charAt(0).toUpperCase() + metric.slice(1)} by Office`} subtitle="Toggle offices above to compare">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -190,15 +186,14 @@ export default function TrendsPage() {
             </div>
           </Section>
 
-          {/* WoW Changes */}
           <Section title="Week-over-Week" subtitle={`${metric} compared to previous week`}>
             <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
               {weeklyTrends.map(t => (
-                <div key={t.office} className="flex items-center justify-between rounded-xl border border-border/30 bg-secondary/15 p-4 transition-all hover:bg-secondary/30 hover:border-border/60">
+                <div key={t.office} className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-4 transition-all hover:bg-muted/40">
                   <div>
                     <div className="text-[13px] font-medium text-foreground">{t.office.split(' - ')[0]}</div>
                     <div className="mt-1 text-xs font-mono tabular-nums text-muted-foreground">
-                      {t.previous} <span className="text-muted-foreground/25 mx-0.5">{'>'}</span> {t.current}
+                      {t.previous} <span className="text-muted-foreground/30 mx-0.5">{'>'}</span> {t.current}
                     </div>
                   </div>
                   <div className={`flex items-center gap-1.5 text-sm font-semibold font-mono tabular-nums ${

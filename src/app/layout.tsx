@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050505",
+  themeColor: "#FFFFFF",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -28,10 +28,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased min-h-screen`}>
         <Nav />
-        <main className="mx-auto max-w-[1440px] px-5 pb-32 pt-8 sm:px-8">
+        <main className="mx-auto max-w-[1440px] px-6 pb-24 pt-8 lg:px-10">
           {children}
         </main>
       </body>

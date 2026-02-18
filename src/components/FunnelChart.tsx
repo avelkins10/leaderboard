@@ -14,13 +14,13 @@ export function FunnelChart({ steps }: { steps: FunnelStep[] }) {
         return (
           <div key={step.label}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">{step.label}</span>
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{step.label}</span>
               <div className="flex items-center gap-3">
-                {convRate && <span className="text-2xs font-mono text-muted-foreground/40">{convRate}%</span>}
+                {convRate && <span className="text-2xs font-mono text-muted-foreground/50">{convRate}%</span>}
                 <span className="text-sm font-semibold font-mono tabular-nums text-foreground">{step.value}</span>
               </div>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+            <div className="h-3 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: step.color }}
