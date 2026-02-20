@@ -17,7 +17,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  ChevronDown,
   ChevronRight,
   Calendar,
   XCircle,
@@ -30,6 +29,7 @@ import {
   formatCurrency,
   formatDate,
 } from "@/lib/format";
+import { THRESHOLDS } from "@/lib/thresholds";
 
 // ── Types ──
 interface ScorecardData {
@@ -222,7 +222,26 @@ function RepDrillDown({
     return (
       <div className="space-y-3">
         {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
-        <div className="text-2xs text-muted-foreground/50 animate-pulse">
+        <div className="flex items-center gap-2 text-2xs text-muted-foreground/50">
+          <svg
+            className="h-3.5 w-3.5 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
           Loading appointments...
         </div>
       </div>
@@ -238,16 +257,20 @@ function RepDrillDown({
       <div className="flex flex-wrap items-center gap-3">
         {outcomes && <OutcomeRow outcomes={outcomes} type={type} />}
         {type === "setter" && data?.avgScheduleOutHours != null && (
-          <span className={`rounded px-2 py-0.5 text-2xs font-medium ${
-            data.avgScheduleOutHours <= 48
-              ? "bg-primary/10 text-primary"
-              : data.avgScheduleOutHours <= 72
-                ? "bg-warning/10 text-warning"
-                : "bg-destructive/10 text-destructive"
-          }`}>
-            Avg {data.avgScheduleOutHours < 48
+          <span
+            className={`rounded px-2 py-0.5 text-2xs font-medium ${
+              data.avgScheduleOutHours <= 48
+                ? "bg-primary/10 text-primary"
+                : data.avgScheduleOutHours <= 72
+                  ? "bg-warning/10 text-warning"
+                  : "bg-destructive/10 text-destructive"
+            }`}
+          >
+            Avg{" "}
+            {data.avgScheduleOutHours < 48
               ? `${Math.round(data.avgScheduleOutHours)}h`
-              : `${(data.avgScheduleOutHours / 24).toFixed(1)}d`} out
+              : `${(data.avgScheduleOutHours / 24).toFixed(1)}d`}{" "}
+            out
           </span>
         )}
       </div>
@@ -359,9 +382,13 @@ function RepDrillDown({
             </tbody>
           </table>
           {appts.length > 10 && (
-            <div className="px-3 py-2 text-2xs text-muted-foreground/60 text-center border-t border-border/20">
-              +{appts.length - 10} more — view full profile
-            </div>
+            <Link
+              href={`/rep/${repId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="block px-3 py-2 text-2xs text-primary text-center border-t border-border/20 hover:bg-secondary/30 transition-colors"
+            >
+              +{appts.length - 10} more — view full profile &rarr;
+            </Link>
           )}
         </div>
       ) : (
@@ -376,7 +403,16 @@ function RepDrillDown({
       {type === "closer" && sales.length > 0 && (
         <div className="mt-2">
           <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
-            QB Sales ({sales.filter((s: any) => !["cancelled", "pending cancel"].some((p) => s.status?.toLowerCase().includes(p))).length} active)
+            QB Sales (
+            {
+              sales.filter(
+                (s: any) =>
+                  !["cancelled", "pending cancel"].some((p) =>
+                    s.status?.toLowerCase().includes(p),
+                  ),
+              ).length
+            }{" "}
+            active)
           </p>
           <div className="overflow-x-auto rounded-lg border border-border/40">
             <table className="w-full text-xs">
@@ -508,20 +544,46 @@ export default function Dashboard() {
   // ── Computed data ──
   const setterList = useMemo(() => {
     if (!data) return [];
-    return sortBy(
-      data.allSetters.filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0),
-      setterSort.key,
-      setterSort.dir,
-    );
+    const withComputed = data.allSetters
+      .filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
+      .map((s) => {
+        const appts = s.APPT || 0;
+        const sits = s.SITS || 0;
+        return {
+          ...s,
+          sitRate: appts > 0 ? Math.round((sits / appts) * 100) : 0,
+          closeRate:
+            sits > 0 ? Math.round(((s.qbCloses || 0) / sits) * 100) : 0,
+          wasteRate:
+            appts > 0
+              ? Math.min(
+                  100,
+                  Math.round(
+                    (((s.outcomes?.NOSH || 0) + (s.outcomes?.CANC || 0)) /
+                      appts) *
+                      100,
+                  ),
+                )
+              : 0,
+          avgStars: s.avgStars || 0,
+        };
+      });
+    return sortBy(withComputed, setterSort.key, setterSort.dir);
   }, [data, setterSort]);
 
   const closerList = useMemo(() => {
     if (!data) return [];
-    return sortBy(
-      data.allClosers.filter((c) => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0),
-      closerSort.key,
-      closerSort.dir,
-    );
+    const withComputed = data.allClosers
+      .filter((c) => (c.SAT || 0) > 0 || (c.qbCloses || 0) > 0)
+      .map((c) => {
+        const sits = c.SAT || 0;
+        return {
+          ...c,
+          sitCloseRate:
+            sits > 0 ? Math.round(((c.qbCloses || 0) / sits) * 100) : 0,
+        };
+      });
+    return sortBy(withComputed, closerSort.key, closerSort.dir);
   }, [data, closerSort]);
 
   const officeList = useMemo(() => {
@@ -539,7 +601,16 @@ export default function Dashboard() {
         const cancelPct = d.sales?.cancelPct || 0;
         const rejected = d.sales?.rejected || 0;
         const activeReps = d.activeReps || 0;
+        const activeSetters = d.activeSetters || 0;
+        const activeClosers = d.activeClosers || 0;
         const closeRate = totalSits > 0 ? (qbCloses / totalSits) * 100 : 0;
+        const sitRate = totalAppts > 0 ? (totalSits / totalAppts) * 100 : 0;
+        // Weekly average: divide closes by number of weeks in the period
+        const periodMs =
+          new Date(data.period.to).getTime() -
+          new Date(data.period.from).getTime();
+        const weeks = Math.max(1, periodMs / (7 * 86400000));
+        const weeklyAvg = qbCloses > 0 ? +(qbCloses / weeks).toFixed(1) : 0;
         return {
           name,
           qbCloses,
@@ -550,7 +621,11 @@ export default function Dashboard() {
           cancelPct,
           rejected,
           activeReps,
+          activeSetters,
+          activeClosers,
           closeRate,
+          sitRate,
+          weeklyAvg,
           setters: d.setters || [],
           closers: d.closers || [],
         };
@@ -671,350 +746,603 @@ export default function Dashboard() {
 
           {/* ── SETTER LEADERBOARD ── */}
           {tab === "setters" && (
-            <Section
-              title="Setter Leaderboard"
-              subtitle={`${setterList.length} setters with activity`}
-              noPadding
-            >
-              {setterList.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-6 py-16">
-                  <Inbox className="h-10 w-10 text-muted-foreground/20" />
-                  <p className="mt-3 text-sm font-medium text-muted-foreground">
-                    No activity yet this period
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground/60">
-                    Check back later or change the date range
-                  </p>
-                </div>
-              ) : (
+            <div key="setters" className="animate-enter">
+              <Section
+                title="Setter Leaderboard"
+                subtitle={`${setterList.length} setters with activity`}
+                noPadding
+              >
+                {setterList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center px-6 py-16">
+                    <Inbox className="h-10 w-10 text-muted-foreground/20" />
+                    <p className="mt-3 text-sm font-medium text-muted-foreground">
+                      No activity yet this period
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground/60">
+                      Check back later or change the date range
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto scrollable-table">
+                    <table className="w-full min-w-[700px]">
+                      <thead>
+                        <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                          <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                            #
+                          </th>
+                          <SortHeader
+                            label="Name"
+                            sortKey="name"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            align="left"
+                          />
+                          <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                            Office
+                          </th>
+                          <SortHeader
+                            label="Appts"
+                            sortKey="APPT"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Appointments set"
+                          />
+                          <SortHeader
+                            label="Sits"
+                            sortKey="SITS"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Appointments that sat"
+                          />
+                          <SortHeader
+                            label="Sit %"
+                            sortKey="sitRate"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Sits / appointments"
+                          />
+                          <SortHeader
+                            label="Closes"
+                            sortKey="qbCloses"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Verified closes from QuickBase"
+                          />
+                          <SortHeader
+                            label="Close %"
+                            sortKey="closeRate"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Closes / sits"
+                          />
+                          <SortHeader
+                            label="Avg Stars"
+                            sortKey="avgStars"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="Average appointment quality (1-3 stars)"
+                          />
+                          <SortHeader
+                            label="Waste %"
+                            sortKey="wasteRate"
+                            sort={setterSort}
+                            onSort={(k) =>
+                              handleSort(setterSort, setSetterSort, k)
+                            }
+                            tooltip="(No shows + Cancels) / Appointments"
+                          />
+                        </tr>
+                      </thead>
+                      <tbody className="text-[13px]">
+                        {setterList.map((s, i) => {
+                          const id = `setter-${s.userId}`;
+                          const isExpanded = expanded.has(id);
+                          const sits = s.SITS || 0;
+                          const appts = s.APPT || 0;
+                          const { sitRate, closeRate, wasteRate } = s;
+                          return (
+                            <Fragment key={s.userId}>
+                              <tr
+                                className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
+                                onClick={() => toggleExpand(id)}
+                              >
+                                <td className="py-3 px-4 sm:px-6">
+                                  <span
+                                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                      i === 0
+                                        ? "bg-primary/15 text-primary"
+                                        : i < 3
+                                          ? "bg-secondary text-foreground"
+                                          : "text-muted-foreground/40"
+                                    }`}
+                                  >
+                                    {i + 1}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <ChevronRight
+                                      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
+                                    />
+                                    <Link
+                                      href={`/rep/${s.userId}`}
+                                      onMouseEnter={() => prefetchRep(s.userId)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="font-medium text-foreground transition-colors hover:text-primary"
+                                    >
+                                      {s.name}
+                                      {s.isRecruit && (
+                                        <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">
+                                          R
+                                        </span>
+                                      )}
+                                    </Link>
+                                  </div>
+                                  <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                    {s.qbOffice?.split(" - ")[0]}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                  {s.qbOffice?.split(" - ")[0]}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">
+                                  {appts}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                  {sits}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {appts > 0 ? (
+                                    <StatusBadge
+                                      value={sitRate}
+                                      good={THRESHOLDS.sitRate.good}
+                                      ok={THRESHOLDS.sitRate.ok}
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                  {s.qbCloses || 0}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {sits > 0 ? (
+                                    <StatusBadge
+                                      value={closeRate}
+                                      good={THRESHOLDS.closeRatePerSit.good}
+                                      ok={THRESHOLDS.closeRatePerSit.ok}
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                  {s.avgStars > 0
+                                    ? `${s.avgStars.toFixed(1)}`
+                                    : "--"}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {appts > 0 ? (
+                                    <span
+                                      className={`font-mono tabular-nums text-2xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
+                                    >
+                                      {wasteRate}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr className="bg-secondary/10 border-b border-border/40">
+                                  <td
+                                    colSpan={99}
+                                    className="py-3 px-6 sm:px-12"
+                                  >
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="flex-1 min-w-0">
+                                        <RepDrillDown
+                                          repId={s.userId}
+                                          type="setter"
+                                          from={from}
+                                          to={to}
+                                          outcomes={s.outcomes}
+                                        />
+                                      </div>
+                                      <Link
+                                        href={`/rep/${s.userId}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
+                                      >
+                                        Full profile &rarr;
+                                      </Link>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Section>
+            </div>
+          )}
+
+          {/* ── CLOSER LEADERBOARD ── */}
+          {tab === "closers" && (
+            <div key="closers" className="animate-enter">
+              <Section
+                title="Closer Leaderboard"
+                subtitle={`${closerList.length} closers with activity`}
+                noPadding
+              >
+                {closerList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center px-6 py-16">
+                    <Inbox className="h-10 w-10 text-muted-foreground/20" />
+                    <p className="mt-3 text-sm font-medium text-muted-foreground">
+                      No activity yet this period
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground/60">
+                      Check back later or change the date range
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto scrollable-table">
+                    <table className="w-full min-w-[800px]">
+                      <thead>
+                        <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                          <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                            #
+                          </th>
+                          <SortHeader
+                            label="Name"
+                            sortKey="name"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            align="left"
+                          />
+                          <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                            Office
+                          </th>
+                          <SortHeader
+                            label="Closes"
+                            sortKey="qbCloses"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Verified closes from QuickBase"
+                          />
+                          <SortHeader
+                            label="kW"
+                            sortKey="totalKw"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Total kilowatts sold"
+                          />
+                          <SortHeader
+                            label="Avg PPW"
+                            sortKey="avgPpw"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Average net price per watt"
+                          />
+                          <SortHeader
+                            label="Sits"
+                            sortKey="SAT"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Appointments sat"
+                          />
+                          <SortHeader
+                            label="Close %"
+                            sortKey="sitCloseRate"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Closes / sits"
+                          />
+                          <SortHeader
+                            label="Cancel %"
+                            sortKey="cancelPct"
+                            sort={closerSort}
+                            onSort={(k) =>
+                              handleSort(closerSort, setCloserSort, k)
+                            }
+                            tooltip="Cancelled / total closes"
+                          />
+                          <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                            Cancels
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-[13px]">
+                        {closerList.map((c, i) => {
+                          const id = `closer-${c.userId}`;
+                          const isExpanded = expanded.has(id);
+                          const sits = c.SAT || 0;
+                          const { sitCloseRate } = c;
+                          return (
+                            <Fragment key={c.userId}>
+                              <tr
+                                className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
+                                onClick={() => toggleExpand(id)}
+                              >
+                                <td className="py-3 px-4 sm:px-6">
+                                  <span
+                                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                      i === 0
+                                        ? "bg-primary/15 text-primary"
+                                        : i < 3
+                                          ? "bg-secondary text-foreground"
+                                          : "text-muted-foreground/40"
+                                    }`}
+                                  >
+                                    {i + 1}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <ChevronRight
+                                      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
+                                    />
+                                    <Link
+                                      href={`/rep/${c.userId}`}
+                                      onMouseEnter={() => prefetchRep(c.userId)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="font-medium text-foreground transition-colors hover:text-primary"
+                                    >
+                                      {c.name}
+                                    </Link>
+                                  </div>
+                                  <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                    {c.qbOffice?.split(" - ")[0]}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                  {c.qbOffice?.split(" - ")[0]}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                  {c.qbCloses || 0}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                  {formatKw(c.totalKw || 0)}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                  {c.avgPpw > 0
+                                    ? formatCurrency(c.avgPpw)
+                                    : "--"}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                  {sits}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {sits > 0 ? (
+                                    <StatusBadge
+                                      value={sitCloseRate}
+                                      good={THRESHOLDS.closeRatePerSit.good}
+                                      ok={THRESHOLDS.closeRatePerSit.ok}
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {(c.qbCloses || 0) + (c.qbCancelled || 0) >
+                                  0 ? (
+                                    <span
+                                      className={`font-mono tabular-nums text-2xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                    >
+                                      {c.cancelPct}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground hidden lg:table-cell">
+                                  {c.qbCancelled || 0}
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr className="bg-secondary/10 border-b border-border/40">
+                                  <td
+                                    colSpan={99}
+                                    className="py-3 px-6 sm:px-12"
+                                  >
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="flex-1 min-w-0">
+                                        <RepDrillDown
+                                          repId={c.userId}
+                                          type="closer"
+                                          from={from}
+                                          to={to}
+                                          outcomes={c.outcomes}
+                                        />
+                                      </div>
+                                      <Link
+                                        href={`/rep/${c.userId}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
+                                      >
+                                        Full profile &rarr;
+                                      </Link>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Section>
+            </div>
+          )}
+
+          {/* ── OFFICE LEADERBOARD ── */}
+          {tab === "offices" && (
+            <div key="offices" className="animate-enter">
+              <Section
+                title="Office Leaderboard"
+                subtitle="Click any office for detailed breakdown"
+                noPadding
+              >
                 <div className="overflow-x-auto scrollable-table">
-                  <table className="w-full min-w-[700px]">
+                  <table className="w-full min-w-[1000px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                         <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
                           #
                         </th>
                         <SortHeader
-                          label="Name"
+                          label="Office"
                           sortKey="name"
-                          sort={setterSort}
+                          sort={officeSort}
                           onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
+                            handleSort(officeSort, setOfficeSort, k)
                           }
                           align="left"
                         />
-                        <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
-                          Office
-                        </th>
+                        <SortHeader
+                          label="Closes"
+                          sortKey="qbCloses"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Verified closed deals"
+                        />
+                        <SortHeader
+                          label="kW"
+                          sortKey="kw"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Total kilowatts sold"
+                        />
                         <SortHeader
                           label="Appts"
-                          sortKey="APPT"
-                          sort={setterSort}
+                          sortKey="totalAppts"
+                          sort={officeSort}
                           onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
+                            handleSort(officeSort, setOfficeSort, k)
                           }
                           tooltip="Appointments set"
                         />
                         <SortHeader
                           label="Sits"
-                          sortKey="SITS"
-                          sort={setterSort}
+                          sortKey="totalSits"
+                          sort={officeSort}
                           onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
-                          }
-                          tooltip="Appointments that sat"
-                        />
-                        <SortHeader
-                          label="Closes"
-                          sortKey="qbCloses"
-                          sort={setterSort}
-                          onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
-                          }
-                          tooltip="Verified closes from QuickBase"
-                        />
-                        <SortHeader
-                          label="Close %"
-                          sortKey="closeRate"
-                          sort={setterSort}
-                          onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
-                          }
-                          tooltip="Closes / sits"
-                        />
-                        <SortHeader
-                          label="Avg Stars"
-                          sortKey="avgStars"
-                          sort={setterSort}
-                          onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
-                          }
-                          tooltip="Average appointment quality (1-3 stars)"
-                        />
-                        <SortHeader
-                          label="Waste %"
-                          sortKey="wasteRate"
-                          sort={setterSort}
-                          onSort={(k) =>
-                            handleSort(setterSort, setSetterSort, k)
-                          }
-                          tooltip="(No shows + Cancels) / Appointments"
-                        />
-                      </tr>
-                    </thead>
-                    <tbody className="text-[13px]">
-                      {setterList.map((s, i) => {
-                        const id = `setter-${s.userId}`;
-                        const isExpanded = expanded.has(id);
-                        const sits = s.SITS || 0;
-                        const appts = s.APPT || 0;
-                        const closeRate =
-                          sits > 0
-                            ? Math.round(((s.qbCloses || 0) / sits) * 100)
-                            : 0;
-                        const wasteRate =
-                          appts > 0
-                            ? Math.min(
-                                100,
-                                Math.round(
-                                  (((s.outcomes?.NOSH || 0) +
-                                    (s.outcomes?.CANC || 0)) /
-                                    appts) *
-                                    100,
-                                ),
-                              )
-                            : 0;
-                        // Attach computed fields for sorting
-                        s.closeRate = closeRate;
-                        s.wasteRate = wasteRate;
-                        s.avgStars = s.avgStars || 0;
-                        return (
-                          <Fragment key={s.userId}>
-                            <tr
-                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
-                              onClick={() => toggleExpand(id)}
-                            >
-                              <td className="py-3 px-4 sm:px-6">
-                                <span
-                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                                    i === 0
-                                      ? "bg-primary/15 text-primary"
-                                      : i < 3
-                                        ? "bg-secondary text-foreground"
-                                        : "text-muted-foreground/40"
-                                  }`}
-                                >
-                                  {i + 1}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="flex items-center gap-2">
-                                  {isExpanded ? (
-                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  ) : (
-                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
-                                  )}
-                                  <Link
-                                    href={`/rep/${s.userId}`}
-                                    onMouseEnter={() => prefetchRep(s.userId)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="font-medium text-foreground transition-colors hover:text-primary"
-                                  >
-                                    {s.name}{s.isRecruit && <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">R</span>}
-                                  </Link>
-                                </div>
-                                <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
-                                  {s.qbOffice?.split(" - ")[0]}
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
-                                {s.qbOffice?.split(" - ")[0]}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">
-                                {appts}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {sits}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                                {s.qbCloses || 0}
-                              </td>
-                              <td className="py-3 px-3 text-right">
-                                {sits > 0 ? (
-                                  <StatusBadge
-                                    value={closeRate}
-                                    good={35}
-                                    ok={25}
-                                  />
-                                ) : (
-                                  <span className="text-muted-foreground/25 font-mono">
-                                    --
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {s.avgStars > 0
-                                  ? `${s.avgStars.toFixed(1)}`
-                                  : "--"}
-                              </td>
-                              <td className="py-3 px-3 text-right">
-                                {appts > 0 ? (
-                                  <span
-                                    className={`font-mono tabular-nums text-2xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
-                                  >
-                                    {wasteRate}%
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground/25 font-mono">
-                                    --
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                            {isExpanded && (
-                              <tr className="bg-secondary/10 border-b border-border/40">
-                                <td colSpan={9} className="py-3 px-6 sm:px-12">
-                                  <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                      <RepDrillDown
-                                        repId={s.userId}
-                                        type="setter"
-                                        from={from}
-                                        to={to}
-                                        outcomes={s.outcomes}
-                                      />
-                                    </div>
-                                    <Link
-                                      href={`/rep/${s.userId}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
-                                    >
-                                      Full profile &rarr;
-                                    </Link>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Section>
-          )}
-
-          {/* ── CLOSER LEADERBOARD ── */}
-          {tab === "closers" && (
-            <Section
-              title="Closer Leaderboard"
-              subtitle={`${closerList.length} closers with activity`}
-              noPadding
-            >
-              {closerList.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-6 py-16">
-                  <Inbox className="h-10 w-10 text-muted-foreground/20" />
-                  <p className="mt-3 text-sm font-medium text-muted-foreground">
-                    No activity yet this period
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground/60">
-                    Check back later or change the date range
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto scrollable-table">
-                  <table className="w-full min-w-[800px]">
-                    <thead>
-                      <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                        <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
-                          #
-                        </th>
-                        <SortHeader
-                          label="Name"
-                          sortKey="name"
-                          sort={closerSort}
-                          onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
-                          }
-                          align="left"
-                        />
-                        <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
-                          Office
-                        </th>
-                        <SortHeader
-                          label="Closes"
-                          sortKey="qbCloses"
-                          sort={closerSort}
-                          onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
-                          }
-                          tooltip="Verified closes from QuickBase"
-                        />
-                        <SortHeader
-                          label="kW"
-                          sortKey="totalKw"
-                          sort={closerSort}
-                          onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
-                          }
-                          tooltip="Total kilowatts sold"
-                        />
-                        <SortHeader
-                          label="Avg PPW"
-                          sortKey="avgPpw"
-                          sort={closerSort}
-                          onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
-                          }
-                          tooltip="Average net price per watt"
-                        />
-                        <SortHeader
-                          label="Sits"
-                          sortKey="SAT"
-                          sort={closerSort}
-                          onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
+                            handleSort(officeSort, setOfficeSort, k)
                           }
                           tooltip="Appointments sat"
                         />
                         <SortHeader
-                          label="Close %"
-                          sortKey="sitCloseRate"
-                          sort={closerSort}
+                          label="Sit %"
+                          sortKey="sitRate"
+                          sort={officeSort}
                           onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Sits / appointments"
+                        />
+                        <SortHeader
+                          label="Close %"
+                          sortKey="closeRate"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
                           }
                           tooltip="Closes / sits"
                         />
                         <SortHeader
+                          label="Wk Avg"
+                          sortKey="weeklyAvg"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Average closes per week"
+                        />
+                        <SortHeader
                           label="Cancel %"
                           sortKey="cancelPct"
-                          sort={closerSort}
+                          sort={officeSort}
                           onSort={(k) =>
-                            handleSort(closerSort, setCloserSort, k)
+                            handleSort(officeSort, setOfficeSort, k)
                           }
                           tooltip="Cancelled / total closes"
                         />
-                        <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
-                          Cancels
-                        </th>
+                        <SortHeader
+                          label="Setters"
+                          sortKey="activeSetters"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Active setters (DK > 0)"
+                          align="center"
+                        />
+                        <SortHeader
+                          label="Closers"
+                          sortKey="activeClosers"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Active closers (SAT >= 1)"
+                          align="center"
+                        />
                       </tr>
                     </thead>
                     <tbody className="text-[13px]">
-                      {closerList.map((c, i) => {
-                        const id = `closer-${c.userId}`;
+                      {officeList.map((o, i) => {
+                        const id = `office-${o.name}`;
                         const isExpanded = expanded.has(id);
-                        const sits = c.SAT || 0;
-                        const sitCloseRate =
-                          sits > 0
-                            ? Math.round(((c.qbCloses || 0) / sits) * 100)
-                            : 0;
-                        c.sitCloseRate = sitCloseRate;
                         return (
-                          <Fragment key={c.userId}>
+                          <Fragment key={o.name}>
                             <tr
-                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
+                              className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${o.qbCloses === 0 ? "opacity-40" : ""} ${isExpanded ? "bg-secondary/20" : ""}`}
                               onClick={() => toggleExpand(id)}
                             >
                               <td className="py-3 px-4 sm:px-6">
@@ -1032,45 +1360,38 @@ export default function Dashboard() {
                               </td>
                               <td className="py-3 px-3">
                                 <div className="flex items-center gap-2">
-                                  {isExpanded ? (
-                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  ) : (
-                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
-                                  )}
+                                  <ChevronRight
+                                    className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
+                                  />
                                   <Link
-                                    href={`/rep/${c.userId}`}
-                                    onMouseEnter={() => prefetchRep(c.userId)}
+                                    href={`/office/${encodeURIComponent(o.name)}`}
+                                    onMouseEnter={() => prefetchOffice(o.name)}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="font-medium text-foreground transition-colors hover:text-primary"
+                                    className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary"
                                   >
-                                    {c.name}
+                                    {o.name}
+                                    <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 transition-all group-hover/link:opacity-100 group-hover/link:translate-x-0 text-primary" />
                                   </Link>
                                 </div>
-                                <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
-                                  {c.qbOffice?.split(" - ")[0]}
-                                </div>
                               </td>
-                              <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
-                                {c.qbOffice?.split(" - ")[0]}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                                {c.qbCloses || 0}
+                              <td className="py-3 px-3 text-right font-semibold font-mono tabular-nums text-primary">
+                                {formatNumber(o.qbCloses)}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {formatKw(c.totalKw || 0)}
+                                {formatKw(o.kw)}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {c.avgPpw > 0 ? formatCurrency(c.avgPpw) : "--"}
+                                {formatNumber(o.totalAppts)}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                {sits}
+                                {formatNumber(o.totalSits)}
                               </td>
                               <td className="py-3 px-3 text-right">
-                                {sits > 0 ? (
+                                {o.totalAppts > 0 ? (
                                   <StatusBadge
-                                    value={sitCloseRate}
-                                    good={35}
-                                    ok={25}
+                                    value={Math.round(o.sitRate)}
+                                    good={THRESHOLDS.sitRate.good}
+                                    ok={THRESHOLDS.sitRate.ok}
                                   />
                                 ) : (
                                   <span className="text-muted-foreground/25 font-mono">
@@ -1079,12 +1400,27 @@ export default function Dashboard() {
                                 )}
                               </td>
                               <td className="py-3 px-3 text-right">
-                                {(c.qbCloses || 0) + (c.qbCancelled || 0) >
-                                0 ? (
+                                {o.totalSits > 0 ? (
+                                  <StatusBadge
+                                    value={Math.round(o.closeRate)}
+                                    good={THRESHOLDS.closeRatePerSit.good}
+                                    ok={THRESHOLDS.closeRatePerSit.ok}
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {o.weeklyAvg > 0 ? o.weeklyAvg : "--"}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {o.cancelPct > 0 ? (
                                   <span
-                                    className={`font-mono tabular-nums text-2xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                    className={`font-mono tabular-nums text-2xs font-semibold ${o.cancelPct > 30 ? "text-destructive" : o.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
                                   >
-                                    {c.cancelPct}%
+                                    {o.cancelPct}%
                                   </span>
                                 ) : (
                                   <span className="text-muted-foreground/25 font-mono">
@@ -1092,29 +1428,111 @@ export default function Dashboard() {
                                   </span>
                                 )}
                               </td>
-                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground hidden lg:table-cell">
-                                {c.qbCancelled || 0}
+                              <td className="py-3 px-3 text-center font-mono tabular-nums text-muted-foreground">
+                                {o.activeSetters}
+                              </td>
+                              <td className="py-3 px-3 text-center font-mono tabular-nums text-muted-foreground">
+                                {o.activeClosers}
                               </td>
                             </tr>
                             {isExpanded && (
                               <tr className="bg-secondary/10 border-b border-border/40">
-                                <td colSpan={10} className="py-3 px-6 sm:px-12">
-                                  <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                      <RepDrillDown
-                                        repId={c.userId}
-                                        type="closer"
-                                        from={from}
-                                        to={to}
-                                        outcomes={c.outcomes}
-                                      />
+                                <td colSpan={99} className="py-4 px-6 sm:px-12">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* Top closers */}
+                                    <div>
+                                      <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                                        Top Closers
+                                      </p>
+                                      <div className="space-y-1.5">
+                                        {o.closers
+                                          .sort(
+                                            (a: any, b: any) =>
+                                              (b.qbCloses || 0) -
+                                              (a.qbCloses || 0),
+                                          )
+                                          .slice(0, 3)
+                                          .map((c: any) => (
+                                            <div
+                                              key={c.userId}
+                                              className="flex items-center justify-between text-xs"
+                                            >
+                                              <Link
+                                                href={`/rep/${c.userId}`}
+                                                onClick={(e) =>
+                                                  e.stopPropagation()
+                                                }
+                                                className="text-foreground hover:text-primary"
+                                              >
+                                                {c.name}
+                                              </Link>
+                                              <span className="font-mono tabular-nums text-primary font-semibold">
+                                                {c.qbCloses || 0}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        {o.closers.length === 0 && (
+                                          <span className="text-2xs text-muted-foreground/40">
+                                            No closers
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
+                                    {/* Top setters */}
+                                    <div>
+                                      <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                                        Top Setters
+                                      </p>
+                                      <div className="space-y-1.5">
+                                        {o.setters
+                                          .sort(
+                                            (a: any, b: any) =>
+                                              (b.APPT || 0) - (a.APPT || 0),
+                                          )
+                                          .slice(0, 3)
+                                          .map((s: any) => (
+                                            <div
+                                              key={s.userId}
+                                              className="flex items-center justify-between text-xs"
+                                            >
+                                              <Link
+                                                href={`/rep/${s.userId}`}
+                                                onClick={(e) =>
+                                                  e.stopPropagation()
+                                                }
+                                                className="text-foreground hover:text-primary"
+                                              >
+                                                {s.name}
+                                                {s.isRecruit && (
+                                                  <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">
+                                                    R
+                                                  </span>
+                                                )}
+                                              </Link>
+                                              <span className="font-mono tabular-nums text-info font-semibold">
+                                                {s.APPT || 0} appts
+                                              </span>
+                                            </div>
+                                          ))}
+                                        {o.setters.length === 0 && (
+                                          <span className="text-2xs text-muted-foreground/40">
+                                            No setters
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+                                    <span className="text-2xs text-muted-foreground">
+                                      {o.setters.length} setters,{" "}
+                                      {o.closers.length} closers
+                                    </span>
                                     <Link
-                                      href={`/rep/${c.userId}`}
+                                      href={`/office/${encodeURIComponent(o.name)}`}
                                       onClick={(e) => e.stopPropagation()}
-                                      className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
+                                      className="text-2xs text-primary hover:underline"
                                     >
-                                      Full profile &rarr;
+                                      Full office page &rarr;
                                     </Link>
                                   </div>
                                 </td>
@@ -1124,318 +1542,76 @@ export default function Dashboard() {
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="text-[13px] font-semibold bg-secondary/20">
+                        <td className="py-3 px-4 sm:px-6" />
+                        <td className="py-3 px-3 text-muted-foreground">
+                          Total
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-primary">
+                          {formatNumber(data.summary.totalSales)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {formatKw(data.summary.totalKw)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {formatNumber(
+                            officeList.reduce((s, o) => s + o.totalAppts, 0),
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {formatNumber(
+                            officeList.reduce((s, o) => s + o.totalSits, 0),
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {data.summary.totalAppts > 0 && (
+                            <StatusBadge
+                              value={Math.round(
+                                (data.summary.totalSits /
+                                  data.summary.totalAppts) *
+                                  100,
+                              )}
+                              good={THRESHOLDS.sitRate.good}
+                              ok={THRESHOLDS.sitRate.ok}
+                            />
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {data.summary.totalSits > 0 && (
+                            <StatusBadge
+                              value={companyCloseRate}
+                              good={THRESHOLDS.closeRatePerSit.good}
+                              ok={THRESHOLDS.closeRatePerSit.ok}
+                            />
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {(() => {
+                            const totalWkAvg = officeList.reduce(
+                              (s, o) => s + o.weeklyAvg,
+                              0,
+                            );
+                            return totalWkAvg > 0
+                              ? totalWkAvg.toFixed(1)
+                              : "--";
+                          })()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {data.summary.cancelPct}%
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono text-muted-foreground">
+                          {officeList.reduce((s, o) => s + o.activeSetters, 0)}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono text-muted-foreground">
+                          {officeList.reduce((s, o) => s + o.activeClosers, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              )}
-            </Section>
-          )}
-
-          {/* ── OFFICE LEADERBOARD ── */}
-          {tab === "offices" && (
-            <Section
-              title="Office Leaderboard"
-              subtitle="Click any office for detailed breakdown"
-              noPadding
-            >
-              <div className="overflow-x-auto scrollable-table">
-                <table className="w-full min-w-[800px]">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                      <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
-                        #
-                      </th>
-                      <SortHeader
-                        label="Office"
-                        sortKey="name"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        align="left"
-                      />
-                      <SortHeader
-                        label="Closes"
-                        sortKey="qbCloses"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Verified closed deals"
-                      />
-                      <SortHeader
-                        label="kW"
-                        sortKey="kw"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Total kilowatts sold"
-                      />
-                      <SortHeader
-                        label="Appts"
-                        sortKey="totalAppts"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Appointments set"
-                      />
-                      <SortHeader
-                        label="Sits"
-                        sortKey="totalSits"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Appointments sat"
-                      />
-                      <SortHeader
-                        label="Close %"
-                        sortKey="closeRate"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Closes / sits"
-                      />
-                      <SortHeader
-                        label="Cancel %"
-                        sortKey="cancelPct"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Cancelled / total closes"
-                      />
-                      <SortHeader
-                        label="Active"
-                        sortKey="activeReps"
-                        sort={officeSort}
-                        onSort={(k) => handleSort(officeSort, setOfficeSort, k)}
-                        tooltip="Unique reps (setters + closers) with appointments in this period"
-                        align="center"
-                      />
-                    </tr>
-                  </thead>
-                  <tbody className="text-[13px]">
-                    {officeList.map((o, i) => {
-                      const id = `office-${o.name}`;
-                      const isExpanded = expanded.has(id);
-                      return (
-                        <Fragment key={o.name}>
-                          <tr
-                            className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer ${o.qbCloses === 0 ? "opacity-40" : ""} ${isExpanded ? "bg-secondary/20" : ""}`}
-                            onClick={() => toggleExpand(id)}
-                          >
-                            <td className="py-3 px-4 sm:px-6">
-                              <span
-                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
-                                  i === 0
-                                    ? "bg-primary/15 text-primary"
-                                    : i < 3
-                                      ? "bg-secondary text-foreground"
-                                      : "text-muted-foreground/40"
-                                }`}
-                              >
-                                {i + 1}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3">
-                              <div className="flex items-center gap-2">
-                                {isExpanded ? (
-                                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                ) : (
-                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
-                                )}
-                                <Link
-                                  href={`/office/${encodeURIComponent(o.name)}`}
-                                  onMouseEnter={() => prefetchOffice(o.name)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="group/link inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary"
-                                >
-                                  {o.name}
-                                  <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 transition-all group-hover/link:opacity-100 group-hover/link:translate-x-0 text-primary" />
-                                </Link>
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-right font-semibold font-mono tabular-nums text-primary">
-                              {formatNumber(o.qbCloses)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {formatKw(o.kw)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {formatNumber(o.totalAppts)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                              {formatNumber(o.totalSits)}
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              {o.totalSits > 0 ? (
-                                <StatusBadge
-                                  value={Math.round(o.closeRate)}
-                                  good={35}
-                                  ok={25}
-                                />
-                              ) : (
-                                <span className="text-muted-foreground/25 font-mono">
-                                  --
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              {o.cancelPct > 0 ? (
-                                <span
-                                  className={`font-mono tabular-nums text-2xs font-semibold ${o.cancelPct > 30 ? "text-destructive" : o.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
-                                >
-                                  {o.cancelPct}%
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/25 font-mono">
-                                  --
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              <span
-                                className={`inline-flex min-w-[24px] items-center justify-center rounded-md px-1.5 py-0.5 text-2xs font-semibold font-mono ${
-                                  o.activeReps > 0
-                                    ? "bg-primary/10 text-primary"
-                                    : "text-muted-foreground/25"
-                                }`}
-                              >
-                                {o.activeReps}
-                              </span>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr className="bg-secondary/10 border-b border-border/40">
-                              <td colSpan={9} className="py-4 px-6 sm:px-12">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  {/* Top closers */}
-                                  <div>
-                                    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                                      Top Closers
-                                    </p>
-                                    <div className="space-y-1.5">
-                                      {o.closers
-                                        .sort(
-                                          (a: any, b: any) =>
-                                            (b.qbCloses || 0) -
-                                            (a.qbCloses || 0),
-                                        )
-                                        .slice(0, 3)
-                                        .map((c: any) => (
-                                          <div
-                                            key={c.userId}
-                                            className="flex items-center justify-between text-xs"
-                                          >
-                                            <Link
-                                              href={`/rep/${c.userId}`}
-                                              onClick={(e) =>
-                                                e.stopPropagation()
-                                              }
-                                              className="text-foreground hover:text-primary"
-                                            >
-                                              {c.name}
-                                            </Link>
-                                            <span className="font-mono tabular-nums text-primary font-semibold">
-                                              {c.qbCloses || 0}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      {o.closers.length === 0 && (
-                                        <span className="text-2xs text-muted-foreground/40">
-                                          No closers
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {/* Top setters */}
-                                  <div>
-                                    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                                      Top Setters
-                                    </p>
-                                    <div className="space-y-1.5">
-                                      {o.setters
-                                        .sort(
-                                          (a: any, b: any) =>
-                                            (b.APPT || 0) - (a.APPT || 0),
-                                        )
-                                        .slice(0, 3)
-                                        .map((s: any) => (
-                                          <div
-                                            key={s.userId}
-                                            className="flex items-center justify-between text-xs"
-                                          >
-                                            <Link
-                                              href={`/rep/${s.userId}`}
-                                              onClick={(e) =>
-                                                e.stopPropagation()
-                                              }
-                                              className="text-foreground hover:text-primary"
-                                            >
-                                              {s.name}{s.isRecruit && <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">R</span>}
-                                            </Link>
-                                            <span className="font-mono tabular-nums text-info font-semibold">
-                                              {s.APPT || 0} appts
-                                            </span>
-                                          </div>
-                                        ))}
-                                      {o.setters.length === 0 && (
-                                        <span className="text-2xs text-muted-foreground/40">
-                                          No setters
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
-                                  <span className="text-2xs text-muted-foreground">
-                                    {o.setters.length} setters,{" "}
-                                    {o.closers.length} closers
-                                  </span>
-                                  <Link
-                                    href={`/office/${encodeURIComponent(o.name)}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-2xs text-primary hover:underline"
-                                  >
-                                    Full office page &rarr;
-                                  </Link>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="text-[13px] font-semibold bg-secondary/20">
-                      <td className="py-3 px-4 sm:px-6" />
-                      <td className="py-3 px-3 text-muted-foreground">Total</td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-primary">
-                        {formatNumber(data.summary.totalSales)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {formatKw(data.summary.totalKw)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {formatNumber(
-                          officeList.reduce((s, o) => s + o.totalAppts, 0),
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {formatNumber(
-                          officeList.reduce((s, o) => s + o.totalSits, 0),
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        {data.summary.totalSits > 0 && (
-                          <StatusBadge
-                            value={companyCloseRate}
-                            good={35}
-                            ok={25}
-                          />
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {data.summary.cancelPct}%
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono text-muted-foreground">
-                        {officeList.reduce((s, o) => s + o.activeReps, 0)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </Section>
+              </Section>
+            </div>
           )}
         </div>
       )}

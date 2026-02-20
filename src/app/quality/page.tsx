@@ -15,6 +15,8 @@ import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Tooltip } from "@/components/Tooltip";
 import { StatusBadge } from "@/components/StatusBadge";
+import { THRESHOLDS } from "@/lib/thresholds";
+import Link from "next/link";
 
 const C = {
   axis: "hsl(220, 9%, 46%)",
@@ -55,21 +57,16 @@ export default function QualityPage() {
 
   const setterAccountability = (() => {
     if (!data) return [];
-    const setterLB = data.setterLeaderboard || [];
-    const setterAppt = data.setterAppointments || [];
-    const salesBySetter = data.salesBySetter || {};
-    const apptMap: Record<number, any> = {};
-    for (const sa of setterAppt) apptMap[sa.userId] = sa;
+    const setters = data.allSetters || [];
 
-    return setterLB
+    return setters
       .filter((s: any) => (s.APPT || 0) > 0 || (s.DK || 0) > 0)
       .map((s: any) => {
-        const ad = apptMap[s.userId] || {};
         const appt = s.APPT || 0;
         const sits = s.SITS || 0;
-        const nosh = ad.NOSH || 0;
-        const canc = ad.CANC || 0;
-        const qbCloses = salesBySetter[s.name]?.deals || 0;
+        const nosh = s.outcomes?.NOSH || 0;
+        const canc = s.outcomes?.CANC || 0;
+        const qbCloses = s.qbCloses || 0;
         const sitRate = appt > 0 ? Math.min((sits / appt) * 100, 100) : 0;
         const closeRate = appt > 0 ? Math.min((qbCloses / appt) * 100, 100) : 0;
         const wasteRate =
@@ -108,6 +105,40 @@ export default function QualityPage() {
         })
         .sort((a, b) => b.sitRate - a.sitRate)
     : [];
+
+  // Avg Stars by Office data (7F)
+  const avgStarsData = data?.avgStarsByOffice
+    ? Object.entries(data.avgStarsByOffice as Record<string, number>)
+        .map(([name, avg]) => ({
+          name: name.split(" - ")[0],
+          fullName: name,
+          avgStars: avg,
+        }))
+        .sort((a, b) => b.avgStars - a.avgStars)
+    : [];
+
+  // Setter funnel conversion data (7E) — computed from pipeline
+  const setterFunnel = (() => {
+    if (!pipelineData || !pipelineData.statuses) return null;
+    const statusMap: Record<string, number> = {};
+    for (const s of pipelineData.statuses) {
+      statusMap[s.status] = s.count;
+    }
+    const total = pipelineData.total;
+    const apptScheduled = statusMap["Appointment Scheduled"] || 0;
+    const notHome = statusMap["Not Home"] || 0;
+    const notInterested = statusMap["Not Interested"] || 0;
+    const comeBack = statusMap["Come Back"] || 0;
+    if (total === 0) return null;
+    return {
+      total,
+      apptScheduled,
+      notHome,
+      notInterested,
+      comeBack,
+      apptRate: total > 0 ? Math.round((apptScheduled / total) * 1000) / 10 : 0,
+    };
+  })();
 
   return (
     <div className="space-y-8">
@@ -289,6 +320,162 @@ export default function QualityPage() {
             </div>
           </Section>
 
+          {/* Avg Stars by Office (7F) */}
+          {avgStarsData.length > 0 && (
+            <Section
+              title="Avg Stars by Office"
+              subtitle="Appointment quality rating by office"
+            >
+              <div
+                className="h-60"
+                style={{
+                  minHeight: Math.max(160, avgStarsData.length * 32),
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={avgStarsData}
+                    layout="vertical"
+                    margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
+                  >
+                    <XAxis
+                      type="number"
+                      domain={[0, 3]}
+                      ticks={[1, 2, 3]}
+                      tick={{
+                        fill: C.axis,
+                        fontSize: 10,
+                        fontFamily: "var(--font-jetbrains)",
+                      }}
+                      tickFormatter={(v) => `${v}★`}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={{
+                        fill: C.fg,
+                        fontSize: 11,
+                        fontFamily: "var(--font-inter)",
+                      }}
+                      width={95}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <RTooltip
+                      cursor={{ fill: "hsl(220, 14%, 94%)" }}
+                      contentStyle={{
+                        background: C.card,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 8,
+                        color: C.fg,
+                        fontSize: 12,
+                        fontFamily: "var(--font-jetbrains)",
+                      }}
+                      formatter={(v: any) => [
+                        `${Number(v).toFixed(2)}★`,
+                        "Avg Stars",
+                      ]}
+                    />
+                    <Bar
+                      dataKey="avgStars"
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={18}
+                    >
+                      {avgStarsData.map((o, i) => (
+                        <Cell
+                          key={i}
+                          fill={
+                            o.avgStars >= 2.5
+                              ? "hsl(152, 56%, 40%)"
+                              : o.avgStars >= 1.5
+                                ? "hsl(38, 92%, 50%)"
+                                : "hsl(346, 77%, 50%)"
+                          }
+                          fillOpacity={0.85}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 flex items-center gap-5 text-2xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-primary" />{" "}
+                  {"2.5+ Great"}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-warning" />{" "}
+                  {"1.5-2.5 Watch"}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-destructive" />{" "}
+                  {"<1.5 Concern"}
+                </span>
+              </div>
+            </Section>
+          )}
+
+          {/* Setter Conversion Funnel (7E) */}
+          {setterFunnel && setterFunnel.total > 0 && (
+            <Section
+              title="Door Knock Conversion Funnel"
+              subtitle={`${setterFunnel.total.toLocaleString()} total status changes`}
+            >
+              <div className="flex flex-wrap gap-3">
+                {[
+                  {
+                    label: "Total Interactions",
+                    value: setterFunnel.total,
+                    color: "bg-secondary text-foreground border-border",
+                  },
+                  {
+                    label: "Not Home",
+                    value: setterFunnel.notHome,
+                    color: "bg-secondary text-muted-foreground border-border",
+                  },
+                  {
+                    label: "Not Interested",
+                    value: setterFunnel.notInterested,
+                    color:
+                      "bg-destructive/10 text-destructive border-destructive/20",
+                  },
+                  {
+                    label: "Come Back",
+                    value: setterFunnel.comeBack,
+                    color: "bg-info/10 text-info border-info/20",
+                  },
+                  {
+                    label: "Appt Scheduled",
+                    value: setterFunnel.apptScheduled,
+                    color: "bg-primary/10 text-primary border-primary/20",
+                  },
+                ]
+                  .filter((item) => item.value > 0)
+                  .map((item) => (
+                    <div
+                      key={item.label}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-4 py-3 ${item.color}`}
+                    >
+                      <span className="text-xl font-bold font-mono tabular-nums">
+                        {item.value.toLocaleString()}
+                      </span>
+                      <span className="text-2xs font-semibold uppercase tracking-wider">
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+              {setterFunnel.apptRate > 0 && (
+                <div className="mt-4 rounded-lg bg-primary/5 px-4 py-3 text-sm text-primary font-medium">
+                  Appointment conversion rate: {setterFunnel.apptRate}% of all
+                  door knock interactions result in a scheduled appointment
+                </div>
+              )}
+            </Section>
+          )}
+
           <Section
             title="Setter Accountability"
             subtitle="Sorted by waste rate (worst first)"
@@ -383,10 +570,24 @@ export default function QualityPage() {
                           {i + 1}
                         </td>
                         <td className="py-3.5 px-3 font-medium text-foreground">
-                          {s.name}
+                          <Link
+                            href={`/rep/${s.userId}`}
+                            className="transition-colors hover:text-primary"
+                          >
+                            {s.name}
+                          </Link>
                         </td>
                         <td className="py-3.5 px-3 text-xs text-muted-foreground">
-                          {s.qbOffice?.split(" - ")[0] || s.team}
+                          {s.qbOffice ? (
+                            <Link
+                              href={`/office/${encodeURIComponent(s.qbOffice)}`}
+                              className="transition-colors hover:text-primary"
+                            >
+                              {s.qbOffice.split(" - ")[0]}
+                            </Link>
+                          ) : (
+                            s.team
+                          )}
                         </td>
                         <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-foreground">
                           {s.appt}
@@ -407,8 +608,8 @@ export default function QualityPage() {
                           {s.appt > 0 ? (
                             <StatusBadge
                               value={Math.round(s.sitRate)}
-                              good={50}
-                              ok={30}
+                              good={THRESHOLDS.sitRate.good}
+                              ok={THRESHOLDS.sitRate.ok}
                             />
                           ) : (
                             <span className="text-muted-foreground/25 font-mono">
@@ -420,8 +621,8 @@ export default function QualityPage() {
                           {s.appt > 0 ? (
                             <StatusBadge
                               value={Math.round(s.closeRate)}
-                              good={15}
-                              ok={8}
+                              good={THRESHOLDS.closeRatePerAppt.good}
+                              ok={THRESHOLDS.closeRatePerAppt.ok}
                             />
                           ) : (
                             <span className="text-muted-foreground/25 font-mono">

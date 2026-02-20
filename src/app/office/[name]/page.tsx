@@ -10,7 +10,9 @@ import { useDateRange } from "@/hooks/useDateRange";
 import { FunnelChart } from "@/components/FunnelChart";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tooltip } from "@/components/Tooltip";
-import { ArrowLeft, Target, Users } from "lucide-react";
+import { THRESHOLDS } from "@/lib/thresholds";
+import { Target, Users, Zap, Clock } from "lucide-react";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import { formatNumber, formatKw, formatCurrency } from "@/lib/format";
 
 function wasteColor(v: number) {
@@ -99,12 +101,14 @@ export default function OfficePage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link
-            href="/"
-            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
-          </Link>
+          <div className="mb-4">
+            <Breadcrumb
+              segments={[
+                { label: "Dashboard", href: "/" },
+                { label: officeName },
+              ]}
+            />
+          </div>
           <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-foreground">
             {officeName}
             {data && (
@@ -151,8 +155,8 @@ export default function OfficePage() {
 
       {isLoading && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            {[1, 2, 3, 4, 5].map((i) => (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
               <Skeleton key={i} className="h-[120px]" />
             ))}
           </div>
@@ -168,7 +172,7 @@ export default function OfficePage() {
 
       {data && !isLoading && (
         <div className="animate-enter space-y-8">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
             <MetricCard
               label="Deals"
               value={formatNumber(data.summary.deals)}
@@ -182,11 +186,62 @@ export default function OfficePage() {
               color="blue"
               tooltip="Total kilowatts sold"
             />
-            <MetricCard
-              label="Avg PPW"
-              value={formatCurrency(data.summary.avgPpw)}
-              tooltip="Average net price per watt"
-            />
+            {(() => {
+              const sitPct =
+                (data.funnel.appointments || 0) > 0
+                  ? Math.round(
+                      (data.funnel.sits / data.funnel.appointments) * 100,
+                    )
+                  : 0;
+              return (
+                <MetricCard
+                  label="Sit %"
+                  value={`${sitPct}%`}
+                  color={
+                    sitPct >= THRESHOLDS.sitRate.good
+                      ? "green"
+                      : sitPct >= THRESHOLDS.sitRate.ok
+                        ? "yellow"
+                        : "red"
+                  }
+                  tooltip="Sits / Appointments set"
+                />
+              );
+            })()}
+            {(() => {
+              const closePct =
+                (data.funnel.sits || 0) > 0
+                  ? Math.round((data.funnel.qbCloses / data.funnel.sits) * 100)
+                  : 0;
+              return (
+                <MetricCard
+                  label="Close %"
+                  value={`${closePct}%`}
+                  color={
+                    closePct >= THRESHOLDS.closeRatePerSit.good
+                      ? "green"
+                      : closePct >= THRESHOLDS.closeRatePerSit.ok
+                        ? "yellow"
+                        : "red"
+                  }
+                  tooltip="QB Closes / Sits"
+                />
+              );
+            })()}
+            {(() => {
+              const fromDate = new Date(from);
+              const toDate = new Date(to);
+              const diffMs = toDate.getTime() - fromDate.getTime();
+              const weeks = Math.max(1, diffMs / (7 * 24 * 60 * 60 * 1000));
+              const wkAvg = (data.summary.deals || 0) / weeks;
+              return (
+                <MetricCard
+                  label="Wk Avg"
+                  value={wkAvg.toFixed(1)}
+                  tooltip="Closes per week in this date range"
+                />
+              );
+            })()}
             <MetricCard
               label="Active Setters"
               value={data.activeSetters || 0}
@@ -200,6 +255,43 @@ export default function OfficePage() {
               tooltip="Unique closers with appointments in this period"
             />
           </div>
+
+          {/* Secondary KPIs row: Installs + Speed-to-Close */}
+          {((data.installs != null && data.installs > 0) ||
+            (data.speedToClose && data.speedToClose.count > 0)) && (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {data.installs != null && data.installs > 0 && (
+                <MetricCard
+                  label="Installs"
+                  value={formatNumber(data.installs)}
+                  color="green"
+                  icon={<Zap className="h-5 w-5" />}
+                  subtitle={
+                    data.installsKw > 0
+                      ? `${formatKw(data.installsKw)} kW`
+                      : undefined
+                  }
+                  tooltip="Completed installs from QuickBase"
+                />
+              )}
+              {data.speedToClose && data.speedToClose.count > 0 && (
+                <MetricCard
+                  label="Speed to Close"
+                  value={`${data.speedToClose.avgDays}d`}
+                  color={
+                    data.speedToClose.avgDays <= 7
+                      ? "green"
+                      : data.speedToClose.avgDays <= 14
+                        ? "yellow"
+                        : "red"
+                  }
+                  icon={<Clock className="h-5 w-5" />}
+                  subtitle={`${data.speedToClose.count} matched deals`}
+                  tooltip="Average days from lead creation to QB sale date"
+                />
+              )}
+            </div>
+          )}
 
           <Section title="Sales Funnel" subtitle="Doors to Closes">
             <FunnelChart
@@ -338,8 +430,8 @@ export default function OfficePage() {
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
-                          Close%{" "}
-                          <Tooltip text="Green: >15%, Yellow: 8-15%, Red: <8%" />
+                          Close/Appt%{" "}
+                          <Tooltip text="Closes / Appointments. Green: >15%, Yellow: 8-15%, Red: <8%" />
                         </span>
                       </th>
                       <th className="py-3 px-3 text-right font-medium">
@@ -416,8 +508,8 @@ export default function OfficePage() {
                               {(s.APPT || 0) > 0 ? (
                                 <StatusBadge
                                   value={Math.round(s.sitRate)}
-                                  good={50}
-                                  ok={30}
+                                  good={THRESHOLDS.sitRate.good}
+                                  ok={THRESHOLDS.sitRate.ok}
                                 />
                               ) : (
                                 <span className="text-muted-foreground/25 font-mono">
@@ -429,8 +521,8 @@ export default function OfficePage() {
                               {(s.APPT || 0) > 0 ? (
                                 <StatusBadge
                                   value={Math.round(s.closeRate)}
-                                  good={15}
-                                  ok={8}
+                                  good={THRESHOLDS.closeRatePerAppt.good}
+                                  ok={THRESHOLDS.closeRatePerAppt.ok}
                                 />
                               ) : (
                                 <span className="text-muted-foreground/25 font-mono">
@@ -567,6 +659,15 @@ export default function OfficePage() {
                           <Tooltip text="Follow-up scheduled for later" />
                         </span>
                       </th>
+                      {data.closerQualityByStars &&
+                        data.closerQualityByStars.length > 0 && (
+                          <th className="py-3 px-3 text-right font-medium">
+                            <span className="inline-flex items-center gap-1">
+                              3★ vs 1★{" "}
+                              <Tooltip text="Sit rate on 3-star vs 1-star appointments" />
+                            </span>
+                          </th>
+                        )}
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
@@ -581,6 +682,9 @@ export default function OfficePage() {
                             ? ((c.qbCloses || 0) / c.SAT) * 100
                             : 0;
                         const gap = (c.CLOS || 0) - (c.qbCloses || 0);
+                        const starQuality = data.closerQualityByStars?.find(
+                          (sq: any) => sq.closerId === c.userId,
+                        );
                         return (
                           <tr
                             key={c.userId}
@@ -622,8 +726,8 @@ export default function OfficePage() {
                               {sitClose > 0 ? (
                                 <StatusBadge
                                   value={Math.round(sitClose)}
-                                  good={35}
-                                  ok={25}
+                                  good={THRESHOLDS.closeRatePerSit.good}
+                                  ok={THRESHOLDS.closeRatePerSit.ok}
                                 />
                               ) : (
                                 <span className="text-muted-foreground/25 font-mono">
@@ -640,6 +744,42 @@ export default function OfficePage() {
                             <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
                               {c.FUS || 0}
                             </td>
+                            {data.closerQualityByStars &&
+                              data.closerQualityByStars.length > 0 && (
+                                <td className="py-3.5 px-3 text-right">
+                                  {starQuality &&
+                                  (starQuality.star3SitRate !== null ||
+                                    starQuality.star1SitRate !== null) ? (
+                                    <div className="flex items-center justify-end gap-1 font-mono tabular-nums text-xs">
+                                      {starQuality.star3SitRate !== null ? (
+                                        <span className="text-primary">
+                                          {starQuality.star3SitRate}%
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground/25">
+                                          --
+                                        </span>
+                                      )}
+                                      <span className="text-muted-foreground/40">
+                                        /
+                                      </span>
+                                      {starQuality.star1SitRate !== null ? (
+                                        <span className="text-destructive">
+                                          {starQuality.star1SitRate}%
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground/25">
+                                          --
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground/25 font-mono">
+                                      --
+                                    </span>
+                                  )}
+                                </td>
+                              )}
                           </tr>
                         );
                       })}
@@ -728,8 +868,8 @@ export default function OfficePage() {
                             {p.total_appts > 0 ? (
                               <StatusBadge
                                 value={Math.round(sitRate)}
-                                good={50}
-                                ok={30}
+                                good={THRESHOLDS.sitRate.good}
+                                ok={THRESHOLDS.sitRate.ok}
                               />
                             ) : (
                               <span className="text-muted-foreground/25 font-mono">

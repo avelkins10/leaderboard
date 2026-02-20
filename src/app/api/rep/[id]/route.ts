@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeaderboards, getUsers } from "@/lib/repcard";
+import { getLeaderboards, getTypedLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import {
   OFFICE_MAPPING,
@@ -292,7 +292,7 @@ export async function GET(
       const rsch = setterApptStats?.RSCH || 0;
       const ntr = setterApptStats?.NTR || 0;
       const qbCloses = repSales.length;
-      
+
       // Compute schedule-out from RepCard appointments
       const schedHours = userAppts
         .map((a: any) => {
@@ -302,9 +302,11 @@ export async function GET(
           return null;
         })
         .filter((h: any) => h != null && h > 0);
-      const avgScheduleOut = schedHours.length > 0
-        ? schedHours.reduce((sum: number, h: number) => sum + h, 0) / schedHours.length
-        : null;
+      const avgScheduleOut =
+        schedHours.length > 0
+          ? schedHours.reduce((sum: number, h: number) => sum + h, 0) /
+            schedHours.length
+          : null;
 
       setterCoaching = {
         doors: dk,
@@ -320,7 +322,8 @@ export async function GET(
         pending: Math.max(0, appt - sits - nosh - canc),
         sitRate: appt > 0 ? Math.round((sits / appt) * 1000) / 10 : 0,
         closeRate: appt > 0 ? Math.round((qbCloses / appt) * 1000) / 10 : 0,
-        wasteRate: appt > 0 ? Math.round(((nosh + canc) / appt) * 1000) / 10 : 0,
+        wasteRate:
+          appt > 0 ? Math.round(((nosh + canc) / appt) * 1000) / 10 : 0,
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,
         doorToQP: dk > 0 ? Math.round((qp / dk) * 1000) / 10 : 0,
         avgScheduleOutHours: avgScheduleOut,
@@ -330,6 +333,76 @@ export async function GET(
     // Closer QB stats — use shared computation from data.ts
     const closerQBStats =
       repCloserSales.length > 0 ? computeCloserQBStats(repCloserSales) : null;
+
+    // Weekly trend — last 4 weeks of leaderboard data
+    const weeklyTrend: any[] = [];
+    try {
+      const weeks: { weekLabel: string; from: string; to: string }[] = [];
+      const today = new Date(toDate);
+      for (let i = 3; i >= 0; i--) {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() - i * 7);
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 6);
+        weeks.push({
+          weekLabel: `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+          from: weekStart.toISOString().split("T")[0],
+          to: weekEnd.toISOString().split("T")[0],
+        });
+      }
+
+      const weekBoards = await Promise.all(
+        weeks.map((w) =>
+          getTypedLeaderboards(
+            role === "closer" ? "closer" : "setter",
+            w.from,
+            w.to,
+          ).catch(() => []),
+        ),
+      );
+
+      for (let i = 0; i < weeks.length; i++) {
+        const boards = weekBoards[i];
+        const lbName =
+          role === "closer" ? "Closer Leaderboard" : "Setter Leaderboard";
+        const lb = boards.find(
+          (b: any) => b.leaderboard_name === lbName,
+        ) as any;
+        if (!lb || !lb.stats?.headers) continue;
+
+        const stat = (lb.stats as any).stats?.find(
+          (s: any) => s.item_id === userId && s.item_type === "user",
+        );
+        if (!stat) {
+          weeklyTrend.push({
+            week: weeks[i].weekLabel,
+            DK: 0,
+            APPT: 0,
+            SITS: 0,
+            CLOS: 0,
+            SAT: 0,
+            LEAD: 0,
+          });
+          continue;
+        }
+
+        const values: Record<string, any> = {};
+        for (const h of (lb.stats as any).headers) {
+          values[h.short_name] = stat[h.mapped_field] ?? 0;
+        }
+        weeklyTrend.push({
+          week: weeks[i].weekLabel,
+          DK: values.DK || 0,
+          APPT: values.APPT || 0,
+          SITS: values.SITS || 0,
+          CLOS: values.CLOS || 0,
+          SAT: values.SAT || 0,
+          LEAD: values.LEAD || 0,
+        });
+      }
+    } catch {
+      // Graceful degradation — skip weekly trend on error
+    }
 
     return NextResponse.json({
       user: {
@@ -361,6 +434,7 @@ export async function GET(
       closerQBStats,
       appointments: userAppts,
       appointmentHistory,
+      weeklyTrend,
       sales: repSales,
       period: { from: fromDate, to: toDate },
     });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTypedLeaderboards, getUsers } from "@/lib/repcard";
-import { getSales } from "@/lib/quickbase";
+import { getSales, getInstalls } from "@/lib/quickbase";
 import {
   OFFICE_MAPPING,
   qbOfficeToRepCardTeams,
@@ -9,6 +9,8 @@ import {
 import {
   getOfficeSetterQualityStats,
   getOfficePartnerships,
+  getSpeedToClose,
+  getCloserQualityByStars,
 } from "@/lib/supabase-queries";
 import { isCancel, isValidPpw, getMonday, getToday } from "@/lib/data";
 
@@ -32,6 +34,9 @@ export async function GET(
       sales,
       qualityStats,
       partnerships,
+      speedToClose,
+      closerQualityByStars,
+      installs,
     ] = await Promise.all([
       getTypedLeaderboards("closer", fromDate, toDate),
       getTypedLeaderboards("setter", fromDate, toDate),
@@ -43,6 +48,13 @@ export async function GET(
       repCardTeamNames.length > 0
         ? getOfficePartnerships(repCardTeamNames, fromDate, toDate)
         : Promise.resolve([]),
+      getSpeedToClose(fromDate, toDate).catch(() => null),
+      repCardTeamNames.length > 0
+        ? getCloserQualityByStars(repCardTeamNames, fromDate, toDate).catch(
+            () => [],
+          )
+        : Promise.resolve([]),
+      getInstalls(fromDate, toDate).catch(() => []),
     ]);
 
     const userMap: Record<number, any> = {};
@@ -268,6 +280,21 @@ export async function GET(
       0,
     );
 
+    // Filter installs for this office
+    const officeInstalls = (installs || []).filter(
+      (i) => normalizeQBOffice(i.salesOffice || "") === officeName,
+    );
+
+    // Filter speed-to-close for this office (null if no office-specific data)
+    const officeStc = speedToClose?.byOffice[officeName];
+    const officeSpeedToClose = officeStc
+      ? {
+          avgDays: officeStc.avgDays,
+          count: officeStc.count,
+          byCloser: speedToClose!.byCloser,
+        }
+      : null;
+
     return NextResponse.json({
       office: officeName,
       region,
@@ -287,6 +314,10 @@ export async function GET(
         breakdown: apptBreakdown,
       },
       partnerships,
+      speedToClose: officeSpeedToClose,
+      closerQualityByStars: closerQualityByStars || [],
+      installs: officeInstalls.length,
+      installsKw: officeInstalls.reduce((s, i) => s + i.systemSizeKw, 0),
       summary: {
         deals: officeSales.length,
         kw: officeSales.reduce((s, sale) => s + sale.systemSizeKw, 0),

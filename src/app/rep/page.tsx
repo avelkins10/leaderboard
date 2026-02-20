@@ -194,6 +194,43 @@ export default function RepDirectory() {
                       <span className="rounded-md bg-secondary px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
                         {reps.length}
                       </span>
+                      {(() => {
+                        const fullOfficeName = Object.keys(data.offices).find(
+                          (k) => k.startsWith(office),
+                        );
+                        const officeData = fullOfficeName
+                          ? data.offices[fullOfficeName]
+                          : null;
+                        if (!officeData) return null;
+                        const totalAppts =
+                          officeData.setters?.reduce(
+                            (s: number, r: any) => s + (r.APPT || 0),
+                            0,
+                          ) || 0;
+                        const totalDeals =
+                          (officeData.sales?.deals || 0) +
+                          (officeData.sales?.cancelled || 0);
+                        return (
+                          <div className="hidden sm:flex items-center gap-3 ml-2 text-2xs text-muted-foreground">
+                            {totalAppts > 0 && (
+                              <span className="font-mono tabular-nums">
+                                <span className="font-semibold text-foreground">
+                                  {totalAppts}
+                                </span>{" "}
+                                appts
+                              </span>
+                            )}
+                            {totalDeals > 0 && (
+                              <span className="font-mono tabular-nums">
+                                <span className="font-semibold text-primary">
+                                  {totalDeals}
+                                </span>{" "}
+                                deals
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <Link
                       href={`/office/${encodeURIComponent(
@@ -202,9 +239,9 @@ export default function RepDirectory() {
                           k.startsWith(office),
                         ) || office,
                       )}`}
-                      className="text-2xs text-primary hover:underline"
+                      className="inline-flex items-center gap-1 text-2xs text-primary hover:underline"
                     >
-                      View office
+                      View office <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
 

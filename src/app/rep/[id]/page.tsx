@@ -14,14 +14,17 @@ import { Section } from "@/components/Section";
 import { MetricCard } from "@/components/MetricCard";
 import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import {
-  ArrowLeft,
   Briefcase,
   MapPin,
   Star,
   FileText,
   Clock,
   Calendar,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import {
   formatDate,
@@ -64,6 +67,62 @@ function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
+function TrendArrow({
+  current,
+  previous,
+}: {
+  current: number;
+  previous: number;
+}) {
+  if (previous === 0 && current === 0) return null;
+  if (current > previous) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-2xs text-primary">
+        <TrendingUp className="h-3 w-3" />
+      </span>
+    );
+  }
+  if (current < previous) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-2xs text-destructive">
+        <TrendingDown className="h-3 w-3" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground">
+      <Minus className="h-3 w-3" />
+    </span>
+  );
+}
+
+function MiniSparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const width = 48;
+  const height = 16;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - (v / max) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <svg width={width} height={height} className="inline-block ml-1">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-primary"
+      />
+    </svg>
+  );
+}
+
 export default function RepPage() {
   const params = useParams();
   const repId = params.id as string;
@@ -84,12 +143,22 @@ export default function RepPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link
-            href="/"
-            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
-          </Link>
+          <div className="mb-4">
+            <Breadcrumb
+              segments={[
+                { label: "Dashboard", href: "/" },
+                ...(data?.user?.office
+                  ? [
+                      {
+                        label: data.user.office.split(" - ")[0],
+                        href: `/office/${encodeURIComponent(data.user.office)}`,
+                      },
+                    ]
+                  : []),
+                { label: data?.user?.name || "Rep" },
+              ]}
+            />
+          </div>
           {data?.user && (
             <>
               <h1 className="flex items-center gap-3.5 text-2xl font-bold tracking-tight text-foreground">
@@ -145,25 +214,17 @@ export default function RepPage() {
         <div className="animate-enter space-y-8">
           {data.user.role === "setter" && data.setterCoaching && (
             <>
-              {/* Primary KPIs */}
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
-                <MetricCard
-                  label="Doors"
-                  value={data.setterCoaching.doors}
-                  tooltip="Total unique doors knocked"
-                />
-                <MetricCard
-                  label="Pitches"
-                  value={data.setterCoaching.qualifiedPitches}
-                  color="blue"
-                  subtitle={data.setterCoaching.doors > 0 ? `${data.setterCoaching.doorToQP}% of doors` : undefined}
-                  tooltip="Qualified pitches — homeowner engaged"
-                />
+              {/* Top row — funnel metrics (coaching front and center) */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                 <MetricCard
                   label="Appts Set"
                   value={data.setterCoaching.appointments}
                   color="blue"
-                  subtitle={data.setterCoaching.doors > 0 ? `${data.setterCoaching.doorToAppt}% of doors` : undefined}
+                  subtitle={
+                    data.setterCoaching.doors > 0
+                      ? `${data.setterCoaching.doorToAppt}% of doors`
+                      : undefined
+                  }
                   tooltip="Appointments set"
                 />
                 <MetricCard
@@ -181,64 +242,239 @@ export default function RepPage() {
                 <MetricCard
                   label="Sit %"
                   value={`${data.setterCoaching.sitRate}%`}
-                  color={data.setterCoaching.sitRate >= 50 ? "green" : data.setterCoaching.sitRate >= 30 ? "yellow" : "red"}
+                  color={
+                    data.setterCoaching.sitRate >= 50
+                      ? "green"
+                      : data.setterCoaching.sitRate >= 30
+                        ? "yellow"
+                        : "red"
+                  }
                   tooltip="Appointments that sat / total set"
                 />
                 <MetricCard
                   label="Close %"
                   value={`${data.setterCoaching.closeRate}%`}
-                  color={data.setterCoaching.closeRate >= 15 ? "green" : data.setterCoaching.closeRate >= 8 ? "yellow" : "red"}
+                  color={
+                    data.setterCoaching.closeRate >= 15
+                      ? "green"
+                      : data.setterCoaching.closeRate >= 8
+                        ? "yellow"
+                        : "red"
+                  }
                   tooltip="QB Closes / appointments set"
+                />
+              </div>
+
+              {/* Second row — context metrics */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                <MetricCard
+                  label="Doors"
+                  value={data.setterCoaching.doors}
+                  tooltip="Total unique doors knocked"
+                />
+                <MetricCard
+                  label="Pitches"
+                  value={data.setterCoaching.qualifiedPitches}
+                  color="blue"
+                  subtitle={
+                    data.setterCoaching.doors > 0
+                      ? `${data.setterCoaching.doorToQP}% of doors`
+                      : undefined
+                  }
+                  tooltip="Qualified pitches -- homeowner engaged"
                 />
                 <MetricCard
                   label="Waste %"
                   value={`${data.setterCoaching.wasteRate}%`}
-                  color={data.setterCoaching.wasteRate <= 15 ? "green" : data.setterCoaching.wasteRate <= 30 ? "yellow" : "red"}
+                  color={
+                    data.setterCoaching.wasteRate <= 15
+                      ? "green"
+                      : data.setterCoaching.wasteRate <= 30
+                        ? "yellow"
+                        : "red"
+                  }
                   tooltip="(No Shows + Cancels) / appointments set"
                 />
               </div>
 
+              {/* Weekly Trend */}
+              {data.weeklyTrend && data.weeklyTrend.length >= 2 && (
+                <Section title="Weekly Trend" subtitle="Last 4 weeks">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                          <th className="py-2.5 px-4 text-left font-medium">
+                            Week
+                          </th>
+                          <th className="py-2.5 px-3 text-right font-medium">
+                            DK
+                          </th>
+                          <th className="py-2.5 px-3 text-right font-medium">
+                            APPT
+                          </th>
+                          <th className="py-2.5 px-3 text-right font-medium">
+                            SITS
+                          </th>
+                          <th className="py-2.5 px-3 text-right font-medium">
+                            CLOS
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-[13px]">
+                        {data.weeklyTrend.map((w: any, i: number) => {
+                          const prev = i > 0 ? data.weeklyTrend[i - 1] : null;
+                          return (
+                            <tr
+                              key={w.week}
+                              className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                            >
+                              <td className="py-3 px-4 text-xs font-medium text-foreground">
+                                {w.week}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums">
+                                <span className="text-foreground">{w.DK}</span>
+                                {prev && (
+                                  <TrendArrow
+                                    current={w.DK}
+                                    previous={prev.DK}
+                                  />
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums">
+                                <span className="text-foreground">
+                                  {w.APPT}
+                                </span>
+                                {prev && (
+                                  <TrendArrow
+                                    current={w.APPT}
+                                    previous={prev.APPT}
+                                  />
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums">
+                                <span className="text-foreground">
+                                  {w.SITS}
+                                </span>
+                                {prev && (
+                                  <TrendArrow
+                                    current={w.SITS}
+                                    previous={prev.SITS}
+                                  />
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums">
+                                <span className="font-semibold text-primary">
+                                  {w.CLOS}
+                                </span>
+                                {prev && (
+                                  <TrendArrow
+                                    current={w.CLOS}
+                                    previous={prev.CLOS}
+                                  />
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="text-2xs text-muted-foreground">
+                      APPT trend:
+                    </span>
+                    <MiniSparkline
+                      values={data.weeklyTrend.map((w: any) => w.APPT)}
+                    />
+                    <span className="text-2xs text-muted-foreground ml-3">
+                      CLOS trend:
+                    </span>
+                    <MiniSparkline
+                      values={data.weeklyTrend.map((w: any) => w.CLOS)}
+                    />
+                  </div>
+                </Section>
+              )}
+
               {/* Accountability Breakdown */}
-              <Section title="Appointment Outcomes" subtitle="Where appointments end up">
+              <Section
+                title="Appointment Outcomes"
+                subtitle="Where appointments end up"
+              >
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-primary/60">Sits</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-primary">{data.setterCoaching.sits}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-primary/60">
+                      Sits
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-primary">
+                      {data.setterCoaching.sits}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-destructive/60">No Shows</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-destructive">{data.setterCoaching.noShows}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-destructive/60">
+                      No Shows
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-destructive">
+                      {data.setterCoaching.noShows}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-warning/60">Cancels</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-warning">{data.setterCoaching.cancels}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-warning/60">
+                      Cancels
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-warning">
+                      {data.setterCoaching.cancels}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Reschedules</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">{data.setterCoaching.reschedules}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                      Reschedules
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">
+                      {data.setterCoaching.reschedules}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/30 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Not Reached</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">{data.setterCoaching.notReached}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                      Not Reached
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-muted-foreground">
+                      {data.setterCoaching.notReached}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-info/20 bg-info/5 p-4 text-center">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-info/60">Pending</div>
-                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-info">{data.setterCoaching.pending}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-info/60">
+                      Pending
+                    </div>
+                    <div className="mt-1 text-2xl font-bold font-mono tabular-nums text-info">
+                      {data.setterCoaching.pending}
+                    </div>
                   </div>
                   {data.setterCoaching.avgScheduleOutHours != null && (
-                    <div className={`rounded-xl border p-4 text-center ${
-                      data.setterCoaching.avgScheduleOutHours <= 48 
-                        ? "border-primary/20 bg-primary/5" 
-                        : data.setterCoaching.avgScheduleOutHours <= 72 
-                          ? "border-warning/20 bg-warning/5" 
-                          : "border-destructive/20 bg-destructive/5"
-                    }`}>
-                      <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">Avg Sched Out</div>
-                      <div className={`mt-1 text-2xl font-bold font-mono tabular-nums ${
-                        data.setterCoaching.avgScheduleOutHours <= 48 ? "text-primary" : data.setterCoaching.avgScheduleOutHours <= 72 ? "text-warning" : "text-destructive"
-                      }`}>
-                        {data.setterCoaching.avgScheduleOutHours < 48 
-                          ? `${Math.round(data.setterCoaching.avgScheduleOutHours)}h` 
+                    <div
+                      className={`rounded-xl border p-4 text-center ${
+                        data.setterCoaching.avgScheduleOutHours <= 48
+                          ? "border-primary/20 bg-primary/5"
+                          : data.setterCoaching.avgScheduleOutHours <= 72
+                            ? "border-warning/20 bg-warning/5"
+                            : "border-destructive/20 bg-destructive/5"
+                      }`}
+                    >
+                      <div className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                        Avg Sched Out
+                      </div>
+                      <div
+                        className={`mt-1 text-2xl font-bold font-mono tabular-nums ${
+                          data.setterCoaching.avgScheduleOutHours <= 48
+                            ? "text-primary"
+                            : data.setterCoaching.avgScheduleOutHours <= 72
+                              ? "text-warning"
+                              : "text-destructive"
+                        }`}
+                      >
+                        {data.setterCoaching.avgScheduleOutHours < 48
+                          ? `${Math.round(data.setterCoaching.avgScheduleOutHours)}h`
                           : `${(data.setterCoaching.avgScheduleOutHours / 24).toFixed(1)}d`}
                       </div>
                     </div>
@@ -292,6 +528,92 @@ export default function RepPage() {
               />
             </div>
           )}
+
+          {/* Closer Weekly Trend */}
+          {data.user.role === "closer" &&
+            data.weeklyTrend &&
+            data.weeklyTrend.length >= 2 && (
+              <Section title="Weekly Trend" subtitle="Last 4 weeks">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                        <th className="py-2.5 px-4 text-left font-medium">
+                          Week
+                        </th>
+                        <th className="py-2.5 px-3 text-right font-medium">
+                          LEAD
+                        </th>
+                        <th className="py-2.5 px-3 text-right font-medium">
+                          SAT
+                        </th>
+                        <th className="py-2.5 px-3 text-right font-medium">
+                          CLOS
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[13px]">
+                      {data.weeklyTrend.map((w: any, i: number) => {
+                        const prev = i > 0 ? data.weeklyTrend[i - 1] : null;
+                        return (
+                          <tr
+                            key={w.week}
+                            className="border-b border-border/60 transition-colors hover:bg-secondary/30"
+                          >
+                            <td className="py-3 px-4 text-xs font-medium text-foreground">
+                              {w.week}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums">
+                              <span className="text-foreground">{w.LEAD}</span>
+                              {prev && (
+                                <TrendArrow
+                                  current={w.LEAD}
+                                  previous={prev.LEAD}
+                                />
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums">
+                              <span className="text-foreground">{w.SAT}</span>
+                              {prev && (
+                                <TrendArrow
+                                  current={w.SAT}
+                                  previous={prev.SAT}
+                                />
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono tabular-nums">
+                              <span className="font-semibold text-primary">
+                                {w.CLOS}
+                              </span>
+                              {prev && (
+                                <TrendArrow
+                                  current={w.CLOS}
+                                  previous={prev.CLOS}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <span className="text-2xs text-muted-foreground">
+                    SAT trend:
+                  </span>
+                  <MiniSparkline
+                    values={data.weeklyTrend.map((w: any) => w.SAT)}
+                  />
+                  <span className="text-2xs text-muted-foreground ml-3">
+                    CLOS trend:
+                  </span>
+                  <MiniSparkline
+                    values={data.weeklyTrend.map((w: any) => w.CLOS)}
+                  />
+                </div>
+              </Section>
+            )}
 
           {data.user.role === "closer" &&
             Object.keys(data.dispositions).length > 0 && (
@@ -833,9 +1155,29 @@ export default function RepPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-3 text-muted-foreground">
-                          {data.user.role === "setter"
-                            ? a.closer_name || "-"
-                            : a.setter_name || "-"}
+                          {data.user.role === "setter" ? (
+                            a.closer_id ? (
+                              <Link
+                                href={`/rep/${a.closer_id}`}
+                                className="transition-colors hover:text-primary"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {a.closer_name || "-"}
+                              </Link>
+                            ) : (
+                              a.closer_name || "-"
+                            )
+                          ) : a.setter_id ? (
+                            <Link
+                              href={`/rep/${a.setter_id}`}
+                              className="transition-colors hover:text-primary"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {a.setter_name || "-"}
+                            </Link>
+                          ) : (
+                            a.setter_name || "-"
+                          )}
                         </td>
                       </tr>
                     ))}

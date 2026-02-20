@@ -79,16 +79,20 @@ export async function GET(req: NextRequest) {
     const [apptRes, custRes] = await Promise.all([
       fetch(
         `https://app.repcard.com/api/appointments/attachments?from_date=${fromDate}&to_date=${toDate}&per_page=100&page=1`,
-        { headers: { "x-api-key": REPCARD_API_KEY } }
+        { headers: { "x-api-key": REPCARD_API_KEY } },
       ),
       fetch(
         `https://app.repcard.com/api/customers/attachments?from_date=${fromDate}&to_date=${toDate}&per_page=100&page=1`,
-        { headers: { "x-api-key": REPCARD_API_KEY } }
+        { headers: { "x-api-key": REPCARD_API_KEY } },
       ),
     ]);
 
-    const apptData = apptRes.ok ? await apptRes.json() : { result: { data: [] } };
-    const custData = custRes.ok ? await custRes.json() : { result: { data: [] } };
+    const apptData = apptRes.ok
+      ? await apptRes.json()
+      : { result: { data: [] } };
+    const custData = custRes.ok
+      ? await custRes.json()
+      : { result: { data: [] } };
     const apptAttachments = apptData.result?.data || apptData.data || [];
     const custAttachments = custData.result?.data || custData.data || [];
     stats.fetched.appointment = apptAttachments.length;
@@ -99,7 +103,7 @@ export async function GET(req: NextRequest) {
       .from("attachments")
       .select("url");
     const verifiedUrls = new Set(
-      (existingAttachments || []).map((a: any) => a.url)
+      (existingAttachments || []).map((a: any) => a.url),
     );
 
     // ── Step 3: Build pending list ──
@@ -138,13 +142,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ── Step 4: Parallel vision AI (cap 15) ──
-    const batch = pending.slice(0, 15);
+    // ── Step 4: Parallel vision AI (cap 40) ──
+    const batch = pending.slice(0, 40);
     const results = await Promise.all(
       batch.map(async (att) => ({
         att,
         isPowerBill: await classifyImage(att.url),
-      }))
+      })),
     );
 
     // ── Step 5: Store results + update appointments ──
@@ -189,8 +193,7 @@ export async function GET(req: NextRequest) {
 
     for (const appt of recentAppts || []) {
       const hasVerifiedPB =
-        verifiedApptIds.has(appt.id) ||
-        verifiedContactIds.has(appt.contact_id);
+        verifiedApptIds.has(appt.id) || verifiedContactIds.has(appt.contact_id);
 
       if (hasVerifiedPB !== appt.has_power_bill) {
         const hrs = appt.hours_to_appointment;
@@ -200,15 +203,23 @@ export async function GET(req: NextRequest) {
           .update({
             has_power_bill: hasVerifiedPB,
             is_quality: hasVerifiedPB && within2days,
-            star_rating: hasVerifiedPB && within2days ? 3 : hasVerifiedPB ? 2 : 1,
+            star_rating:
+              hasVerifiedPB && within2days ? 3 : hasVerifiedPB ? 2 : 1,
           })
           .eq("id", appt.id);
         stats.appointmentsUpdated++;
       }
     }
 
-    return NextResponse.json({ success: true, window: { fromDate, toDate }, ...stats });
+    return NextResponse.json({
+      success: true,
+      window: { fromDate, toDate },
+      ...stats,
+    });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
   }
 }

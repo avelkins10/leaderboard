@@ -516,6 +516,306 @@ export async function getOfficePartnerships(
   return Object.values(map).sort((a, b) => b.total_appts - a.total_appts);
 }
 
+// ── Speed-to-close: days from lead creation to QB sale date ──
+
+export interface SpeedToCloseResult {
+  avgDaysOverall: number;
+  byOffice: Record<string, { avgDays: number; count: number }>;
+  byCloser: Record<
+    string,
+    { avgDays: number; count: number; closerName: string }
+  >;
+}
+
+export async function getSpeedToClose(
+  from: string,
+  to: string,
+): Promise<SpeedToCloseResult> {
+  // Join deal_matches with appointments to get lead_created_at and qb_sale_date
+  const { data, error } = await supabaseAdmin
+    .from("deal_matches")
+    .select("qb_sale_date, qb_sales_office, qb_closer_rc_id, appointment_id")
+    .gte("qb_sale_date", from)
+    .lte("qb_sale_date", to);
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    return { avgDaysOverall: 0, byOffice: {}, byCloser: {} };
+  }
+
+  // Fetch appointment lead_created_at for all matched appointments
+  const apptIds = data.map((d) => d.appointment_id).filter(Boolean) as number[];
+  const apptMap = new Map<number, string>();
+  const closerNameMap = new Map<string, string>();
+
+  if (apptIds.length > 0) {
+    const { data: appts } = await supabaseAdmin
+      .from("appointments")
+      .select("id, lead_created_at, contact_created_at, closer_name, closer_id")
+      .in("id", apptIds);
+    for (const a of appts || []) {
+      const leadDate = a.lead_created_at || a.contact_created_at;
+      if (leadDate) apptMap.set(a.id, leadDate);
+      if (a.closer_id)
+        closerNameMap.set(
+          String(a.closer_id),
+          a.closer_name || `Closer #${a.closer_id}`,
+        );
+    }
+  }
+
+  // Compute days between lead creation and sale date
+  const officeAgg: Record<string, { totalDays: number; count: number }> = {};
+  const closerAgg: Record<
+    string,
+    { totalDays: number; count: number; closerName: string }
+  > = {};
+  let totalDays = 0;
+  let totalCount = 0;
+
+  for (const match of data) {
+    if (!match.appointment_id || !match.qb_sale_date) continue;
+    const leadDate = apptMap.get(match.appointment_id);
+    if (!leadDate) continue;
+
+    const days =
+      (new Date(match.qb_sale_date).getTime() - new Date(leadDate).getTime()) /
+      (1000 * 60 * 60 * 24);
+    if (days < 0 || days > 365) continue; // filter outliers
+
+    totalDays += days;
+    totalCount++;
+
+    // By office
+    const office = match.qb_sales_office || "Unknown";
+    if (!officeAgg[office]) officeAgg[office] = { totalDays: 0, count: 0 };
+    officeAgg[office].totalDays += days;
+    officeAgg[office].count++;
+
+    // By closer
+    const closerId = match.qb_closer_rc_id
+      ? String(match.qb_closer_rc_id)
+      : null;
+    if (closerId) {
+      if (!closerAgg[closerId]) {
+        closerAgg[closerId] = {
+          totalDays: 0,
+          count: 0,
+          closerName: closerNameMap.get(closerId) || `Closer #${closerId}`,
+        };
+      }
+      closerAgg[closerId].totalDays += days;
+      closerAgg[closerId].count++;
+    }
+  }
+
+  const byOffice: Record<string, { avgDays: number; count: number }> = {};
+  for (const [office, agg] of Object.entries(officeAgg)) {
+    byOffice[office] = {
+      avgDays: Math.round((agg.totalDays / agg.count) * 10) / 10,
+      count: agg.count,
+    };
+  }
+
+  const byCloser: Record<
+    string,
+    { avgDays: number; count: number; closerName: string }
+  > = {};
+  for (const [closerId, agg] of Object.entries(closerAgg)) {
+    byCloser[closerId] = {
+      avgDays: Math.round((agg.totalDays / agg.count) * 10) / 10,
+      count: agg.count,
+      closerName: agg.closerName,
+    };
+  }
+
+  return {
+    avgDaysOverall:
+      totalCount > 0 ? Math.round((totalDays / totalCount) * 10) / 10 : 0,
+    byOffice,
+    byCloser,
+  };
+}
+
+// ── Closer quality stats by star rating ──
+
+export interface CloserQualityByStars {
+  closerId: number;
+  closerName: string;
+  star1SitRate: number | null;
+  star2SitRate: number | null;
+  star3SitRate: number | null;
+  star1Count: number;
+  star2Count: number;
+  star3Count: number;
+}
+
+const SIT_DISPOSITIONS = new Set([
+  "closed",
+  "credit_fail",
+  "no_close",
+  "follow_up",
+  "shade",
+  "one_legger",
+]);
+
+export async function getCloserQualityByStars(
+  teamNames: string[],
+  from: string,
+  to: string,
+): Promise<CloserQualityByStars[]> {
+  const { data, error } = await supabaseAdmin
+    .from("appointments")
+    .select("closer_id, closer_name, star_rating, disposition")
+    .in("office_team", teamNames)
+    .gte("appointment_time", `${from}T00:00:00Z`)
+    .lt("appointment_time", `${to}T00:00:00Z`)
+    .not("closer_id", "is", null)
+    .not("star_rating", "is", null);
+  if (error) throw error;
+
+  // Group by closer_id + star_rating
+  const closerMap: Record<
+    number,
+    {
+      closerName: string;
+      byStar: Record<number, { total: number; sat: number }>;
+    }
+  > = {};
+
+  for (const row of data || []) {
+    if (!row.closer_id || !row.star_rating) continue;
+    if (!closerMap[row.closer_id]) {
+      closerMap[row.closer_id] = {
+        closerName: row.closer_name || `Closer #${row.closer_id}`,
+        byStar: {},
+      };
+    }
+    const star = row.star_rating;
+    if (!closerMap[row.closer_id].byStar[star]) {
+      closerMap[row.closer_id].byStar[star] = { total: 0, sat: 0 };
+    }
+    closerMap[row.closer_id].byStar[star].total++;
+    const cat = dispositionCategory(row.disposition);
+    if (SIT_DISPOSITIONS.has(cat)) {
+      closerMap[row.closer_id].byStar[star].sat++;
+    }
+  }
+
+  const MIN_SAMPLE = 2;
+  return Object.entries(closerMap).map(([id, entry]) => {
+    const rate = (star: number) => {
+      const bucket = entry.byStar[star];
+      if (!bucket || bucket.total < MIN_SAMPLE) return null;
+      return Math.round((bucket.sat / bucket.total) * 1000) / 10;
+    };
+    return {
+      closerId: Number(id),
+      closerName: entry.closerName,
+      star1SitRate: rate(1),
+      star2SitRate: rate(2),
+      star3SitRate: rate(3),
+      star1Count: entry.byStar[1]?.total || 0,
+      star2Count: entry.byStar[2]?.total || 0,
+      star3Count: entry.byStar[3]?.total || 0,
+    };
+  });
+}
+
+// ── Setter Funnel from lead_status_changes ──
+
+export interface SetterFunnelEntry {
+  setterId: number;
+  setterName: string;
+  officeName: string;
+  doorKnocks: number;
+  appointmentScheduled: number;
+  notInterested: number;
+  notHome: number;
+  comeBack: number;
+  dq: number;
+  other: number;
+}
+
+export async function getSetterFunnel(
+  from: string,
+  to: string,
+): Promise<SetterFunnelEntry[]> {
+  const { data, error } = await supabaseAdmin
+    .from("lead_status_changes")
+    .select("rep_id, rep_name, office_team, new_status")
+    .gte("changed_at", `${from}T00:00:00Z`)
+    .lt("changed_at", `${to}T00:00:00Z`)
+    .not("rep_id", "is", null);
+  if (error) throw error;
+
+  const map: Record<
+    number,
+    {
+      name: string;
+      office: string;
+      doorKnocks: number;
+      appointmentScheduled: number;
+      notInterested: number;
+      notHome: number;
+      comeBack: number;
+      dq: number;
+      other: number;
+    }
+  > = {};
+
+  for (const row of data || []) {
+    if (!row.rep_id) continue;
+    if (!map[row.rep_id]) {
+      map[row.rep_id] = {
+        name: row.rep_name || `Rep #${row.rep_id}`,
+        office: row.office_team || "Unknown",
+        doorKnocks: 0,
+        appointmentScheduled: 0,
+        notInterested: 0,
+        notHome: 0,
+        comeBack: 0,
+        dq: 0,
+        other: 0,
+      };
+    }
+    const entry = map[row.rep_id];
+    const status = (row.new_status || "").toLowerCase();
+
+    if (status.includes("not home")) {
+      entry.notHome++;
+      entry.doorKnocks++;
+    } else if (status.includes("not interested")) {
+      entry.notInterested++;
+      entry.doorKnocks++;
+    } else if (status.includes("appointment scheduled")) {
+      entry.appointmentScheduled++;
+      entry.doorKnocks++;
+    } else if (status.includes("come back")) {
+      entry.comeBack++;
+      entry.doorKnocks++;
+    } else if (status.includes("dq")) {
+      entry.dq++;
+      entry.doorKnocks++;
+    } else {
+      entry.other++;
+      entry.doorKnocks++;
+    }
+  }
+
+  return Object.entries(map).map(([id, e]) => ({
+    setterId: Number(id),
+    setterName: e.name,
+    officeName: e.office,
+    doorKnocks: e.doorKnocks,
+    appointmentScheduled: e.appointmentScheduled,
+    notInterested: e.notInterested,
+    notHome: e.notHome,
+    comeBack: e.comeBack,
+    dq: e.dq,
+    other: e.other,
+  }));
+}
+
 export async function getContactTimeline(
   contactId: number,
 ): Promise<TimelineEvent[]> {

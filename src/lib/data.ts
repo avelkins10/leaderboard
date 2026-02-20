@@ -5,7 +5,12 @@
 
 import { getTypedLeaderboards, getUsers, type RepUser } from "./repcard";
 import { getSales, type QBSale } from "./quickbase";
-import { OFFICE_MAPPING, teamIdToQBOffice, normalizeQBOffice } from "./config";
+import {
+  OFFICE_MAPPING,
+  teamIdToQBOffice,
+  normalizeQBOffice,
+  repCardTeamToQBOffice,
+} from "./config";
 import { supabaseAdmin } from "./supabase";
 
 // ── Name cleanup — strip "R - " recruit prefix ──
@@ -122,6 +127,8 @@ export interface OfficeSummary {
     cancelPct: number;
   };
   activeReps: number;
+  activeSetters: number;
+  activeClosers: number;
 }
 
 export interface ScorecardResult {
@@ -143,6 +150,7 @@ export interface ScorecardResult {
   allClosers: ProcessedCloser[];
   salesByOffice: Record<string, SalesAgg>;
   activeRepsByOffice: Record<string, number>;
+  avgStarsByOffice: Record<string, number>;
 }
 
 // ── Core: process a RepCard leaderboard into typed array ──
@@ -477,25 +485,51 @@ export async function fetchScorecard(
           cancelPct: 0,
         },
         activeReps: 0,
+        activeSetters: 0,
+        activeClosers: 0,
       };
     return offices[office];
   };
 
-  // Fetch avg star ratings per setter from Supabase
+  // Fetch avg star ratings per setter from Supabase (also grab office_team for 7F)
   const { data: starRows } = await supabaseAdmin
     .from("appointments")
-    .select("setter_id, star_rating")
+    .select("setter_id, star_rating, office_team")
     .gte("appointment_time", fromDate)
     .lte("appointment_time", toDate + "T23:59:59")
     .not("star_rating", "is", null);
 
   const starBySetter: Record<number, { sum: number; count: number }> = {};
+  const starByOfficeTeam: Record<string, { sum: number; count: number }> = {};
   for (const row of starRows || []) {
     if (!row.setter_id) continue;
     if (!starBySetter[row.setter_id])
       starBySetter[row.setter_id] = { sum: 0, count: 0 };
     starBySetter[row.setter_id].sum += row.star_rating;
     starBySetter[row.setter_id].count++;
+
+    // Aggregate by office team for avg stars by office
+    if (row.office_team) {
+      if (!starByOfficeTeam[row.office_team])
+        starByOfficeTeam[row.office_team] = { sum: 0, count: 0 };
+      starByOfficeTeam[row.office_team].sum += row.star_rating;
+      starByOfficeTeam[row.office_team].count++;
+    }
+  }
+
+  // Map office team names to QB office names for avgStarsByOffice
+  const avgStarsByOffice: Record<string, number> = {};
+  const officeStarAgg: Record<string, { sum: number; count: number }> = {};
+  for (const [teamName, agg] of Object.entries(starByOfficeTeam)) {
+    const qbOffice = repCardTeamToQBOffice(teamName);
+    if (!qbOffice) continue;
+    if (!officeStarAgg[qbOffice])
+      officeStarAgg[qbOffice] = { sum: 0, count: 0 };
+    officeStarAgg[qbOffice].sum += agg.sum;
+    officeStarAgg[qbOffice].count += agg.count;
+  }
+  for (const [office, agg] of Object.entries(officeStarAgg)) {
+    avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
   }
 
   // Process setters with QB attribution
@@ -542,12 +576,16 @@ export async function fetchScorecard(
   // Deduplicate: same person can appear as both setter and closer
   const activeRepsByOffice: Record<string, number> = {};
   const activeRepsSeen: Record<string, Set<number>> = {};
+  const activeSettersSeen: Record<string, Set<number>> = {};
+  const activeClosersSeen: Record<string, Set<number>> = {};
   for (const s of allSetters) {
     if ((s as any).DK > 0) {
       const office = s.qbOffice;
       if (office && office !== "Unknown") {
         if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
         activeRepsSeen[office].add(s.userId);
+        if (!activeSettersSeen[office]) activeSettersSeen[office] = new Set();
+        activeSettersSeen[office].add(s.userId);
       }
     }
   }
@@ -557,12 +595,17 @@ export async function fetchScorecard(
       if (office && office !== "Unknown") {
         if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
         activeRepsSeen[office].add(c.userId);
+        if (!activeClosersSeen[office]) activeClosersSeen[office] = new Set();
+        activeClosersSeen[office].add(c.userId);
       }
     }
   }
   for (const [office, ids] of Object.entries(activeRepsSeen)) {
     activeRepsByOffice[office] = ids.size;
-    getOrCreate(office).activeReps = ids.size;
+    const o = getOrCreate(office);
+    o.activeReps = ids.size;
+    o.activeSetters = activeSettersSeen[office]?.size || 0;
+    o.activeClosers = activeClosersSeen[office]?.size || 0;
   }
 
   // Summary
@@ -601,5 +644,6 @@ export async function fetchScorecard(
     allClosers,
     salesByOffice: byOffice,
     activeRepsByOffice,
+    avgStarsByOffice,
   };
 }
