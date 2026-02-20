@@ -679,10 +679,8 @@ export async function fetchScorecard(
           ? Math.round((cancelledSales.length / sales.length) * 100)
           : 0,
       totalAppts: allSetters.reduce((sum, s) => sum + (s.APPT || 0), 0),
-      totalSits: Math.max(
-        allSetters.reduce((sum, s) => sum + ((s as any).SITS || 0), 0),
-        allClosers.reduce((sum, c) => sum + (c.SAT || 0), 0),
-      ),
+      // Use setter SITS as authoritative — sits belong to the setter's office
+      totalSits: allSetters.reduce((sum, s) => sum + ((s as any).SITS || 0), 0),
     },
     offices,
     allSetters,

@@ -304,17 +304,11 @@ export async function GET(
       (s: number, r: any) => s + (r.APPT || 0),
       0,
     );
-    // Use setter SITS (not closer SAT) — offices with shared closers
-    // have 0 closers on their team but setters still track sits
-    const setterSits = setters.reduce(
+    // Use setter SITS — sits belong to the setter's office, not the closer's
+    const totalSits = setters.reduce(
       (s: number, r: any) => s + (r.SITS || 0),
       0,
     );
-    const closerSats = closers.reduce(
-      (s: number, r: any) => s + (r.SAT || 0),
-      0,
-    );
-    const totalSits = Math.max(setterSits, closerSats);
     const totalQBCloses = officeSales.length;
     const totalRCClaims = closers.reduce(
       (s: number, r: any) => s + (r.CLOS || 0),
