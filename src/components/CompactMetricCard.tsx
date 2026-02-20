@@ -1,7 +1,7 @@
-'use client';
-import { Tooltip } from './Tooltip';
+"use client";
+import { Tooltip } from "./Tooltip";
 
-type Color = 'default' | 'green' | 'blue' | 'yellow' | 'red';
+type Color = "default" | "green" | "blue" | "yellow" | "red";
 
 interface Row {
   label: string;
@@ -16,16 +16,20 @@ interface CompactMetricCardProps {
 }
 
 const valueColor: Record<string, string> = {
-  default: 'text-card-dark-foreground',
-  green: 'text-primary',
-  blue: 'text-info',
-  yellow: 'text-warning',
-  red: 'text-destructive',
+  default: "text-card-dark-foreground",
+  green: "text-primary",
+  blue: "text-info",
+  yellow: "text-warning",
+  red: "text-destructive",
 };
 
-export function CompactMetricCard({ title, tooltip, rows }: CompactMetricCardProps) {
+export function CompactMetricCard({
+  title,
+  tooltip,
+  rows,
+}: CompactMetricCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-xl bg-card-dark p-5">
+    <div className="relative rounded-xl bg-card-dark p-5">
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-card-dark-foreground/50">
           {title}
@@ -35,8 +39,12 @@ export function CompactMetricCard({ title, tooltip, rows }: CompactMetricCardPro
       <div className="mt-3 space-y-2">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between">
-            <span className="text-xs text-card-dark-foreground/50">{row.label}</span>
-            <span className={`text-sm font-semibold font-mono tabular-nums ${valueColor[row.color || 'default']}`}>
+            <span className="text-xs text-card-dark-foreground/50">
+              {row.label}
+            </span>
+            <span
+              className={`text-sm font-semibold font-mono tabular-nums ${valueColor[row.color || "default"]}`}
+            >
               {row.value}
             </span>
           </div>

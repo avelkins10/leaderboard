@@ -240,10 +240,10 @@ export default function RepPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 <CompactMetricCard
                   title="Conversion"
-                  tooltip="Appointment conversion rates"
+                  tooltip="Excludes credit fails and shade from rates"
                   rows={[
                     {
-                      label: "Sit %",
+                      label: "Set/Sit %",
                       value: `${data.setterCoaching.sitRate}%`,
                       color:
                         data.setterCoaching.sitRate >= 50
@@ -253,7 +253,7 @@ export default function RepPage() {
                             : "red",
                     },
                     {
-                      label: "Close %",
+                      label: "Sit/Close %",
                       value: `${data.setterCoaching.closeRate}%`,
                       color:
                         data.setterCoaching.closeRate >= 15

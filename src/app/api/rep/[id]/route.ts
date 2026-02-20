@@ -359,7 +359,11 @@ export async function GET(
       const canc = setterApptStats?.CANC || 0;
       const rsch = setterApptStats?.RSCH || 0;
       const ntr = setterApptStats?.NTR || 0;
+      const cf = setterApptStats?.CF || 0;
+      const shad = setterApptStats?.SHAD || setterApptStats?.SHADE || 0;
       const qbCloses = repSales.length;
+      // "Good sits" = sits minus credit fails and shade (not closeable leads)
+      const goodSits = Math.max(0, sits - cf - shad);
 
       // Compute schedule-out from RepCard appointments
       const schedHours = userAppts
@@ -388,8 +392,12 @@ export async function GET(
         reschedules: rsch,
         notReached: ntr,
         pending: Math.max(0, appt - sits - nosh - canc),
-        sitRate: appt > 0 ? Math.round((sits / appt) * 1000) / 10 : 0,
-        closeRate: appt > 0 ? Math.round((qbCloses / appt) * 1000) / 10 : 0,
+        creditFails: cf,
+        shadeFails: shad,
+        goodSits,
+        sitRate: appt > 0 ? Math.round((goodSits / appt) * 1000) / 10 : 0,
+        closeRate:
+          goodSits > 0 ? Math.round((qbCloses / goodSits) * 1000) / 10 : 0,
         wasteRate:
           appt > 0 ? Math.round(((nosh + canc) / appt) * 1000) / 10 : 0,
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,

@@ -1,6 +1,6 @@
-'use client';
-import { ReactNode } from 'react';
-import { Tooltip } from './Tooltip';
+"use client";
+import { ReactNode } from "react";
+import { Tooltip } from "./Tooltip";
 
 interface MetricCardProps {
   label: string;
@@ -9,23 +9,33 @@ interface MetricCardProps {
   tooltip?: string;
   icon?: ReactNode;
   trend?: number;
-  color?: 'default' | 'green' | 'blue' | 'yellow' | 'red';
+  color?: "default" | "green" | "blue" | "yellow" | "red";
 }
 
 const subtitleAccent: Record<string, string> = {
-  default: 'text-card-dark-foreground/50',
-  green: 'text-primary',
-  blue: 'text-info',
-  yellow: 'text-warning',
-  red: 'text-destructive',
+  default: "text-card-dark-foreground/50",
+  green: "text-primary",
+  blue: "text-info",
+  yellow: "text-warning",
+  red: "text-destructive",
 };
 
-export function MetricCard({ label, value, subtitle, tooltip, icon, trend, color = 'default' }: MetricCardProps) {
+export function MetricCard({
+  label,
+  value,
+  subtitle,
+  tooltip,
+  icon,
+  trend,
+  color = "default",
+}: MetricCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-xl bg-card-dark p-5">
+    <div className="relative rounded-xl bg-card-dark p-5">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-card-dark-foreground/50">{label}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-card-dark-foreground/50">
+            {label}
+          </span>
           {tooltip && <Tooltip text={tooltip} />}
         </div>
         {icon && <span className="text-card-dark-foreground/15">{icon}</span>}
@@ -37,10 +47,17 @@ export function MetricCard({ label, value, subtitle, tooltip, icon, trend, color
       </div>
       {(subtitle || trend !== undefined) && (
         <div className="mt-2 flex items-center gap-2">
-          {subtitle && <span className={`text-xs font-medium ${subtitleAccent[color]}`}>{subtitle}</span>}
+          {subtitle && (
+            <span className={`text-xs font-medium ${subtitleAccent[color]}`}>
+              {subtitle}
+            </span>
+          )}
           {trend !== undefined && (
-            <span className={`text-[11px] font-semibold font-mono ${trend > 0 ? 'text-primary' : trend < 0 ? 'text-destructive' : 'text-card-dark-foreground/40'}`}>
-              {trend > 0 ? '+' : ''}{trend.toFixed(0)}%
+            <span
+              className={`text-[11px] font-semibold font-mono ${trend > 0 ? "text-primary" : trend < 0 ? "text-destructive" : "text-card-dark-foreground/40"}`}
+            >
+              {trend > 0 ? "+" : ""}
+              {trend.toFixed(0)}%
             </span>
           )}
         </div>
