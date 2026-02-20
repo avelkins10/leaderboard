@@ -140,10 +140,15 @@ export async function GET(req: NextRequest) {
 }
 
 function getMonday(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().split("T")[0];
+  const now = new Date();
+  const ct = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  const day = ct.getDay();
+  const diff = ct.getDate() - day + (day === 0 ? -6 : 1);
+  ct.setDate(diff);
+  const y = ct.getFullYear();
+  const m = String(ct.getMonth() + 1).padStart(2, "0");
+  const d = String(ct.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function getSunday(monday: string): string {

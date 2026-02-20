@@ -217,6 +217,20 @@ const [qualityStats, partnerships, fieldTimeData] = await Promise.all([
 ]);
 ```
 
+### Supabase Date Boundaries — Use `dateBoundsUTC()`
+
+All Supabase timestamp queries must use `dateBoundsUTC(from, to)` from `data.ts` instead of hardcoded `T00:00:00Z`/`T23:59:59Z` suffixes. This converts YYYY-MM-DD date strings to UTC boundaries aligned to America/Chicago timezone (handles CST/CDT automatically):
+
+```typescript
+import { dateBoundsUTC } from "@/lib/data";
+const bounds = dateBoundsUTC(from, to);
+const { data } = await supabaseAdmin
+  .from("appointments")
+  .select("*")
+  .gte("appointment_time", bounds.gte)
+  .lte("appointment_time", bounds.lte);
+```
+
 ### Office Name Mapping
 
 QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names like "Stevens - Team 2026". `normalizeQBOffice()` handles the translation.
@@ -241,6 +255,9 @@ QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names
 - **Timezone-aware date formatting:** Use `formatDate()`/`formatDateShort()` with timezone parameter. Offices have timezones defined in `OFFICE_MAPPING`.
 - **Multiple RepCard teams per office:** Some QB offices have multiple RepCard teams (e.g., Stevens has teams 5671, 6737, 7141 all mapping to "Stevens - Iowa 2025"). This is correct — all teams roll into one office.
 - **Tooltip component:** Uses `text` prop, NOT `content`. `<Tooltip text="...">`.
+- **Date range `to` is inclusive.** `useDateRange` hook returns `from`/`to` as inclusive YYYY-MM-DD dates. All downstream APIs (RepCard, QuickBase `OBF`, Supabase `.lte`) treat dates as inclusive. NEVER add +1 day to the end date.
+- **Supabase UTC timestamp boundaries:** NEVER use hardcoded `T00:00:00Z`/`T23:59:59Z` suffixes — they align to UTC midnight, not Central time. Always use `dateBoundsUTC(from, to)` from `data.ts` which computes correct UTC boundaries for America/Chicago timezone.
+- **Server-side `getMonday()`/`getToday()`:** Use America/Chicago timezone, not UTC. UTC `.toISOString().split("T")[0]` gives wrong date during evening hours in Central time.
 - **Supabase default row limit is 1000.** Queries returning more rows (e.g. company-wide `door_knocks`) must paginate with `.range()`. Without pagination, results are silently truncated.
 
 ## Environment Variables

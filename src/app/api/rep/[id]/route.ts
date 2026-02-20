@@ -8,6 +8,7 @@ import {
   getOfficeTimezone,
 } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
+import { dateBoundsUTC } from "@/lib/data";
 import { dispositionCategory, getFieldTimeStats } from "@/lib/supabase-queries";
 import {
   getRepSales,
@@ -168,8 +169,8 @@ export async function GET(
           "has_power_bill, hours_to_appointment, is_quality, disposition, star_rating",
         )
         .eq(idField, userId)
-        .gte("appointment_time", `${qualityFrom}T00:00:00Z`)
-        .lte("appointment_time", `${qualityTo}T23:59:59Z`);
+        .gte("appointment_time", dateBoundsUTC(qualityFrom, qualityTo).gte)
+        .lte("appointment_time", dateBoundsUTC(qualityFrom, qualityTo).lte);
 
       if (apptRows && apptRows.length > 0) {
         const total = apptRows.length;

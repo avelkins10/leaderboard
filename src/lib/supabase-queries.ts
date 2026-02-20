@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase";
 import { getTimezoneForTeam } from "./config";
+import { dateBoundsUTC } from "./data";
 
 // ── Types ──
 
@@ -160,8 +161,8 @@ export async function getSetterAppointments(
     .from("appointments")
     .select("*")
     .eq("setter_id", setterId)
-    .gte("appointment_time", `${from}T00:00:00Z`)
-    .lte("appointment_time", `${to}T23:59:59Z`)
+    .gte("appointment_time", dateBoundsUTC(from, to).gte)
+    .lte("appointment_time", dateBoundsUTC(from, to).lte)
     .order("appointment_time", { ascending: false });
   if (error) throw error;
   return (data || []).map(mapAppointment);
@@ -176,8 +177,8 @@ export async function getCloserAppointments(
     .from("appointments")
     .select("*")
     .eq("closer_id", closerId)
-    .gte("appointment_time", `${from}T00:00:00Z`)
-    .lte("appointment_time", `${to}T23:59:59Z`)
+    .gte("appointment_time", dateBoundsUTC(from, to).gte)
+    .lte("appointment_time", dateBoundsUTC(from, to).lte)
     .order("appointment_time", { ascending: false });
   if (error) throw error;
   return (data || []).map(mapAppointment);
@@ -192,8 +193,8 @@ export async function getOfficeSetterQualityStats(
   let query = supabaseAdmin
     .from("appointments")
     .select("*")
-    .gte("appointment_time", `${from}T00:00:00Z`)
-    .lte("appointment_time", `${to}T23:59:59Z`);
+    .gte("appointment_time", dateBoundsUTC(from, to).gte)
+    .lte("appointment_time", dateBoundsUTC(from, to).lte);
 
   if (setterIds && setterIds.length > 0) {
     // Primary: query by setter_id (works even when office_team is null)
@@ -233,8 +234,8 @@ export async function getOfficePartnerships(
   let query = supabaseAdmin
     .from("appointments")
     .select("setter_id, setter_name, closer_id, closer_name, disposition")
-    .gte("appointment_time", `${from}T00:00:00Z`)
-    .lte("appointment_time", `${to}T23:59:59Z`);
+    .gte("appointment_time", dateBoundsUTC(from, to).gte)
+    .lte("appointment_time", dateBoundsUTC(from, to).lte);
 
   if (setterIds && setterIds.length > 0) {
     query = query.in("setter_id", setterIds);
@@ -435,8 +436,8 @@ export async function getCloserQualityByStars(
   let query = supabaseAdmin
     .from("appointments")
     .select("closer_id, closer_name, star_rating, disposition")
-    .gte("appointment_time", `${from}T00:00:00Z`)
-    .lte("appointment_time", `${to}T23:59:59Z`)
+    .gte("appointment_time", dateBoundsUTC(from, to).gte)
+    .lte("appointment_time", dateBoundsUTC(from, to).lte)
     .not("closer_id", "is", null)
     .not("star_rating", "is", null);
 
@@ -647,8 +648,8 @@ export async function getFieldTimeStats(
       let query = supabaseAdmin
         .from("door_knocks")
         .select("rep_id, rep_name, knocked_at")
-        .gte("knocked_at", `${from}T00:00:00Z`)
-        .lte("knocked_at", `${to}T23:59:59Z`);
+        .gte("knocked_at", dateBoundsUTC(from, to).gte)
+        .lte("knocked_at", dateBoundsUTC(from, to).lte);
       if (repIds && repIds.length > 0) query = query.in("rep_id", repIds);
       if (teamNames && teamNames.length > 0) query = query.in("office_team", teamNames);
       query = query.range(offset, offset + pageSize - 1);

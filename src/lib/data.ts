@@ -42,15 +42,67 @@ export function isValidPpw(ppw: number): boolean {
 }
 
 // ── Date helpers ──
+const CT_TZ = "America/Chicago";
+
 export function getMonday(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().split("T")[0];
+  // Get current date in Central time
+  const now = new Date();
+  const ctDate = new Date(
+    now.toLocaleString("en-US", { timeZone: CT_TZ }),
+  );
+  const day = ctDate.getDay();
+  const diff = ctDate.getDate() - day + (day === 0 ? -6 : 1);
+  ctDate.setDate(diff);
+  const y = ctDate.getFullYear();
+  const m = String(ctDate.getMonth() + 1).padStart(2, "0");
+  const d = String(ctDate.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export function getToday(): string {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const ctDate = new Date(
+    now.toLocaleString("en-US", { timeZone: CT_TZ }),
+  );
+  const y = ctDate.getFullYear();
+  const m = String(ctDate.getMonth() + 1).padStart(2, "0");
+  const d = String(ctDate.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Convert YYYY-MM-DD date range to UTC timestamp boundaries aligned to
+ * America/Chicago timezone. Most KIN offices are Central; the small offset
+ * for Mountain offices is acceptable for aggregate queries.
+ */
+export function dateBoundsUTC(
+  from: string,
+  to: string,
+): { gte: string; lte: string } {
+  function getOffset(dateStr: string): number {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    // Probe at 18:00 UTC — safely in the middle of a CT day
+    const dt = new Date(Date.UTC(y, m - 1, d, 18, 0, 0));
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: CT_TZ,
+      hour: "numeric",
+      hour12: false,
+    }).formatToParts(dt);
+    const ctHour = parseInt(parts.find((p) => p.type === "hour")!.value);
+    return 18 - ctHour; // 6 for CST, 5 for CDT
+  }
+
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const fromOff = getOffset(from);
+  const toOff = getOffset(to);
+  const [ty, tm, td] = to.split("-").map(Number);
+
+  return {
+    gte: new Date(Date.UTC(fy, fm - 1, fd, fromOff, 0, 0)).toISOString(),
+    lte: new Date(
+      Date.UTC(ty, tm - 1, td + 1, toOff, 0, 0) - 1000,
+    ).toISOString(),
+  };
 }
 
 // ── Types ──
@@ -494,11 +546,12 @@ export async function fetchScorecard(
   };
 
   // Fetch avg star ratings per setter from Supabase (also grab office_team for 7F)
+  const bounds = dateBoundsUTC(fromDate, toDate);
   const { data: starRows } = await supabaseAdmin
     .from("appointments")
     .select("setter_id, star_rating, office_team")
-    .gte("appointment_time", `${fromDate}T00:00:00Z`)
-    .lte("appointment_time", `${toDate}T23:59:59Z`)
+    .gte("appointment_time", bounds.gte)
+    .lte("appointment_time", bounds.lte)
     .not("star_rating", "is", null);
 
   const starBySetter: Record<number, { sum: number; count: number }> = {};
@@ -520,8 +573,8 @@ export async function fetchScorecard(
       const { data: page } = await supabaseAdmin
         .from("door_knocks")
         .select("rep_id, knocked_at")
-        .gte("knocked_at", `${fromDate}T00:00:00Z`)
-        .lte("knocked_at", `${toDate}T23:59:59Z`)
+        .gte("knocked_at", bounds.gte)
+        .lte("knocked_at", bounds.lte)
         .range(from, from + pageSize - 1);
       if (!page || page.length === 0) break;
       allKnocks.push(...page);

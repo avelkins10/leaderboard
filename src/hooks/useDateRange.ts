@@ -9,9 +9,7 @@ import {
   startOfYear,
   subDays,
   subWeeks,
-  addDays,
   format,
-  parseISO,
 } from "date-fns";
 
 export type PresetKey =
@@ -74,7 +72,7 @@ export function computePreset(key: PresetKey): { from: string; to: string } {
 
   return {
     from: format(rangeStart, "yyyy-MM-dd"),
-    to: format(addDays(rangeEnd, 1), "yyyy-MM-dd"), // exclusive end
+    to: format(rangeEnd, "yyyy-MM-dd"), // inclusive end
   };
 }
 
@@ -92,15 +90,14 @@ export function useDateRange(defaultPreset: PresetKey = "this-week") {
     const computed = computePreset(preset);
     from = computed.from;
     to = computed.to;
-    // displayFrom/To = human-visible dates (to is inclusive, so subtract 1 day)
     displayFrom = from;
-    displayTo = format(addDays(parseISO(to), -1), "yyyy-MM-dd");
+    displayTo = to;
   } else {
     // custom range
     displayFrom = customFrom!;
     displayTo = customTo!;
     from = displayFrom;
-    to = format(addDays(parseISO(displayTo), 1), "yyyy-MM-dd"); // exclusive
+    to = displayTo;
   }
 
   const setPreset = (key: PresetKey) => {

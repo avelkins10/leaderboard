@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getOfficeTimezone, qbOfficeToRepCardTeams, getTimezoneForTeam } from '@/lib/config';
 import { type Appointment } from '@/lib/supabase-queries';
 import { getSetterAppointments, getCloserAppointments } from '@/lib/supabase-queries';
+import { dateBoundsUTC } from '@/lib/data';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -29,8 +30,8 @@ export async function GET(req: NextRequest) {
         .from('appointments')
         .select('*')
         .in('office_team', teamsToQuery)
-        .gte('appointment_time', `${from}T00:00:00Z`)
-        .lte('appointment_time', `${to}T23:59:59Z`)
+        .gte('appointment_time', dateBoundsUTC(from, to).gte)
+        .lte('appointment_time', dateBoundsUTC(from, to).lte)
         .order('appointment_time', { ascending: false });
       if (error) throw error;
       appointments = (data || []).map(row => mapRow(row));
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest) {
       const { data, error } = await supabaseAdmin
         .from('appointments')
         .select('*')
-        .gte('appointment_time', `${from}T00:00:00Z`)
-        .lte('appointment_time', `${to}T23:59:59Z`)
+        .gte('appointment_time', dateBoundsUTC(from, to).gte)
+        .lte('appointment_time', dateBoundsUTC(from, to).lte)
         .order('appointment_time', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -100,12 +101,22 @@ function dispositionCategory(d: string | null): string {
 }
 
 function getMonday(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+  const now = new Date();
+  const ct = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  const day = ct.getDay();
+  const diff = ct.getDate() - day + (day === 0 ? -6 : 1);
+  ct.setDate(diff);
+  const y = ct.getFullYear();
+  const m = String(ct.getMonth() + 1).padStart(2, "0");
+  const d = String(ct.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const ct = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  const y = ct.getFullYear();
+  const m = String(ct.getMonth() + 1).padStart(2, "0");
+  const d = String(ct.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
