@@ -151,7 +151,7 @@ export async function GET(
 
     // QB sales — use shared attribution (RepCard ID primary, name fallback)
     const fullName = `${user.firstName} ${user.lastName}`;
-    const { closerSales: repCloserSales, allSales: repSales } = getRepSales(
+    const { closerSales: repCloserSales, setterSales: repSetterSales, allSales: repSales } = getRepSales(
       sales,
       userId,
       fullName,
@@ -183,19 +183,20 @@ export async function GET(
             a.hours_to_appointment <= 48,
         ).length;
         const threeStarCount = apptRows.filter(
-          (a) => a.is_quality === true,
+          (a) => a.star_rating === 3,
         ).length;
         const twoStarCount = apptRows.filter(
-          (a) =>
-            a.has_power_bill === true &&
-            (a.hours_to_appointment == null || a.hours_to_appointment > 48),
+          (a) => a.star_rating === 2,
         ).length;
-        const oneStarCount = total - threeStarCount - twoStarCount;
+        const oneStarCount = apptRows.filter(
+          (a) => a.star_rating === 1,
+        ).length;
+        const withStars = apptRows.filter((a) => a.star_rating != null);
         const avgStars =
-          total > 0
+          withStars.length > 0
             ? Math.round(
-                ((threeStarCount * 3 + twoStarCount * 2 + oneStarCount * 1) /
-                  total) *
+                (withStars.reduce((s, a) => s + a.star_rating, 0) /
+                  withStars.length) *
                   100,
               ) / 100
             : 0;
@@ -315,7 +316,7 @@ export async function GET(
       const ntr = setterApptStats?.NTR || 0;
       const cf = setterApptStats?.CF || 0;
       const shad = setterApptStats?.SHAD || setterApptStats?.SHADE || 0;
-      const qbCloses = repSales.length;
+      const qbCloses = repSetterSales.length;
       // "Good sits" = sits minus credit fails and shade (not closeable leads)
       const goodSits = Math.max(0, sits - cf - shad);
 

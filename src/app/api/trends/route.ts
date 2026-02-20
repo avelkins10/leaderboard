@@ -97,6 +97,9 @@ export async function GET(req: NextRequest) {
         const apptHeader = setterLB.stats.headers.find(
           (h: any) => h.short_name === "APPT",
         );
+        const sitsHeader = setterLB.stats.headers.find(
+          (h: any) => h.short_name === "SITS",
+        );
         for (const s of setterLB.stats.stats) {
           if (s.item_type !== "user") continue;
           const office = teamIdToQBOffice(s.office_team_id);
@@ -117,6 +120,10 @@ export async function GET(req: NextRequest) {
           officeData[office].appts += apptHeader
             ? s[apptHeader.mapped_field] || 0
             : 0;
+          // Use setter SITS (not closer SAT) — sits belong to the setter's office
+          officeData[office].sits += sitsHeader
+            ? s[sitsHeader.mapped_field] || 0
+            : 0;
         }
       }
 
@@ -124,9 +131,6 @@ export async function GET(req: NextRequest) {
         (lb: any) => lb.leaderboard_name === "Closer Leaderboard",
       ) as any;
       if (closerLB?.stats?.headers) {
-        const satHeader = closerLB.stats.headers.find(
-          (h: any) => h.short_name === "SAT",
-        );
         const closHeader = closerLB.stats.headers.find(
           (h: any) => h.short_name === "CLOS",
         );
@@ -144,9 +148,6 @@ export async function GET(req: NextRequest) {
               kw: 0,
               activeReps: 0,
             };
-          officeData[office].sits += satHeader
-            ? s[satHeader.mapped_field] || 0
-            : 0;
           officeData[office].closes += closHeader
             ? s[closHeader.mapped_field] || 0
             : 0;
