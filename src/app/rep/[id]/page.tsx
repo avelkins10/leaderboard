@@ -309,19 +309,19 @@ export default function RepPage() {
                   ]}
                 />
                 <CompactMetricCard
-                  title="Field Time"
-                  tooltip="Average knocking hours, start and end times"
+                  title={`Field Time${data.setterCoaching.timezone ? ` (${data.setterCoaching.timezone})` : ""}`}
+                  tooltip="Hours knocking, first and last door knock times"
                   rows={[
                     {
-                      label: "Qty Hrs",
+                      label: "Hours",
                       value: data.setterCoaching.qualityHours ?? "—",
                     },
                     {
-                      label: "Start",
+                      label: "First Knock",
                       value: data.setterCoaching.firstDoorKnock ?? "—",
                     },
                     {
-                      label: "End",
+                      label: "Last Knock",
                       value: data.setterCoaching.lastDoorKnock ?? "—",
                     },
                   ]}

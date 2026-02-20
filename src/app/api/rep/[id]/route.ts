@@ -5,6 +5,7 @@ import {
   OFFICE_MAPPING,
   REPCARD_API_KEY,
   teamIdToQBOffice,
+  getOfficeTimezone,
 } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
 import { dispositionCategory } from "@/lib/supabase-queries";
@@ -15,6 +16,67 @@ import {
   getToday,
 } from "@/lib/data";
 import repRoles from "@/lib/rep-roles.json";
+
+/** Parse RepCard time value (could be "H:MM", "HH:MM", or a number) to 12-hour format */
+function formatTime12h(raw: any): string | null {
+  if (raw == null || raw === 0) return null;
+  const str = String(raw);
+  // Match H:MM or HH:MM patterns
+  const match = str.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (match) {
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    // If h > 23, this isn't a clock time (it's duration like QHST "64:9")
+    if (h > 23) return null;
+    const ampm = h >= 12 ? "PM" : "AM";
+    if (h === 0) h = 12;
+    else if (h > 12) h -= 12;
+    return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+  }
+  return null;
+}
+
+/** Parse RepCard duration value like "64:9" (hours:minutes) to readable format */
+function formatDuration(raw: any): string | null {
+  if (raw == null || raw === 0) return null;
+  const str = String(raw);
+  const match = str.match(/^(\d+):(\d+)$/);
+  if (match) {
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (h === 0 && m === 0) return null;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  // If it's already a number, treat as hours
+  const num = Number(raw);
+  if (!isNaN(num) && num > 0) return `${Math.round(num * 10) / 10}h`;
+  return null;
+}
+
+/** Get short timezone abbreviation for an office */
+function getTzAbbrev(qbOffice: string): string {
+  const tz = getOfficeTimezone(qbOffice);
+  try {
+    return (
+      new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+        .formatToParts(new Date())
+        .find((p) => p.type === "timeZoneName")?.value || ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+function formatFieldTime(stats: Record<string, any>, qbOffice: string) {
+  const tzAbbrev = getTzAbbrev(qbOffice);
+  return {
+    qualityHours: formatDuration(stats.QHST),
+    firstDoorKnock: formatTime12h(stats.FDK),
+    lastDoorKnock: formatTime12h(stats.LDK),
+    timeSinceFirst: formatDuration(stats.TSF),
+    timezone: tzAbbrev,
+  };
+}
 
 export async function GET(
   req: NextRequest,
@@ -333,10 +395,13 @@ export async function GET(
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,
         doorToQP: dk > 0 ? Math.round((qp / dk) * 1000) / 10 : 0,
         avgScheduleOutHours: avgScheduleOut,
-        qualityHours: setterStats.QHST || null,
-        firstDoorKnock: setterStats.FDK || null,
-        lastDoorKnock: setterStats.LDK || null,
-        timeSinceFirst: setterStats.TSF || null,
+        // Field time — raw values from RepCard leaderboard
+        qualityHoursRaw: setterStats.QHST || null,
+        firstDoorKnockRaw: setterStats.FDK || null,
+        lastDoorKnockRaw: setterStats.LDK || null,
+        timeSinceFirstRaw: setterStats.TSF || null,
+        // Formatted field time values
+        ...formatFieldTime(setterStats, qbOffice),
       };
     }
 
