@@ -28,7 +28,9 @@ import {
   formatKw,
   formatCurrency,
   formatDate,
+  formatDateShort,
 } from "@/lib/format";
+import { getOfficeTimezone } from "@/lib/config";
 import { THRESHOLDS } from "@/lib/thresholds";
 
 // ── Types ──
@@ -75,6 +77,20 @@ const CLOSER_CATEGORIES = [
   { label: "Sits", key: "SAT" },
   { label: "Close%", key: "sitCloseRate" },
   { label: "Cancel%", key: "cancelPct" },
+] as const;
+
+const OFFICE_CATEGORIES = [
+  { label: "Closes", key: "qbCloses" },
+  { label: "Active", key: "activeSales" },
+  { label: "kW", key: "kw" },
+  { label: "Appts", key: "totalAppts" },
+  { label: "Sits", key: "totalSits" },
+  { label: "Sit %", key: "sitRate" },
+  { label: "Close %", key: "closeRate" },
+  { label: "Wk Avg", key: "weeklyAvg" },
+  { label: "Cancel %", key: "cancelPct" },
+  { label: "Sets/Setter", key: "apptsPerSetter" },
+  { label: "Cls/Closer", key: "closesPerCloser" },
 ] as const;
 
 // ── Skeleton ──
@@ -225,13 +241,16 @@ function RepDrillDown({
   from,
   to,
   outcomes,
+  qbOffice,
 }: {
   repId: number;
   type: "setter" | "closer";
   from: string;
   to: string;
   outcomes?: Record<string, number>;
+  qbOffice?: string;
 }) {
+  const tz = qbOffice ? getOfficeTimezone(qbOffice) : undefined;
   const { data, isLoading } = useSWR(
     `/api/rep/${repId}/appointments?from=${from}&to=${to}`,
   );
@@ -326,10 +345,7 @@ function RepDrillDown({
                   >
                     <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground whitespace-nowrap">
                       {a.appointment_time
-                        ? new Date(a.appointment_time).toLocaleDateString(
-                            "en-US",
-                            { month: "short", day: "numeric" },
-                          )
+                        ? formatDateShort(a.appointment_time, tz)
                         : "-"}
                     </td>
                     <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
@@ -422,10 +438,7 @@ function RepDrillDown({
                 <div className="flex items-center justify-between">
                   <span className="font-mono tabular-nums text-xs text-muted-foreground">
                     {a.appointment_time
-                      ? new Date(a.appointment_time).toLocaleDateString(
-                          "en-US",
-                          { month: "short", day: "numeric" },
-                        )
+                      ? formatDateShort(a.appointment_time, tz)
                       : "-"}
                   </span>
                   <span className="text-xs text-foreground truncate ml-2 flex-1 text-right">
@@ -687,9 +700,11 @@ export default function Dashboard() {
         const totalSits =
           d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
         const qbCloses = d.sales?.deals || 0;
+        const cancelled = d.sales?.cancelled || 0;
         const kw = d.sales?.kw || 0;
         const cancelPct = d.sales?.cancelPct || 0;
         const rejected = d.sales?.rejected || 0;
+        const activeSales = qbCloses - cancelled - rejected;
         const activeReps = d.activeReps || 0;
         const activeSetters = d.activeSetters || 0;
         const activeClosers = d.activeClosers || 0;
@@ -701,9 +716,13 @@ export default function Dashboard() {
           new Date(data.period.from).getTime();
         const weeks = Math.max(1, periodMs / (7 * 86400000));
         const weeklyAvg = qbCloses > 0 ? +(qbCloses / weeks).toFixed(1) : 0;
+        const apptsPerSetter = activeSetters > 0 ? totalAppts / activeSetters : 0;
+        const closesPerCloser = activeClosers > 0 ? qbCloses / activeClosers : 0;
         return {
           name,
           qbCloses,
+          cancelled,
+          activeSales,
           kw,
           totalAppts,
           totalSits,
@@ -716,6 +735,8 @@ export default function Dashboard() {
           closeRate,
           sitRate,
           weeklyAvg,
+          apptsPerSetter,
+          closesPerCloser,
           setters: d.setters || [],
           closers: d.closers || [],
         };
@@ -834,16 +855,17 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
-            {tab !== "offices" && (
-              <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-2xs font-medium text-muted-foreground/60 uppercase tracking-widest mr-1">
                   Rank by
                 </span>
                 {(tab === "setters"
                   ? SETTER_CATEGORIES
-                  : CLOSER_CATEGORIES
+                  : tab === "closers"
+                    ? CLOSER_CATEGORIES
+                    : OFFICE_CATEGORIES
                 ).map((cat) => {
-                  const sort = tab === "setters" ? setterSort : closerSort;
+                  const sort = tab === "setters" ? setterSort : tab === "closers" ? closerSort : officeSort;
                   const active = sort.key === cat.key;
                   return (
                     <button
@@ -851,8 +873,10 @@ export default function Dashboard() {
                       onClick={() => {
                         if (tab === "setters") {
                           setSetterSort({ key: cat.key, dir: "desc" });
-                        } else {
+                        } else if (tab === "closers") {
                           setCloserSort({ key: cat.key, dir: "desc" });
+                        } else {
+                          setOfficeSort({ key: cat.key, dir: "desc" });
                         }
                       }}
                       className={`rounded-md px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-2xs font-medium transition-all ${
@@ -866,7 +890,6 @@ export default function Dashboard() {
                   );
                 })}
               </div>
-            )}
           </div>
 
           {/* ── SETTER LEADERBOARD ── */}
@@ -1095,6 +1118,7 @@ export default function Dashboard() {
                                             from={from}
                                             to={to}
                                             outcomes={s.outcomes}
+                                            qbOffice={s.qbOffice}
                                           />
                                         </div>
                                         <Link
@@ -1264,6 +1288,7 @@ export default function Dashboard() {
                                   from={from}
                                   to={to}
                                   outcomes={s.outcomes}
+                                  qbOffice={s.qbOffice}
                                 />
                               </div>
                             )}
@@ -1482,6 +1507,7 @@ export default function Dashboard() {
                                             from={from}
                                             to={to}
                                             outcomes={c.outcomes}
+                                            qbOffice={c.qbOffice}
                                           />
                                         </div>
                                         <Link
@@ -1638,6 +1664,7 @@ export default function Dashboard() {
                                   from={from}
                                   to={to}
                                   outcomes={c.outcomes}
+                                  qbOffice={c.qbOffice}
                                 />
                               </div>
                             )}
@@ -1660,7 +1687,7 @@ export default function Dashboard() {
                 noPadding
               >
                 <div className="overflow-x-auto scrollable-table hidden sm:block">
-                  <table className="w-full min-w-[1000px]">
+                  <table className="w-full min-w-[1200px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
                         <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
@@ -1682,7 +1709,34 @@ export default function Dashboard() {
                           onSort={(k) =>
                             handleSort(officeSort, setOfficeSort, k)
                           }
-                          tooltip="Verified closed deals"
+                          tooltip="Total closed deals"
+                        />
+                        <SortHeader
+                          label="Active"
+                          sortKey="activeSales"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Active deals (not cancelled or rejected)"
+                        />
+                        <SortHeader
+                          label="Rej"
+                          sortKey="rejected"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Rejected — intake kicked back for corrections"
+                        />
+                        <SortHeader
+                          label="Cxl"
+                          sortKey="cancelled"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Cancelled + Pending Cancel"
                         />
                         <SortHeader
                           label="kW"
@@ -1767,6 +1821,24 @@ export default function Dashboard() {
                           tooltip="Active closers (SAT >= 1)"
                           align="center"
                         />
+                        <SortHeader
+                          label="Sets/Setter"
+                          sortKey="apptsPerSetter"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Appointments per active setter"
+                        />
+                        <SortHeader
+                          label="Cls/Closer"
+                          sortKey="closesPerCloser"
+                          sort={officeSort}
+                          onSort={(k) =>
+                            handleSort(officeSort, setOfficeSort, k)
+                          }
+                          tooltip="Closes per active closer"
+                        />
                       </tr>
                     </thead>
                     <tbody className="text-[13px]">
@@ -1810,6 +1882,15 @@ export default function Dashboard() {
                               </td>
                               <td className="py-3 px-3 text-right font-semibold font-mono tabular-nums text-primary">
                                 {formatNumber(o.qbCloses)}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-500">
+                                {o.activeSales > 0 ? formatNumber(o.activeSales) : "--"}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">
+                                {o.rejected > 0 ? formatNumber(o.rejected) : <span className="text-muted-foreground/25">--</span>}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">
+                                {o.cancelled > 0 ? formatNumber(o.cancelled) : <span className="text-muted-foreground/25">--</span>}
                               </td>
                               <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
                                 {formatKw(o.kw)}
@@ -1867,6 +1948,12 @@ export default function Dashboard() {
                               </td>
                               <td className="py-3 px-3 text-center font-mono tabular-nums text-muted-foreground">
                                 {o.activeClosers}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {o.apptsPerSetter > 0 ? o.apptsPerSetter.toFixed(1) : "--"}
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                {o.closesPerCloser > 0 ? o.closesPerCloser.toFixed(1) : "--"}
                               </td>
                             </tr>
                             {isExpanded && (
@@ -1985,6 +2072,15 @@ export default function Dashboard() {
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-primary">
                           {formatNumber(data.summary.totalSales)}
                         </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-500">
+                          {formatNumber(data.summary.totalSales - data.summary.cancelled - data.summary.rejected)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-warning">
+                          {formatNumber(data.summary.rejected)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-destructive">
+                          {formatNumber(data.summary.cancelled)}
+                        </td>
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
                           {formatKw(data.summary.totalKw)}
                         </td>
@@ -2039,6 +2135,19 @@ export default function Dashboard() {
                         </td>
                         <td className="py-3 px-3 text-center font-mono text-muted-foreground">
                           {officeList.reduce((s, o) => s + o.activeClosers, 0)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {(() => {
+                            const totalAppts = officeList.reduce((s, o) => s + o.totalAppts, 0);
+                            const totalSetters = officeList.reduce((s, o) => s + o.activeSetters, 0);
+                            return totalSetters > 0 ? (totalAppts / totalSetters).toFixed(1) : "--";
+                          })()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                          {(() => {
+                            const totalClosers = officeList.reduce((s, o) => s + o.activeClosers, 0);
+                            return totalClosers > 0 ? (data.summary.totalSales / totalClosers).toFixed(1) : "--";
+                          })()}
                         </td>
                       </tr>
                     </tfoot>
@@ -2119,6 +2228,24 @@ export default function Dashboard() {
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">
+                                  Active
+                                </span>
+                                <span className="font-mono tabular-nums text-emerald-500">
+                                  {o.activeSales > 0 ? formatNumber(o.activeSales) : "--"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Rej / Cxl
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  <span className="text-warning">{o.rejected}</span>
+                                  {" / "}
+                                  <span className="text-destructive">{o.cancelled}</span>
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
                                   Appts
                                 </span>
                                 <span className="font-mono tabular-nums">
@@ -2179,6 +2306,22 @@ export default function Dashboard() {
                                 </span>
                                 <span className="font-mono tabular-nums">
                                   {o.activeSetters}S / {o.activeClosers}C
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Sets/Setter
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {o.apptsPerSetter > 0 ? o.apptsPerSetter.toFixed(1) : "--"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Cls/Closer
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {o.closesPerCloser > 0 ? o.closesPerCloser.toFixed(1) : "--"}
                                 </span>
                               </div>
                             </div>
