@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { PowerBillModal } from "@/components/PowerBillModal";
 import {
   PieChart,
   Pie,
@@ -26,6 +28,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Receipt,
 } from "lucide-react";
 import {
   formatDate,
@@ -139,6 +142,7 @@ export default function RepPage() {
   const { data, error, isLoading } = useSWR(
     `/api/rep/${repId}?from=${from}&to=${to}`,
   );
+  const [pbUrls, setPbUrls] = useState<string[] | null>(null);
 
   return (
     <div className="space-y-8">
@@ -1184,7 +1188,15 @@ export default function RepPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-3 text-center">
-                          {a.has_power_bill ? (
+                          {a.has_power_bill && a.power_bill_urls?.length ? (
+                            <button
+                              onClick={() => setPbUrls(a.power_bill_urls)}
+                              className="text-primary transition-colors hover:text-primary/70"
+                              title="View power bill"
+                            >
+                              <Receipt className="mx-auto h-4 w-4" />
+                            </button>
+                          ) : a.has_power_bill ? (
                             <span className="text-primary">&#10003;</span>
                           ) : (
                             <span className="text-muted-foreground/25">-</span>
@@ -1252,6 +1264,9 @@ export default function RepPage() {
             </Section>
           )}
         </div>
+      )}
+      {pbUrls && (
+        <PowerBillModal urls={pbUrls} onClose={() => setPbUrls(null)} />
       )}
     </div>
   );

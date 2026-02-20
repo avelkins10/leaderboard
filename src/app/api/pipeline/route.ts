@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       .select("new_status, office_team");
 
     if (from) query = query.gte("changed_at", `${from}T00:00:00Z`);
-    if (to) query = query.lt("changed_at", `${to}T00:00:00Z`);
+    if (to) query = query.lte("changed_at", `${to}T23:59:59Z`);
 
     const { data, error } = await query;
     if (error) throw error;

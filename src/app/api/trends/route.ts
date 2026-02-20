@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
           closes: number;
           deals: number;
           kw: number;
+          activeReps: number;
         }
       > = {};
 
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
               closes: 0,
               deals: 0,
               kw: 0,
+              activeReps: 0,
             };
           officeData[office].doors += dkHeader
             ? s[dkHeader.mapped_field] || 0
@@ -140,6 +142,7 @@ export async function GET(req: NextRequest) {
               closes: 0,
               deals: 0,
               kw: 0,
+              activeReps: 0,
             };
           officeData[office].sits += satHeader
             ? s[satHeader.mapped_field] || 0
@@ -147,6 +150,44 @@ export async function GET(req: NextRequest) {
           officeData[office].closes += closHeader
             ? s[closHeader.mapped_field] || 0
             : 0;
+        }
+      }
+
+      // Count active reps per office (deduplicated by userId)
+      const activeByOffice: Record<string, Set<number>> = {};
+      if (setterLB?.stats?.headers) {
+        const dkHeader = setterLB.stats.headers.find(
+          (h: any) => h.short_name === "DK",
+        );
+        for (const s of setterLB.stats.stats) {
+          if (s.item_type !== "user") continue;
+          const office = teamIdToQBOffice(s.office_team_id);
+          if (!office) continue;
+          const dk = dkHeader ? s[dkHeader.mapped_field] || 0 : 0;
+          if (dk > 0) {
+            if (!activeByOffice[office]) activeByOffice[office] = new Set();
+            activeByOffice[office].add(s.user_id);
+          }
+        }
+      }
+      if (closerLB?.stats?.headers) {
+        const satHeader = closerLB.stats.headers.find(
+          (h: any) => h.short_name === "SAT",
+        );
+        for (const s of closerLB.stats.stats) {
+          if (s.item_type !== "user") continue;
+          const office = teamIdToQBOffice(s.office_team_id);
+          if (!office) continue;
+          const sat = satHeader ? s[satHeader.mapped_field] || 0 : 0;
+          if (sat >= 1) {
+            if (!activeByOffice[office]) activeByOffice[office] = new Set();
+            activeByOffice[office].add(s.user_id);
+          }
+        }
+      }
+      for (const [office, ids] of Object.entries(activeByOffice)) {
+        if (officeData[office]) {
+          officeData[office].activeReps = ids.size;
         }
       }
 

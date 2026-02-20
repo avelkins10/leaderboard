@@ -50,7 +50,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 
 export default function TrendsPage() {
   const [metric, setMetric] = useState<
-    "deals" | "doors" | "appts" | "sits" | "closes"
+    "deals" | "doors" | "appts" | "sits" | "closes" | "activeReps"
   >("deals");
   const [selectedOffices, setSelectedOffices] = useState<Set<string>>(
     new Set(),
@@ -124,7 +124,15 @@ export default function TrendsPage() {
     });
   };
 
-  const metrics = ["deals", "doors", "appts", "sits", "closes"] as const;
+  const metrics = ["deals", "doors", "appts", "sits", "closes", "activeReps"] as const;
+  const metricLabels: Record<string, string> = {
+    deals: "Deals",
+    doors: "Doors",
+    appts: "Appts",
+    sits: "Sits",
+    closes: "Closes",
+    activeReps: "Active Reps",
+  };
 
   return (
     <div className="space-y-8">
@@ -216,13 +224,13 @@ export default function TrendsPage() {
                 <button
                   key={m}
                   onClick={() => setMetric(m)}
-                  className={`h-9 px-3.5 text-xs font-medium capitalize transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                  className={`h-9 px-3.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
                     metric === m
                       ? "bg-card-dark text-card-dark-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {m}
+                  {metricLabels[m] || m}
                 </button>
               ))}
             </div>
@@ -253,7 +261,7 @@ export default function TrendsPage() {
           </div>
 
           <Section
-            title={`${metric.charAt(0).toUpperCase() + metric.slice(1)} by Office`}
+            title={`${metricLabels[metric] || metric} by Office`}
             subtitle="Toggle offices above to compare"
           >
             <div className="h-72">
@@ -309,7 +317,7 @@ export default function TrendsPage() {
 
           <Section
             title="Week-over-Week"
-            subtitle={`${metric} compared to previous week`}
+            subtitle={`${metricLabels[metric] || metric} compared to previous week`}
           >
             <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
               {weeklyTrends.map((t) => (

@@ -188,23 +188,25 @@ export async function GET(req: NextRequest) {
     const { data: recentAppts } = await supabaseAdmin
       .from("appointments")
       .select("id, contact_id, has_power_bill, hours_to_appointment")
-      .gte("appointment_time", fromDate)
-      .lte("appointment_time", toDate + "T23:59:59");
+      .gte("appointment_time", fromDate + "T00:00:00Z")
+      .lte("appointment_time", toDate + "T23:59:59Z");
 
     for (const appt of recentAppts || []) {
       const hasVerifiedPB =
         verifiedApptIds.has(appt.id) || verifiedContactIds.has(appt.contact_id);
 
-      if (hasVerifiedPB !== appt.has_power_bill) {
+      // Only upgrade (false→true), never downgrade (true→false).
+      // If webhook already set has_power_bill=true but AI hasn't verified the
+      // attachment yet, trust the webhook — don't clobber back to false.
+      if (hasVerifiedPB && !appt.has_power_bill) {
         const hrs = appt.hours_to_appointment;
         const within2days = hrs != null && hrs > 0 && hrs <= 48;
         await supabaseAdmin
           .from("appointments")
           .update({
-            has_power_bill: hasVerifiedPB,
-            is_quality: hasVerifiedPB && within2days,
-            star_rating:
-              hasVerifiedPB && within2days ? 3 : hasVerifiedPB ? 2 : 1,
+            has_power_bill: true,
+            is_quality: within2days,
+            star_rating: within2days ? 3 : 2,
           })
           .eq("id", appt.id);
         stats.appointmentsUpdated++;

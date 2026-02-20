@@ -495,8 +495,8 @@ export async function fetchScorecard(
   const { data: starRows } = await supabaseAdmin
     .from("appointments")
     .select("setter_id, star_rating, office_team")
-    .gte("appointment_time", fromDate)
-    .lte("appointment_time", toDate + "T23:59:59")
+    .gte("appointment_time", `${fromDate}T00:00:00Z`)
+    .lte("appointment_time", `${toDate}T23:59:59Z`)
     .not("star_rating", "is", null);
 
   const starBySetter: Record<number, { sum: number; count: number }> = {};

@@ -168,8 +168,8 @@ export async function GET(
           "has_power_bill, hours_to_appointment, is_quality, disposition, star_rating",
         )
         .eq(idField, userId)
-        .gte("appointment_time", qualityFrom)
-        .lte("appointment_time", qualityTo + "T23:59:59");
+        .gte("appointment_time", `${qualityFrom}T00:00:00Z`)
+        .lte("appointment_time", `${qualityTo}T23:59:59Z`);
 
       if (apptRows && apptRows.length > 0) {
         const total = apptRows.length;
@@ -276,7 +276,7 @@ export async function GET(
     if (apptIds.length > 0) {
       const { data: starData } = await supabaseAdmin
         .from("appointments")
-        .select("id, star_rating, has_power_bill, hours_to_appointment")
+        .select("id, star_rating, has_power_bill, hours_to_appointment, power_bill_urls")
         .in("id", apptIds);
       if (starData) {
         const starMap = new Map(starData.map((s: any) => [s.id, s]));
@@ -286,6 +286,7 @@ export async function GET(
             appt.star_rating = sb.star_rating ?? null;
             appt.has_power_bill = sb.has_power_bill ?? null;
             appt.hours_to_appointment = sb.hours_to_appointment ?? null;
+            appt.power_bill_urls = sb.power_bill_urls ?? null;
           }
         }
       }

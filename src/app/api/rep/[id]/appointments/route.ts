@@ -117,7 +117,7 @@ export async function GET(
     if (apptIds.length > 0) {
       const { data: starData } = await supabaseAdmin
         .from("appointments")
-        .select("id, star_rating, has_power_bill")
+        .select("id, star_rating, has_power_bill, power_bill_urls")
         .in("id", apptIds);
       if (starData) {
         const starMap = new Map(starData.map((s: any) => [s.id, s]));
@@ -126,6 +126,7 @@ export async function GET(
           if (sb) {
             appt.star_rating = sb.star_rating ?? null;
             appt.has_power_bill = sb.has_power_bill ?? null;
+            appt.power_bill_urls = sb.power_bill_urls ?? null;
           }
         }
       }

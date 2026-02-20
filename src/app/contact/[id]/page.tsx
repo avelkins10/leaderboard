@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Section } from "@/components/Section";
+import { PowerBillModal } from "@/components/PowerBillModal";
 import {
   ArrowLeft,
   DoorOpen,
@@ -12,6 +14,7 @@ import {
   ArrowRightLeft,
   Paperclip,
   Link2,
+  Receipt,
 } from "lucide-react";
 
 const EVENT_CONFIG: Record<
@@ -86,6 +89,7 @@ export default function ContactPage() {
   const params = useParams();
   const contactId = params.id as string;
   const { data, error, isLoading } = useSWR(`/api/contact/${contactId}`);
+  const [pbUrls, setPbUrls] = useState<string[] | null>(null);
 
   return (
     <div className="space-y-8">
@@ -150,8 +154,20 @@ export default function ContactPage() {
                             <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                               {config.label}
                             </span>
-                            <div className="mt-1 text-[13px] text-foreground">
-                              {eventDescription(event)}
+                            <div className="mt-1 flex items-center gap-2 text-[13px] text-foreground">
+                              <span>{eventDescription(event)}</span>
+                              {event.type === "appointment_set" &&
+                                event.power_bill_urls?.length > 0 && (
+                                  <button
+                                    onClick={() =>
+                                      setPbUrls(event.power_bill_urls)
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/20"
+                                    title="View power bill"
+                                  >
+                                    <Receipt className="h-3 w-3" /> PB
+                                  </button>
+                                )}
                             </div>
                           </div>
                           <time className="shrink-0 text-2xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
@@ -177,6 +193,10 @@ export default function ContactPage() {
             )}
           </Section>
         </div>
+      )}
+
+      {pbUrls && (
+        <PowerBillModal urls={pbUrls} onClose={() => setPbUrls(null)} />
       )}
     </div>
   );

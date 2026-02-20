@@ -291,8 +291,8 @@ export async function getDailyActiveReps(
   let query = supabaseAdmin
     .from("door_knocks")
     .select("office_team, rep_id, knocked_at")
-    .gte("knocked_at", from)
-    .lte("knocked_at", to + "T23:59:59Z");
+    .gte("knocked_at", `${from}T00:00:00Z`)
+    .lte("knocked_at", `${to}T23:59:59Z`);
 
   if (officeTeam) {
     query = query.eq("office_team", officeTeam);
@@ -344,7 +344,7 @@ export async function getOfficeAppointmentBreakdown(
     .select("disposition")
     .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
-    .lt("appointment_time", `${to}T00:00:00Z`);
+    .lte("appointment_time", `${to}T23:59:59Z`);
   if (error) throw error;
 
   const result: AppointmentBreakdown = {
@@ -407,7 +407,7 @@ export async function getActiveClosers(
     .select("closer_id")
     .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
-    .lt("appointment_time", `${to}T00:00:00Z`);
+    .lte("appointment_time", `${to}T23:59:59Z`);
   if (error) throw error;
 
   const unique = new Set<number>();
@@ -427,7 +427,7 @@ export async function getActiveSettersForOffice(
     .select("rep_id")
     .in("office_team", teamNames)
     .gte("knocked_at", `${from}T00:00:00Z`)
-    .lt("knocked_at", `${to}T00:00:00Z`);
+    .lte("knocked_at", `${to}T23:59:59Z`);
   if (error) throw error;
 
   const unique = new Set<number>();
@@ -447,7 +447,7 @@ export async function getOfficeSetterQualityStats(
     .select("*")
     .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
-    .lt("appointment_time", `${to}T00:00:00Z`);
+    .lte("appointment_time", `${to}T23:59:59Z`);
   if (error) throw error;
   return aggregateStats(
     data || [],
@@ -476,7 +476,7 @@ export async function getOfficePartnerships(
     .select("setter_id, setter_name, closer_id, closer_name, disposition")
     .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
-    .lt("appointment_time", `${to}T00:00:00Z`);
+    .lte("appointment_time", `${to}T23:59:59Z`);
   if (error) throw error;
 
   const map: Record<string, PartnershipStats> = {};
@@ -668,7 +668,7 @@ export async function getCloserQualityByStars(
     .select("closer_id, closer_name, star_rating, disposition")
     .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
-    .lt("appointment_time", `${to}T00:00:00Z`)
+    .lte("appointment_time", `${to}T23:59:59Z`)
     .not("closer_id", "is", null)
     .not("star_rating", "is", null);
   if (error) throw error;
@@ -744,7 +744,7 @@ export async function getSetterFunnel(
     .from("lead_status_changes")
     .select("rep_id, rep_name, office_team, new_status")
     .gte("changed_at", `${from}T00:00:00Z`)
-    .lt("changed_at", `${to}T00:00:00Z`)
+    .lte("changed_at", `${to}T23:59:59Z`)
     .not("rep_id", "is", null);
   if (error) throw error;
 
@@ -869,6 +869,7 @@ export async function getContactTimeline(
       setter: appt.setter_name || "",
       closer: appt.closer_name || "",
       has_power_bill: !!appt.has_power_bill,
+      power_bill_urls: appt.power_bill_urls || null,
       star_rating: appt.star_rating,
     });
     if (appt.disposition) {

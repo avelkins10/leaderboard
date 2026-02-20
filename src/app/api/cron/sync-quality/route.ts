@@ -149,8 +149,8 @@ export async function GET(req: NextRequest) {
       .select(
         "id, contact_id, has_power_bill, hours_to_appointment, star_rating",
       )
-      .gte("appointment_time", fromDate)
-      .lte("appointment_time", toDate + "T23:59:59");
+      .gte("appointment_time", fromDate + "T00:00:00Z")
+      .lte("appointment_time", toDate + "T23:59:59Z");
 
     // Batch updates
     const updates: {
@@ -160,8 +160,12 @@ export async function GET(req: NextRequest) {
       star_rating: number;
     }[] = [];
     for (const appt of allAppts || []) {
-      const hasPB =
+      const apiSaysPB =
         apptIdsWithPB.has(appt.id) || customerIdsWithPB.has(appt.contact_id);
+      // Only upgrade, never downgrade: if webhook already set has_power_bill=true
+      // but the attachment API (limited pagination/window) doesn't return it,
+      // trust the webhook — don't clobber back to false.
+      const hasPB = apiSaysPB || !!appt.has_power_bill;
       const hrs = appt.hours_to_appointment;
       const within2days = hrs != null && hrs > 0 && hrs <= 48;
       const correctStar = hasPB && within2days ? 3 : hasPB ? 2 : 1;

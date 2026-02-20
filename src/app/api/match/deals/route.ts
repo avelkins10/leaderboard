@@ -74,12 +74,12 @@ export async function GET(req: NextRequest) {
   const from = req.nextUrl.searchParams.get("from");
   const to = req.nextUrl.searchParams.get("to");
 
-  const query = supabaseAdmin
+  let query = supabaseAdmin
     .from("deal_matches")
     .select("*")
     .order("qb_sale_date", { ascending: false });
-  if (from) query.gte("qb_sale_date", from);
-  if (to) query.lte("qb_sale_date", to + "T23:59:59Z");
+  if (from) query = query.gte("qb_sale_date", from);
+  if (to) query = query.lte("qb_sale_date", to);
 
   const { data, error } = await query.limit(500);
   if (error)
