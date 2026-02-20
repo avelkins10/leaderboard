@@ -429,7 +429,7 @@ export default function OfficePage() {
           </Section>
 
           <Section title="Setter Accountability" noPadding>
-            {data.setters.length === 0 ? (
+            {data.setters.filter((s: any) => (s.DK || 0) > 0).length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-20">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -517,6 +517,7 @@ export default function OfficePage() {
                   </thead>
                   <tbody className="text-[13px]">
                     {data.setters
+                      .filter((s: any) => (s.DK || 0) > 0)
                       .sort((a: any, b: any) => (b.APPT || 0) - (a.APPT || 0))
                       .map((s: any, i: number) => (
                         <tr
