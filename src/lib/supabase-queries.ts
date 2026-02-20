@@ -236,10 +236,6 @@ export async function getCloserAppointments(
   return (data || []).map(mapAppointment);
 }
 
-export async function getActiveRepsToday(): Promise<Record<string, number>> {
-  return getActiveReps();
-}
-
 export async function getActiveReps(
   from?: string,
   to?: string,

@@ -392,9 +392,10 @@ function attachCloserQB(
       ? Math.round((qbData.ppwSum / qbData.ppwCount) * 100) / 100
       : 0;
 
-  const totalSold = closer.qbCloses + closer.qbCancelled;
   closer.cancelPct =
-    totalSold > 0 ? Math.round((closer.qbCancelled / totalSold) * 100) : 0;
+    closer.qbCloses > 0
+      ? Math.round((closer.qbCancelled / closer.qbCloses) * 100)
+      : 0;
 
   // Merge outcomes from appointment data LB
   const apptData = closerApptMap[closer.userId];
@@ -420,13 +421,12 @@ export async function fetchScorecard(
   fromDate: string,
   toDate: string,
 ): Promise<ScorecardResult> {
-  const [closerBoards, setterBoards, users, sales] =
-    await Promise.all([
-      getTypedLeaderboards("closer", fromDate, toDate),
-      getTypedLeaderboards("setter", fromDate, toDate),
-      getUsers(),
-      getSales(fromDate, toDate),
-    ]);
+  const [closerBoards, setterBoards, users, sales] = await Promise.all([
+    getTypedLeaderboards("closer", fromDate, toDate),
+    getTypedLeaderboards("setter", fromDate, toDate),
+    getUsers(),
+    getSales(fromDate, toDate),
+  ]);
 
   // Build user lookup
   const userMap: Record<number, RepUser> = {};
@@ -468,7 +468,14 @@ export async function fetchScorecard(
       offices[office] = {
         setters: [],
         closers: [],
-        sales: { deals: 0, kw: 0, cancelled: 0, cancelledKw: 0, rejected: 0, cancelPct: 0 },
+        sales: {
+          deals: 0,
+          kw: 0,
+          cancelled: 0,
+          cancelledKw: 0,
+          rejected: 0,
+          cancelPct: 0,
+        },
         activeReps: 0,
       };
     return offices[office];
@@ -485,7 +492,8 @@ export async function fetchScorecard(
   const starBySetter: Record<number, { sum: number; count: number }> = {};
   for (const row of starRows || []) {
     if (!row.setter_id) continue;
-    if (!starBySetter[row.setter_id]) starBySetter[row.setter_id] = { sum: 0, count: 0 };
+    if (!starBySetter[row.setter_id])
+      starBySetter[row.setter_id] = { sum: 0, count: 0 };
     starBySetter[row.setter_id].sum += row.star_rating;
     starBySetter[row.setter_id].count++;
   }
@@ -571,8 +579,7 @@ export async function fetchScorecard(
       totalKw: sales.reduce((sum, s) => sum + s.systemSizeKw, 0),
       avgSystemSize:
         sales.length > 0
-          ? sales.reduce((sum, s) => sum + s.systemSizeKw, 0) /
-            sales.length
+          ? sales.reduce((sum, s) => sum + s.systemSizeKw, 0) / sales.length
           : 0,
       avgPpw:
         validPpwSales.length > 0

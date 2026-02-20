@@ -1,19 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const VALID_EVENTS = [
-  'door-knocked',
-  'appointment-set',
-  'appointment-update',
-  'appointment-outcome',
-  'closer-update',
-  'status-changed',
-  'contact-type-changed',
+  "door-knocked",
+  "appointment-set",
+  "appointment-update",
+  "appointment-outcome",
+  "closer-update",
+  "status-changed",
+  "contact-type-changed",
 ] as const;
 
 type EventType = (typeof VALID_EVENTS)[number];
 
-function calcHoursToAppointment(apptTime: string | null, leadCreated: string | null): number | null {
+function calcHoursToAppointment(
+  apptTime: string | null,
+  leadCreated: string | null,
+): number | null {
   if (!apptTime || !leadCreated) return null;
   const diff = new Date(apptTime).getTime() - new Date(leadCreated).getTime();
   return Math.round((diff / (1000 * 60 * 60)) * 100) / 100;
@@ -25,25 +28,52 @@ function extractDispositionCategory(disposition: string | null): string | null {
   return match ? match[1] : null;
 }
 
-function checkForPowerBill(payload: any): { hasPowerBill: boolean; urls: string[] } {
-  if (Array.isArray(payload.appointment_attachment) && payload.appointment_attachment.length > 0) {
+function checkForPowerBill(payload: any): {
+  hasPowerBill: boolean;
+  urls: string[];
+} {
+  if (
+    Array.isArray(payload.appointment_attachment) &&
+    payload.appointment_attachment.length > 0
+  ) {
     return { hasPowerBill: true, urls: payload.appointment_attachment };
   }
   const contact = payload.contact || {};
-  if (contact.attachment && typeof contact.attachment === 'string' && contact.attachment.length > 0) {
+  if (
+    contact.attachment &&
+    typeof contact.attachment === "string" &&
+    contact.attachment.length > 0
+  ) {
     return { hasPowerBill: true, urls: [contact.attachment] };
   }
-  if (contact.latestAttachment && typeof contact.latestAttachment === 'string' && contact.latestAttachment.length > 0) {
+  if (
+    contact.latestAttachment &&
+    typeof contact.latestAttachment === "string" &&
+    contact.latestAttachment.length > 0
+  ) {
     return { hasPowerBill: true, urls: [contact.latestAttachment] };
   }
-  if (contact.soloAttachment && typeof contact.soloAttachment === 'string' && contact.soloAttachment.length > 0) {
+  if (
+    contact.soloAttachment &&
+    typeof contact.soloAttachment === "string" &&
+    contact.soloAttachment.length > 0
+  ) {
     return { hasPowerBill: true, urls: [contact.soloAttachment] };
   }
   return { hasPowerBill: false, urls: [] };
 }
 
-function computeStarRating(hasPowerBill: boolean, hoursToAppt: number | null): number {
-  if (hasPowerBill && hoursToAppt !== null && hoursToAppt > 0 && hoursToAppt <= 48) return 3;
+function computeStarRating(
+  hasPowerBill: boolean,
+  hoursToAppt: number | null,
+): number {
+  if (
+    hasPowerBill &&
+    hoursToAppt !== null &&
+    hoursToAppt > 0 &&
+    hoursToAppt <= 48
+  )
+    return 3;
   if (hasPowerBill) return 2;
   return 1;
 }
@@ -52,9 +82,13 @@ function buildAppointmentUpsert(payload: any) {
   const { hasPowerBill, urls: powerBillUrls } = checkForPowerBill(payload);
   const hoursToAppt = calcHoursToAppointment(
     payload.appt_start_time,
-    payload.contact?.createdAt
+    payload.contact?.createdAt,
   );
-  const isQuality = hasPowerBill && hoursToAppt !== null && hoursToAppt <= 48;
+  const isQuality =
+    hasPowerBill &&
+    hoursToAppt !== null &&
+    hoursToAppt > 0 &&
+    hoursToAppt <= 48;
   const starRating = computeStarRating(hasPowerBill, hoursToAppt);
 
   return {
@@ -71,9 +105,14 @@ function buildAppointmentUpsert(payload: any) {
     contact_state: payload.contact?.state ?? null,
     contact_email: payload.contact?.email ?? null,
     star_rating: starRating,
-    contact_source: payload.contact?.source ?? payload.contact?.leadSource ?? null,
-    latitude: payload.contact?.latitude ? parseFloat(payload.contact.latitude) : null,
-    longitude: payload.contact?.longitude ? parseFloat(payload.contact.longitude) : null,
+    contact_source:
+      payload.contact?.source ?? payload.contact?.leadSource ?? null,
+    latitude: payload.contact?.latitude
+      ? parseFloat(payload.contact.latitude)
+      : null,
+    longitude: payload.contact?.longitude
+      ? parseFloat(payload.contact.longitude)
+      : null,
     office_team: payload.user?.team ?? null,
     office_region: payload.user?.location ?? null,
     appointment_time: payload.appt_start_time ?? null,
@@ -90,7 +129,7 @@ function buildAppointmentUpsert(payload: any) {
 }
 
 async function logEvent(eventType: string, payload: any) {
-  await supabaseAdmin.from('repcard_events').insert({
+  await supabaseAdmin.from("repcard_events").insert({
     event_type: eventType,
     payload,
     received_at: new Date().toISOString(),
@@ -105,19 +144,19 @@ async function insertAttachments(payload: any, appointmentId: number | null) {
   for (const url of urls) {
     // Dedup by url + appointment_id
     const { data: existing } = await supabaseAdmin
-      .from('attachments')
-      .select('id')
-      .eq('url', url)
-      .eq('appointment_id', appointmentId)
+      .from("attachments")
+      .select("id")
+      .eq("url", url)
+      .eq("appointment_id", appointmentId)
       .limit(1);
     if (existing && existing.length > 0) continue;
 
-    await supabaseAdmin.from('attachments').insert({
+    await supabaseAdmin.from("attachments").insert({
       contact_id: contactId,
       appointment_id: appointmentId,
       url,
-      source: 'appointment',
-      attachment_type: 'power_bill',
+      source: "appointment",
+      attachment_type: "power_bill",
       uploaded_at: new Date().toISOString(),
     });
   }
@@ -126,18 +165,18 @@ async function insertAttachments(payload: any, appointmentId: number | null) {
 async function handleAppointmentSet(payload: any) {
   const data = { ...buildAppointmentUpsert(payload), disposition: null as any };
   const { error } = await supabaseAdmin
-    .from('appointments')
-    .upsert(data, { onConflict: 'id' });
-  if (error) console.error('appointment-set upsert error:', error);
+    .from("appointments")
+    .upsert(data, { onConflict: "id" });
+  if (error) console.error("appointment-set upsert error:", error);
   await insertAttachments(payload, payload.id);
 }
 
 async function handleAppointmentUpdate(payload: any) {
   const data = buildAppointmentUpsert(payload);
   const { error } = await supabaseAdmin
-    .from('appointments')
-    .upsert(data, { onConflict: 'id' });
-  if (error) console.error('appointment-update upsert error:', error);
+    .from("appointments")
+    .upsert(data, { onConflict: "id" });
+  if (error) console.error("appointment-update upsert error:", error);
   await insertAttachments(payload, payload.id);
 }
 
@@ -145,25 +184,27 @@ async function handleAppointmentOutcome(payload: any) {
   const data = {
     ...buildAppointmentUpsert(payload),
     disposition: payload.appointment_status_title ?? null,
-    disposition_category: extractDispositionCategory(payload.appointment_status_title),
+    disposition_category: extractDispositionCategory(
+      payload.appointment_status_title,
+    ),
   };
   const { error } = await supabaseAdmin
-    .from('appointments')
-    .upsert(data, { onConflict: 'id' });
-  if (error) console.error('appointment-outcome upsert error:', error);
+    .from("appointments")
+    .upsert(data, { onConflict: "id" });
+  if (error) console.error("appointment-outcome upsert error:", error);
   await insertAttachments(payload, payload.id);
 }
 
 async function handleCloserUpdate(payload: any) {
   if (!payload.id) return;
   const { error } = await supabaseAdmin
-    .from('appointments')
+    .from("appointments")
     .update({
       closer_id: payload.closer?.id ?? null,
       closer_name: payload.closer?.name ?? null,
     })
-    .eq('id', payload.id);
-  if (error) console.error('closer-update error:', error);
+    .eq("id", payload.id);
+  if (error) console.error("closer-update error:", error);
 }
 
 async function handleDoorKnocked(payload: any) {
@@ -172,19 +213,21 @@ async function handleDoorKnocked(payload: any) {
   if (contactId && repId) {
     const cutoff = new Date(Date.now() - 60_000).toISOString();
     const { data: existing } = await supabaseAdmin
-      .from('door_knocks')
-      .select('id')
-      .eq('contact_id', contactId)
-      .eq('rep_id', repId)
-      .gte('knocked_at', cutoff)
+      .from("door_knocks")
+      .select("id")
+      .eq("contact_id", contactId)
+      .eq("rep_id", repId)
+      .gte("knocked_at", cutoff)
       .limit(1);
     if (existing && existing.length > 0) {
-      console.log(`Skipping duplicate door knock: contact=${contactId} rep=${repId}`);
+      console.log(
+        `Skipping duplicate door knock: contact=${contactId} rep=${repId}`,
+      );
       return;
     }
   }
 
-  const { error } = await supabaseAdmin.from('door_knocks').insert({
+  const { error } = await supabaseAdmin.from("door_knocks").insert({
     contact_id: payload.id ?? null,
     rep_id: payload.user?.id ?? null,
     rep_name: payload.user?.name ?? null,
@@ -200,35 +243,40 @@ async function handleDoorKnocked(payload: any) {
     contact_name: payload.name ?? payload.contact?.name ?? null,
     contact_phone: payload.phoneNumber ?? payload.contact?.phoneNumber ?? null,
   });
-  if (error) console.error('door-knocked insert error:', error);
+  if (error) console.error("door-knocked insert error:", error);
 }
 
 async function handleStatusChanged(payload: any) {
   const contactId = payload.id ?? payload.contact?.id ?? null;
   if (!contactId) return;
 
-  const { error } = await supabaseAdmin.from('lead_status_changes').insert({
+  const { error } = await supabaseAdmin.from("lead_status_changes").insert({
     contact_id: contactId,
     rep_id: payload.user?.id ?? null,
     rep_name: payload.user?.name ?? null,
-    old_status: payload.oldStatus ?? payload.old_status ?? payload.previousStatus ?? null,
-    new_status: payload.newStatus ?? payload.new_status ?? payload.status ?? null,
+    old_status:
+      payload.oldStatus ?? payload.old_status ?? payload.previousStatus ?? null,
+    new_status:
+      payload.newStatus ?? payload.new_status ?? payload.status ?? null,
     office_team: payload.user?.team ?? null,
-    changed_at: payload.changedAt ?? payload.updatedAt ?? new Date().toISOString(),
+    changed_at:
+      payload.changedAt ?? payload.updatedAt ?? new Date().toISOString(),
   });
-  if (error) console.error('status-changed insert error:', error);
+  if (error) console.error("status-changed insert error:", error);
 }
 
 async function handleContactTypeChanged(payload: any) {
   const contactId = payload.id ?? payload.contact?.id ?? null;
   if (!contactId) return;
 
-  const { error } = await supabaseAdmin.from('contact_type_changes').insert({
+  const { error } = await supabaseAdmin.from("contact_type_changes").insert({
     contact_id: contactId,
     contact_name: payload.name ?? payload.contact?.name ?? null,
     contact_phone: payload.phoneNumber ?? payload.contact?.phoneNumber ?? null,
-    contact_address: payload.fullAddress ?? payload.contact?.fullAddress ?? null,
-    old_type: payload.oldType ?? payload.old_type ?? payload.previousType ?? null,
+    contact_address:
+      payload.fullAddress ?? payload.contact?.fullAddress ?? null,
+    old_type:
+      payload.oldType ?? payload.old_type ?? payload.previousType ?? null,
     new_type: payload.newType ?? payload.new_type ?? payload.type ?? null,
     old_type_id: payload.oldTypeId ?? payload.old_type_id ?? null,
     new_type_id: payload.newTypeId ?? payload.new_type_id ?? null,
@@ -237,49 +285,60 @@ async function handleContactTypeChanged(payload: any) {
     setter_id: payload.user?.id ?? payload.setter?.id ?? null,
     setter_name: payload.user?.name ?? payload.setter?.name ?? null,
     office_team: payload.user?.team ?? null,
-    changed_at: payload.changedAt ?? payload.updatedAt ?? new Date().toISOString(),
+    changed_at:
+      payload.changedAt ?? payload.updatedAt ?? new Date().toISOString(),
   });
-  if (error) console.error('contact-type-changed insert error:', error);
+  if (error) console.error("contact-type-changed insert error:", error);
 }
 
 async function handleContactAttachmentUpdate(payload: any) {
   const contactId = payload.id;
-  const attachment = payload.attachment || payload.latestAttachment || payload.soloAttachment;
-  if (!contactId || !attachment || typeof attachment !== 'string' || attachment.length === 0) return;
+  const attachment =
+    payload.attachment || payload.latestAttachment || payload.soloAttachment;
+  if (
+    !contactId ||
+    !attachment ||
+    typeof attachment !== "string" ||
+    attachment.length === 0
+  )
+    return;
 
   const { data: appts } = await supabaseAdmin
-    .from('appointments')
-    .select('id, hours_to_appointment')
-    .eq('contact_id', contactId)
-    .eq('has_power_bill', false);
+    .from("appointments")
+    .select("id, hours_to_appointment")
+    .eq("contact_id", contactId)
+    .eq("has_power_bill", false);
 
   if (!appts || appts.length === 0) return;
 
   for (const appt of appts) {
-    const isQuality = appt.hours_to_appointment !== null && appt.hours_to_appointment > 0 && appt.hours_to_appointment <= 48;
+    const isQuality =
+      appt.hours_to_appointment !== null &&
+      appt.hours_to_appointment > 0 &&
+      appt.hours_to_appointment <= 48;
     const starRating = isQuality ? 3 : 2;
     await supabaseAdmin
-      .from('appointments')
+      .from("appointments")
       .update({
         has_power_bill: true,
         power_bill_urls: [attachment],
         is_quality: isQuality,
         star_rating: starRating,
       })
-      .eq('id', appt.id);
+      .eq("id", appt.id);
   }
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { event: string } }
+  { params }: { params: { event: string } },
 ) {
   const eventType = params.event as EventType;
 
   if (!VALID_EVENTS.includes(eventType)) {
     return NextResponse.json(
       { success: false, error: `Unknown event type: ${eventType}` },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -288,8 +347,8 @@ export async function POST(
     payload = await request.json();
   } catch {
     return NextResponse.json(
-      { success: false, error: 'Invalid JSON' },
-      { status: 400 }
+      { success: false, error: "Invalid JSON" },
+      { status: 400 },
     );
   }
 
@@ -297,26 +356,26 @@ export async function POST(
 
   try {
     switch (eventType) {
-      case 'appointment-set':
+      case "appointment-set":
         await handleAppointmentSet(payload);
         break;
-      case 'appointment-update':
+      case "appointment-update":
         await handleAppointmentUpdate(payload);
         break;
-      case 'appointment-outcome':
+      case "appointment-outcome":
         await handleAppointmentOutcome(payload);
         break;
-      case 'closer-update':
+      case "closer-update":
         await handleCloserUpdate(payload);
         break;
-      case 'door-knocked':
+      case "door-knocked":
         await handleDoorKnocked(payload);
         break;
-      case 'status-changed':
+      case "status-changed":
         await handleStatusChanged(payload);
         await handleContactAttachmentUpdate(payload);
         break;
-      case 'contact-type-changed':
+      case "contact-type-changed":
         await handleContactTypeChanged(payload);
         await handleContactAttachmentUpdate(payload);
         break;

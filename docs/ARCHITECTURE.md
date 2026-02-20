@@ -34,6 +34,12 @@ Supabase (real-time data store)
                      /api/contact/[id] (timelines)
                      /api/rep/[id] (quality stats, appointment history)
                      /api/cron/snapshot (weekly snapshots)
+
+Cron Jobs (Vercel)
+    │
+    ├── /api/cron/snapshot      — weekly snapshot (Mon 6am UTC)
+    ├── /api/cron/sync-quality  — appointment sync + star recompute (every 4h)
+    └── /api/cron/verify-attachments — AI vision power bill check (every 2h)
 ```
 
 ## Tech Stack
@@ -48,6 +54,7 @@ Supabase (real-time data store)
 ## Data Flow
 
 ### Real-Time (Webhooks → Supabase)
+
 1. Rep knocks a door → RepCard fires `door-knocked` webhook
 2. Rep sets appointment → `appointment-set` webhook → creates appointment record
 3. Closer runs appointment → `appointment-outcome` webhook → updates disposition
@@ -55,12 +62,14 @@ Supabase (real-time data store)
 5. Contact type changes → `contact-type-changed` webhook → signals deal closed
 
 ### On-Demand (API calls per page load)
+
 1. Dashboard loads → `/api/scorecard` calls RepCard leaderboards + QB sales API
 2. Scorecard merges: RepCard activity stats + QB verified closes + Supabase quality/active reps
 3. Office pages call `/api/office/[name]` → same merge at office level
 4. Rep profiles call `/api/rep/[id]` → individual stats + Supabase appointment history
 
 ### Cross-System Matching
+
 - **Primary**: RepCard User ID stored in QB (FID 2277 = closer, FID 2279 = setter) — 96-99% match rate
 - **Fallback**: Name matching (case-insensitive contains)
 - A **close only counts if it's in QuickBase** — RepCard "Closed (Pending KCA)" is just a claim
@@ -82,6 +91,7 @@ Supabase (real-time data store)
 Every QB deal is matched to a RepCard appointment. 90% YTD match rate.
 
 **Matching chain (priority order):**
+
 1. **Phone** (84% of matches) — normalize both to 10 digits, exact match. Confidence: 0.95 if closer ID also matches, 0.8 otherwise.
 2. **Address** (3%) — normalize addresses, partial match on street number + name. Confidence: 0.85 with closer match.
 3. **Name + Date** (3%) — last name match + same closer + appointment within 30 days of sale. Confidence: 0.6.
@@ -114,29 +124,38 @@ Timeline API: `GET /api/contact/[id]` — returns chronological events from all 
 src/
 ├── app/
 │   ├── api/
-│   │   ├── appointments/route.ts   # Appointment drill-down (filter by setter, closer, office, disposition)
-│   │   ├── backfill/route.ts       # One-time data backfill endpoint
-│   │   ├── backfill/history/route.ts # Historical backfill from Neon DB
+│   │   ├── activity/route.ts       # Real-time activity feed
+│   │   ├── appointments/route.ts   # Appointment drill-down
+│   │   ├── backfill/route.ts       # Data backfill endpoint
+│   │   ├── backfill/history/route.ts # Historical backfill from Neon
+│   │   ├── contact/[id]/route.ts   # Contact timeline
+│   │   ├── cron/snapshot/route.ts  # Weekly snapshot (Mon 6am UTC)
+│   │   ├── cron/sync-quality/route.ts  # 4-hourly quality sync
+│   │   ├── cron/verify-attachments/route.ts  # 2-hourly AI vision verification
 │   │   ├── match/deals/route.ts    # Batch deal matching (QB ↔ RC)
 │   │   ├── match/deal/[id]/route.ts # Single deal full chain
-│   │   ├── contact/[id]/route.ts   # Contact timeline (full lifecycle)
-│   │   ├── cron/snapshot/route.ts  # Weekly snapshot (runs Monday 6am UTC)
 │   │   ├── office/[name]/route.ts  # Office detail page data
+│   │   ├── pipeline/route.ts       # Pipeline/status aggregation
 │   │   ├── rep/[id]/route.ts       # Rep baseball card data
+│   │   ├── rep/[id]/appointments/route.ts # Rep appointment drill-down
 │   │   ├── scorecard/route.ts      # Main dashboard data
+│   │   ├── trends/route.ts         # Multi-week trend data
 │   │   └── webhooks/repcard/[event]/route.ts  # 7 webhook receivers
+│   ├── page.tsx                    # Main dashboard UI
+│   ├── contact/[id]/page.tsx       # Contact timeline UI
+│   ├── office/page.tsx             # Office directory
 │   ├── office/[name]/page.tsx      # Office detail UI
 │   ├── quality/page.tsx            # Quality analytics UI
+│   ├── rep/page.tsx                # Rep directory
 │   ├── rep/[id]/page.tsx           # Rep profile UI
-│   ├── trends/page.tsx             # Trends UI
-│   └── page.tsx                    # Main dashboard UI
+│   └── trends/page.tsx             # Trends UI
 ├── components/                     # Shared UI components
 └── lib/
     ├── config.ts                   # Office mapping, timezones, env vars
     ├── matching.ts                 # Phone/address normalization + matching
     ├── quickbase.ts                # QB API client
     ├── repcard.ts                  # RepCard API client
-    ├── rep-roles.json              # RepCard role badges (seeded from Neon)
+    ├── rep-roles.json              # Static role override file
     ├── supabase.ts                 # Supabase client (lazy-loaded)
     └── supabase-queries.ts         # All Supabase query functions
 ```

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
-import { teamIdToQBOffice, OFFICE_MAPPING } from "@/lib/config";
+import { teamIdToQBOffice } from "@/lib/config";
 import {
   format,
   parseISO,

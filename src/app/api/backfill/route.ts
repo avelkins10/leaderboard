@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const REPCARD_API_KEY = process.env.REPCARD_API_KEY!;
-const REPCARD_API_URL = 'https://app.repcard.com/api/appointments';
+const REPCARD_API_URL = "https://app.repcard.com/api/appointments";
 
 async function fetchPage(page: number) {
-  const res = await fetch(`${REPCARD_API_URL}?limit=100&page=${page}`, {
-    headers: { 'x-api-key': REPCARD_API_KEY },
+  const res = await fetch(`${REPCARD_API_URL}?per_page=100&page=${page}`, {
+    headers: { "x-api-key": REPCARD_API_KEY },
   });
-  if (!res.ok) throw new Error(`RepCard API error: ${res.status} on page ${page}`);
+  if (!res.ok)
+    throw new Error(`RepCard API error: ${res.status} on page ${page}`);
   return res.json();
 }
 
@@ -16,9 +17,9 @@ async function fetchPage(page: number) {
 async function fetchAllPages(baseUrl: string): Promise<any[]> {
   const all: any[] = [];
   for (let page = 1; page <= 200; page++) {
-    const sep = baseUrl.includes('?') ? '&' : '?';
+    const sep = baseUrl.includes("?") ? "&" : "?";
     const res = await fetch(`${baseUrl}${sep}page=${page}&per_page=100`, {
-      headers: { 'x-api-key': REPCARD_API_KEY },
+      headers: { "x-api-key": REPCARD_API_KEY },
     });
     if (!res.ok) break;
     const d = await res.json();
@@ -30,25 +31,37 @@ async function fetchAllPages(baseUrl: string): Promise<any[]> {
 }
 
 function mapAppointment(appt: any, hasPowerBill: boolean = false) {
-  const setter = appt.setter || appt.contact?.owner || appt.contact?.user || appt.user;
+  const setter =
+    appt.setter || appt.contact?.owner || appt.contact?.user || appt.user;
   const startAt = appt.startAt;
   const leadCreated = appt.contact?.createdAt || appt.createdAt;
 
   let hoursToAppointment: number | null = null;
   if (startAt && leadCreated) {
-    const diff = (new Date(startAt).getTime() - new Date(leadCreated).getTime()) / 3600000;
-    hoursToAppointment = (diff < 0 || diff > 8760) ? null : Math.round(diff * 100) / 100;
+    const diff =
+      (new Date(startAt).getTime() - new Date(leadCreated).getTime()) / 3600000;
+    hoursToAppointment =
+      diff < 0 || diff > 8760 ? null : Math.round(diff * 100) / 100;
   }
 
   // Power bill: check inline attachment OR external attachment lookup
-  const inlinePB = Array.isArray(appt.appointment_attachment) && appt.appointment_attachment.length > 0;
+  const inlinePB =
+    Array.isArray(appt.appointment_attachment) &&
+    appt.appointment_attachment.length > 0;
   const hasPB = inlinePB || hasPowerBill;
-  const within2days = hoursToAppointment !== null && hoursToAppointment > 0 && hoursToAppointment <= 48;
+  const within2days =
+    hoursToAppointment !== null &&
+    hoursToAppointment > 0 &&
+    hoursToAppointment <= 48;
   const starRating = hasPB && within2days ? 3 : hasPB ? 2 : 1;
 
   const contact = appt.contact || {};
-  const address = contact.fullAddress ||
-    [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(' ') || null;
+  const address =
+    contact.fullAddress ||
+    [contact.address, contact.city, contact.state, contact.zip]
+      .filter(Boolean)
+      .join(" ") ||
+    null;
 
   return {
     id: appt.id,
@@ -70,7 +83,9 @@ function mapAppointment(appt: any, hasPowerBill: boolean = false) {
     lead_created_at: leadCreated ?? null,
     hours_to_appointment: hoursToAppointment,
     has_power_bill: hasPB,
-    power_bill_urls: Array.isArray(appt.appointment_attachment) ? appt.appointment_attachment : [],
+    power_bill_urls: Array.isArray(appt.appointment_attachment)
+      ? appt.appointment_attachment
+      : [],
     is_quality: hasPB && within2days,
     star_rating: starRating,
     both_spouses_present: contact.both_spouses_present ?? null,
@@ -84,16 +99,21 @@ function mapAppointment(appt: any, hasPowerBill: boolean = false) {
 
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  if (searchParams.get('key') !== 'backfill2026') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (searchParams.get("key") !== "backfill2026") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const mode = searchParams.get('mode') || 'full'; // 'full' | 'power-bills-only'
+  const mode = searchParams.get("mode") || "full"; // 'full' | 'power-bills-only'
 
   // ── Step 1: Fetch power bill data from attachment endpoints ──
+  const year = new Date().getFullYear();
   const [apptAttachments, custAttachments] = await Promise.all([
-    fetchAllPages('https://app.repcard.com/api/appointments/attachments?from_date=2026-01-01&to_date=2026-12-31'),
-    fetchAllPages('https://app.repcard.com/api/customers/attachments?from_date=2026-01-01&to_date=2026-12-31'),
+    fetchAllPages(
+      `https://app.repcard.com/api/appointments/attachments?from_date=${year}-01-01&to_date=${year}-12-31`,
+    ),
+    fetchAllPages(
+      `https://app.repcard.com/api/customers/attachments?from_date=${year}-01-01&to_date=${year}-12-31`,
+    ),
   ]);
 
   // Map appointment IDs and customer IDs with power bills
@@ -107,29 +127,33 @@ export async function POST(req: NextRequest) {
   }
 
   // If power-bills-only mode, just update existing Supabase records
-  if (mode === 'power-bills-only') {
+  if (mode === "power-bills-only") {
     const { data: allAppts } = await supabaseAdmin
-      .from('appointments')
-      .select('id, contact_id, has_power_bill, hours_to_appointment');
+      .from("appointments")
+      .select("id, contact_id, has_power_bill, hours_to_appointment");
 
     let updated = 0;
-    for (const appt of (allAppts || [])) {
-      const hasPB = apptIdsWithPB.has(appt.id) || customerIdsWithPB.has(appt.contact_id);
+    for (const appt of allAppts || []) {
+      const hasPB =
+        apptIdsWithPB.has(appt.id) || customerIdsWithPB.has(appt.contact_id);
       if (hasPB && !appt.has_power_bill) {
         const hrs = appt.hours_to_appointment;
         const within2days = hrs != null && hrs > 0 && hrs <= 48;
-        await supabaseAdmin.from('appointments').update({
-          has_power_bill: true,
-          is_quality: within2days,
-          star_rating: within2days ? 3 : 2,
-        }).eq('id', appt.id);
+        await supabaseAdmin
+          .from("appointments")
+          .update({
+            has_power_bill: true,
+            is_quality: within2days,
+            star_rating: within2days ? 3 : 2,
+          })
+          .eq("id", appt.id);
         updated++;
       }
     }
 
     return NextResponse.json({
       success: true,
-      mode: 'power-bills-only',
+      mode: "power-bills-only",
       apptAttachments: apptAttachments.length,
       custAttachments: custAttachments.length,
       uniqueApptIdsWithPB: apptIdsWithPB.size,
@@ -159,20 +183,24 @@ export async function POST(req: NextRequest) {
 
     totalFetched += items.length;
 
-    const appts2026 = items.filter((a: any) => a.startAt && a.startAt.startsWith('2026'));
+    const appts2026 = items.filter(
+      (a: any) => a.startAt && a.startAt.startsWith("2026"),
+    );
     total2026 += appts2026.length;
 
     if (appts2026.length > 0) {
       const mapped = appts2026.map((appt: any) => {
         // Check if this appointment or its contact has a power bill from attachment endpoints
         const contactId = appt.contact?.id;
-        const hasPB = apptIdsWithPB.has(appt.id) || (contactId && customerIdsWithPB.has(contactId));
+        const hasPB =
+          apptIdsWithPB.has(appt.id) ||
+          (contactId && customerIdsWithPB.has(contactId));
         return mapAppointment(appt, hasPB);
       });
 
       const { error } = await supabaseAdmin
-        .from('appointments')
-        .upsert(mapped, { onConflict: 'id' });
+        .from("appointments")
+        .upsert(mapped, { onConflict: "id" });
       if (error) {
         console.error(`Upsert error on page ${page}:`, error);
       } else {
@@ -186,7 +214,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    mode: 'full',
+    mode: "full",
     totalFetched,
     total2026,
     totalUpserted,

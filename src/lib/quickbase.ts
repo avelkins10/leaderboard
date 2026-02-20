@@ -87,7 +87,7 @@ export async function getInstalls(
   const data = await qbQuery(
     QB_PROJECTS_TABLE,
     INSTALL_FIELDS,
-    `{534.AF.${fromDate}}AND{534.BF.${toDate}}`,
+    `{534.OAF.${fromDate}}AND{534.OBF.${toDate}}`,
   );
 
   return (data.data || []).map((r: any) => ({

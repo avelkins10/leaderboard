@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     // ── Step 1: Sync recent appointments from RepCard → Supabase ──
     const recentAppts = await fetchPages(
       `https://app.repcard.com/api/appointments?from_date=${fromDate}&to_date=${toDate}`,
-      10 // Up to 1000 appointments
+      10, // Up to 1000 appointments
     );
 
     if (recentAppts.length > 0) {
@@ -123,11 +123,11 @@ export async function GET(req: NextRequest) {
     const [apptAttachments, custAttachments] = await Promise.all([
       fetchPages(
         `https://app.repcard.com/api/appointments/attachments?from_date=${fromDate}&to_date=${toDate}`,
-        10
+        10,
       ),
       fetchPages(
         `https://app.repcard.com/api/customers/attachments?from_date=${fromDate}&to_date=${toDate}`,
-        5
+        5,
       ),
     ]);
 
@@ -146,12 +146,19 @@ export async function GET(req: NextRequest) {
     // ── Step 3: Update power bills + star ratings ──
     const { data: allAppts } = await supabaseAdmin
       .from("appointments")
-      .select("id, contact_id, has_power_bill, hours_to_appointment, star_rating")
+      .select(
+        "id, contact_id, has_power_bill, hours_to_appointment, star_rating",
+      )
       .gte("appointment_time", fromDate)
       .lte("appointment_time", toDate + "T23:59:59");
 
     // Batch updates
-    const updates: { id: number; has_power_bill: boolean; is_quality: boolean; star_rating: number }[] = [];
+    const updates: {
+      id: number;
+      has_power_bill: boolean;
+      is_quality: boolean;
+      star_rating: number;
+    }[] = [];
     for (const appt of allAppts || []) {
       const hasPB =
         apptIdsWithPB.has(appt.id) || customerIdsWithPB.has(appt.contact_id);
@@ -159,7 +166,7 @@ export async function GET(req: NextRequest) {
       const within2days = hrs != null && hrs > 0 && hrs <= 48;
       const correctStar = hasPB && within2days ? 3 : hasPB ? 2 : 1;
 
-      if ((hasPB && !appt.has_power_bill) || appt.star_rating !== correctStar) {
+      if (appt.has_power_bill !== hasPB || appt.star_rating !== correctStar) {
         updates.push({
           id: appt.id,
           has_power_bill: hasPB,
@@ -181,20 +188,22 @@ export async function GET(req: NextRequest) {
               is_quality: u.is_quality,
               star_rating: u.star_rating,
             })
-            .eq("id", u.id)
-        )
+            .eq("id", u.id),
+        ),
       );
     }
-    stats.powerBillsUpdated = updates.filter(
-      (u) => u.has_power_bill
-    ).length;
+    stats.powerBillsUpdated = updates.filter((u) => u.has_power_bill).length;
     stats.starsUpdated = updates.length;
 
-    return NextResponse.json({ success: true, window: { fromDate, toDate }, ...stats });
+    return NextResponse.json({
+      success: true,
+      window: { fromDate, toDate },
+      ...stats,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

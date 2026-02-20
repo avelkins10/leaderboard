@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTypedLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
-import { OFFICE_MAPPING, qbOfficeToRepCardTeams } from "@/lib/config";
+import {
+  OFFICE_MAPPING,
+  qbOfficeToRepCardTeams,
+  normalizeQBOffice,
+} from "@/lib/config";
 import {
   getOfficeSetterQualityStats,
   getOfficePartnerships,
 } from "@/lib/supabase-queries";
-import { isCancel, getMonday, getToday } from "@/lib/data";
+import { isCancel, isValidPpw, getMonday, getToday } from "@/lib/data";
 
 export async function GET(
   req: NextRequest,
@@ -137,8 +141,9 @@ export async function GET(
     };
 
     // Sales for this office — split active vs cancelled using shared isCancel()
-    const officeSales = sales.filter((s) => s.salesOffice === officeName);
-    const activeOfficeSales = officeSales.filter((s) => !isCancel(s.status));
+    const officeSales = sales.filter(
+      (s) => normalizeQBOffice(s.salesOffice || "") === officeName,
+    );
     const cancelledOfficeSales = officeSales.filter((s) => isCancel(s.status));
 
     // QB sales by closer/setter — indexed by both name and RepCard ID
@@ -201,8 +206,8 @@ export async function GET(
       const agg = qbByCloserRC[c.userId] || qbByCloserName[c.name];
       c.qbCloses = (agg?.deals || 0) + (agg?.cancelled || 0);
       c.qbCancelled = agg?.cancelled || 0;
-      const total = c.qbCloses + c.qbCancelled;
-      c.cancelPct = total > 0 ? Math.round((c.qbCancelled / total) * 100) : 0;
+      c.cancelPct =
+        c.qbCloses > 0 ? Math.round((c.qbCancelled / c.qbCloses) * 100) : 0;
       c.totalKw = agg?.kw || 0;
       c.avgPpw =
         agg && agg.ppwCount > 0
@@ -293,8 +298,10 @@ export async function GET(
               )
             : 0,
         avgPpw: (() => {
-          const valid = officeSales.filter(s => s.netPpw > 1 && s.netPpw < 8);
-          return valid.length > 0 ? valid.reduce((s, sale) => s + sale.netPpw, 0) / valid.length : 0;
+          const valid = officeSales.filter((s) => isValidPpw(s.netPpw));
+          return valid.length > 0
+            ? valid.reduce((s, sale) => s + sale.netPpw, 0) / valid.length
+            : 0;
         })(),
       },
     });
