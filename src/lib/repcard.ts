@@ -109,12 +109,3 @@ export async function getAppointments(fromDate: string, toDate: string): Promise
   return appointments;
 }
 
-export async function getOffices() {
-  const data = await rcFetch('/offices');
-  return data.result.data;
-}
-
-export async function getTeams(officeId: number) {
-  const data = await rcFetch(`/offices/${officeId}/teams`);
-  return data.result.data;
-}

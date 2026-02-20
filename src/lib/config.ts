@@ -136,13 +136,6 @@ export const OFFICE_MAPPING: Record<
   },
 };
 
-// Get display name for an office (QB-normalized)
-export function getOfficeName(teamId: number): string {
-  const mapping = OFFICE_MAPPING[teamId];
-  if (!mapping) return `Unknown (${teamId})`;
-  return mapping.qbName || mapping.name;
-}
-
 // Get all active QB office names (deduplicated)
 export function getActiveOffices(): string[] {
   const offices = new Set<string>();
