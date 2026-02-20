@@ -511,11 +511,24 @@ export async function fetchScorecard(
   }
 
   // Fetch door_knocks for field time computation (processed after setters are built)
-  const { data: allKnocks } = await supabaseAdmin
-    .from("door_knocks")
-    .select("rep_id, knocked_at")
-    .gte("knocked_at", `${fromDate}T00:00:00Z`)
-    .lte("knocked_at", `${toDate}T23:59:59Z`);
+  // Must paginate — Supabase default limit is 1000 rows, company-wide knocks easily exceed that
+  const allKnocks: { rep_id: number; knocked_at: string }[] = [];
+  {
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: page } = await supabaseAdmin
+        .from("door_knocks")
+        .select("rep_id, knocked_at")
+        .gte("knocked_at", `${fromDate}T00:00:00Z`)
+        .lte("knocked_at", `${toDate}T23:59:59Z`)
+        .range(from, from + pageSize - 1);
+      if (!page || page.length === 0) break;
+      allKnocks.push(...page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+  }
 
   // Process setters with QB attribution
   const allSetters: ProcessedSetter[] = [];
@@ -548,7 +561,7 @@ export async function fetchScorecard(
 
   // Compute avgFieldHoursByOffice using setter→office mapping + local timezone
   const avgFieldHoursByOffice: Record<string, number> = {};
-  if (allKnocks && allKnocks.length > 0) {
+  if (allKnocks.length > 0) {
     // Build setter→office map from leaderboard data
     const setterOfficeMap: Record<number, string> = {};
     for (const s of allSetters) {

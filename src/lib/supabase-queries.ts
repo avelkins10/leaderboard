@@ -638,21 +638,28 @@ export async function getFieldTimeStats(
   to: string,
   timezone: string,
 ): Promise<RepFieldTime[]> {
-  let query = supabaseAdmin
-    .from("door_knocks")
-    .select("rep_id, rep_name, knocked_at")
-    .gte("knocked_at", `${from}T00:00:00Z`)
-    .lte("knocked_at", `${to}T23:59:59Z`);
-
-  if (repIds && repIds.length > 0) {
-    query = query.in("rep_id", repIds);
+  // Paginate — Supabase default limit is 1000 rows, door knocks can easily exceed that
+  const data: { rep_id: number; rep_name: string; knocked_at: string }[] = [];
+  {
+    const pageSize = 1000;
+    let offset = 0;
+    while (true) {
+      let query = supabaseAdmin
+        .from("door_knocks")
+        .select("rep_id, rep_name, knocked_at")
+        .gte("knocked_at", `${from}T00:00:00Z`)
+        .lte("knocked_at", `${to}T23:59:59Z`);
+      if (repIds && repIds.length > 0) query = query.in("rep_id", repIds);
+      if (teamNames && teamNames.length > 0) query = query.in("office_team", teamNames);
+      query = query.range(offset, offset + pageSize - 1);
+      const { data: page, error } = await query;
+      if (error || !page || page.length === 0) break;
+      data.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
   }
-  if (teamNames && teamNames.length > 0) {
-    query = query.in("office_team", teamNames);
-  }
-
-  const { data, error } = await query;
-  if (error || !data || data.length === 0) return [];
+  if (data.length === 0) return [];
 
   // Group knocks by rep_id + local date
   const byRepDay = new Map<string, Date[]>();

@@ -368,14 +368,12 @@ export async function GET(
               10,
           ) / 10
         : 0;
-    const sWithField = setterAccountability.filter(
-      (s: any) => s.fieldHours != null,
-    );
+    // Compute avg field hours directly from fieldTimeData (matches data.ts logic)
     const sAvgFieldHours =
-      sWithField.length > 0
+      fieldTimeData.length > 0
         ? Math.round(
-            (sWithField.reduce((sum: number, s: any) => sum + s.fieldHours, 0) /
-              sWithField.length) *
+            (fieldTimeData.reduce((sum: number, ft: RepFieldTime) => sum + ft.avgHoursPerDay, 0) /
+              fieldTimeData.length) *
               10,
           ) / 10
         : null;

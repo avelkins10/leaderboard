@@ -241,6 +241,7 @@ QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names
 - **Timezone-aware date formatting:** Use `formatDate()`/`formatDateShort()` with timezone parameter. Offices have timezones defined in `OFFICE_MAPPING`.
 - **Multiple RepCard teams per office:** Some QB offices have multiple RepCard teams (e.g., Stevens has teams 5671, 6737, 7141 all mapping to "Stevens - Iowa 2025"). This is correct — all teams roll into one office.
 - **Tooltip component:** Uses `text` prop, NOT `content`. `<Tooltip text="...">`.
+- **Supabase default row limit is 1000.** Queries returning more rows (e.g. company-wide `door_knocks`) must paginate with `.range()`. Without pagination, results are silently truncated.
 
 ## Environment Variables
 
