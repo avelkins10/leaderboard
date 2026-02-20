@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const CRON_SECRET = process.env.CRON_SECRET || "backfill2026";
+const ADMIN_PASSWORD = "Amssc2017";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const key = searchParams.get("key");
-  const authHeader = req.headers.get("authorization");
-  if (key !== CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (key !== ADMIN_PASSWORD) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
