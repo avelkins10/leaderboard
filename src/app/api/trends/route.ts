@@ -201,6 +201,7 @@ export async function GET(req: NextRequest) {
             closes: 0,
             deals: 0,
             kw: 0,
+            activeReps: 0,
           };
         officeData[office].deals++;
         officeData[office].kw += sale.systemSizeKw;
