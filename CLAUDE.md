@@ -27,13 +27,14 @@ Next.js 14 (App Router) + Tailwind + shadcn-style components
 │   ├── /api/cron/verify-attachments — 2-hourly AI vision power bill check
 │   └── /api/backfill — sync RepCard appointments to Supabase
 └── Pages
-    ├── / — Dashboard (home, leaderboards, office scorecards)
-    ├── /office — Office directory
-    ├── /office/[name] — Office detail (setter accountability, closer stats, funnel)
+    ├── / — Dashboard (setter/closer/office leaderboards with drill-downs)
+    ├── /office — Office directory (cards with sits, field time, per-rep averages)
+    ├── /office/[name] — Office detail (setter accountability, closer breakdown, funnel)
     ├── /rep — Rep directory
     ├── /rep/[id] — Rep profile (coaching metrics, quality, appointments, sales)
     ├── /quality — Quality page
     ├── /trends — Trends page
+    ├── /admin — Admin attachment review (direct URL only, not in nav)
     └── /contact/[id] — Contact timeline
 ```
 
@@ -77,11 +78,22 @@ ALL QuickBase deals count as closes regardless of status. `totalSales` = all dea
 
 **Cancel patterns:** ONLY `['cancelled', 'pending cancel']`. NOT rejected.
 
-### Active Rep Definition
+### Active Rep Definition (standardized everywhere)
 
-- Setter active = `DK > 0` (knocked doors)
+- Setter active = `DK > 0` (knocked doors). NOT `DK > 0 || APPT > 0`.
 - Closer active = `SAT >= 1` (sat appointments)
 - Deduplicate by userId (same person can be both)
+- Applied consistently on: dashboard, quality page, office detail, trends
+
+### Sits Attribution
+
+- **Sits belong to the setter's office**, not the closer's office. Use setter `SITS` stat.
+- Office sits = sum of setter SITS, NOT closer SAT (closer may be from a different office).
+
+### Office Deal Attribution
+
+- Office closes come from QB `salesOffice` field (FID 339) — reflects where the lead originated.
+- Closer-level QB closes use RepCard ID primary, name fallback attribution.
 
 ### Star Rating System
 
@@ -118,6 +130,24 @@ ALL QuickBase deals count as closes regardless of status. `totalSales` = all dea
 
 - `src/app/api/webhooks/repcard/[event]/route.ts` — Processes all RepCard webhook events. Computes star_rating, has_power_bill, hours_to_appointment. Upserts to Supabase `appointments` table.
 
+## Dashboard Features
+
+### Leaderboard Tabs
+- **Setters** — Rank-by filter chips (Appts, Sits, Sit%, Closes, Avg Stars, Waste%). Click to expand for appointment list + outcome badges.
+- **Closers** — Rank-by filter chips (Closes, kW, Sits, Close%, Cancel%). Sits breakdown columns (CLS, NC, CF, FU) visible on xl screens. Expand for appointment list (with setter name), outcome badges, and QB Sales table (with setter name column).
+- **Offices** — Rank-by filter chips (Closes, Active, kW, Appts, Sits, Sit%, Close%, Wk Avg, Cancel%, Sets/Setter, Cls/Closer). Per-rep averages computed.
+
+### RepDrillDown Component
+Inline in `page.tsx` (~line 238). Lazy-loads `/api/rep/{id}/appointments` via useSWR. Shows:
+- Outcome badges (OutcomeRow component)
+- Appointment table with setter/closer name, disposition, stars (setter), schedule-out (setter)
+- QB Sales table (closer only) with setter name, kW, PPW, status
+
+### Office Detail Page
+- Setter accountability table with QB closes, PB%, avg stars, field time
+- Closer table with sits breakdown (CLS, NC, CF, FU on lg screens), outcomes attached via office API
+- Only active setters shown (DK > 0 filter)
+
 ## Common Patterns
 
 ### Merging RepCard + Supabase Data
@@ -148,6 +178,20 @@ const qbData = byCloserRC[closer.userId] || byCloserName[closer.name];
 closer.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0); // A close is a close
 ```
 
+### Supabase Queries — Always Use Setter/Closer IDs
+
+Supabase `office_team` can be null. Always query by setter_id/closer_id arrays:
+
+```typescript
+// In office API: fetch leaderboard first, extract IDs, then query Supabase
+const setterIds = setters.map((s: any) => s.userId);
+const [qualityStats, partnerships, fieldTimeData] = await Promise.all([
+  setterIds.length > 0 ? getOfficeSetterQualityStats(teams, from, to, setterIds) : Promise.resolve([]),
+  setterIds.length > 0 ? getOfficePartnerships(teams, from, to, setterIds) : Promise.resolve([]),
+  setterIds.length > 0 ? getFieldTimeStats(setterIds, null, from, to, tz) : Promise.resolve([]),
+]);
+```
+
 ### Office Name Mapping
 
 QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names like "Stevens - Team 2026". `normalizeQBOffice()` handles the translation.
@@ -157,14 +201,21 @@ QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names
 - **QB date queries:** `AF`/`BF` = strictly after/before (excludes boundary). Use `OAF`/`OBF` = on or after/before.
 - **RepCard per_page max is 100.** Always paginate.
 - **RepCard appointments API does NOT include attachments inline.** Use `/appointments/attachments` and `/customers/attachments` endpoints separately.
-- **Supabase `office_team` can be null** if appointment was synced from API (not webhook). Repair by mapping setter_id → team from users API.
+- **Supabase `office_team` can be null** if appointment was synced from API (not webhook). NEVER query Supabase by `office_team`. Always use `setter_id`/`closer_id` with `.in()` filter.
+- **Supabase queries must use setter/closer IDs** — partnerships, quality stats, field time all take setter IDs as params. Fetch leaderboard data first, extract IDs, then query Supabase in a second Promise.all.
 - **`hours_to_appointment`** is lead creation → appointment time, NOT appointment creation → appointment time.
 - **RepCard leaderboard CLOS stat includes "Closed (Pending KCA)"** — it's broader than QB verified closes.
+- **RepCard leaderboard user IDs** are `s.item_id`, NOT `s.user_id` (which doesn't exist). Using `s.user_id` gives `undefined`.
 - **`contact.createdAt`** in webhook payload = lead creation date. In RepCard appointments API, `createdAt` = appointment creation date. Different things.
 - **Rejected ≠ Cancelled** — Rejected means intake kicked it back for corrections. Deal is still alive.
 - **PPW outlier filtering:** `isValidPpw()` excludes PPW outside 0.5–8.0 from averages. Defined in `data.ts`.
 - **Recruit prefix:** Rep names starting with "R - " are recruits. `cleanRepName()` strips the prefix, `isRecruit()` flags them.
 - **avgStars:** Computed per setter from Supabase `appointments.star_rating` in `fetchScorecard()`. Not a RepCard API field.
+- **PB% denominator:** Must use Supabase `total_appts` (same source as `power_bill_count`) to avoid >100%. RepCard APPT count can differ from Supabase appointment count.
+- **Field time computation:** Groups door_knocks by rep + LOCAL date (timezone-aware via `getOfficeTimezone()`). Computes per-rep avg hours/day, then averages across reps per office. Both office directory cards and detail pages must use the same logic.
+- **Timezone-aware date formatting:** Use `formatDate()`/`formatDateShort()` with timezone parameter. Offices have timezones defined in `OFFICE_MAPPING`.
+- **Multiple RepCard teams per office:** Some QB offices have multiple RepCard teams (e.g., Stevens has teams 5671, 6737, 7141 all mapping to "Stevens - Iowa 2025"). This is correct — all teams roll into one office.
+- **Tooltip component:** Uses `text` prop, NOT `content`. `<Tooltip text="...">`.
 
 ## Environment Variables
 
