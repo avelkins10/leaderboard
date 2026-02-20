@@ -395,9 +395,8 @@ export async function GET(
         creditFails: cf,
         shadeFails: shad,
         goodSits,
-        sitRate: appt > 0 ? Math.round((goodSits / appt) * 1000) / 10 : 0,
-        closeRate:
-          goodSits > 0 ? Math.round((qbCloses / goodSits) * 1000) / 10 : 0,
+        sitRate: appt > 0 ? Math.round((sits / appt) * 1000) / 10 : 0,
+        closeRate: sits > 0 ? Math.round((qbCloses / sits) * 1000) / 10 : 0,
         wasteRate:
           appt > 0 ? Math.round(((nosh + canc) / appt) * 1000) / 10 : 0,
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,

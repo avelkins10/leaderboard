@@ -240,7 +240,7 @@ export default function RepPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 <CompactMetricCard
                   title="Conversion"
-                  tooltip="Excludes credit fails and shade from rates"
+                  tooltip="Set/Sit = sits / appts set, Sit/Close = QB closes / sits"
                   rows={[
                     {
                       label: "Set/Sit %",
