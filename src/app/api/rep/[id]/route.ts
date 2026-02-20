@@ -97,7 +97,13 @@ export async function GET(
     // Fetch user-specific appointments from RepCard API (not all company appointments)
     const filterParam =
       role === "closer" ? `closer_ids=${userId}` : `setter_ids=${userId}`;
-    const rcUrl = `https://app.repcard.com/api/appointments?${filterParam}&from_date=${fromDate}&to_date=${toDate}&per_page=100`;
+    // RepCard to_date is exclusive — add 1 day to our inclusive end date
+    const rcToExcl = (() => {
+      const [y, m, d] = toDate.split("-").map(Number);
+      const next = new Date(y, m - 1, d + 1);
+      return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    })();
+    const rcUrl = `https://app.repcard.com/api/appointments?${filterParam}&from_date=${fromDate}&to_date=${rcToExcl}&per_page=100`;
     const rcRes = await fetch(rcUrl, {
       headers: { "x-api-key": REPCARD_API_KEY },
       next: { revalidate: 120 },

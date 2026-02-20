@@ -255,7 +255,8 @@ QB uses names like "Stevens - Iowa 2025". RepCard uses team IDs mapping to names
 - **Timezone-aware date formatting:** Use `formatDate()`/`formatDateShort()` with timezone parameter. Offices have timezones defined in `OFFICE_MAPPING`.
 - **Multiple RepCard teams per office:** Some QB offices have multiple RepCard teams (e.g., Stevens has teams 5671, 6737, 7141 all mapping to "Stevens - Iowa 2025"). This is correct — all teams roll into one office.
 - **Tooltip component:** Uses `text` prop, NOT `content`. `<Tooltip text="...">`.
-- **Date range `to` is inclusive.** `useDateRange` hook returns `from`/`to` as inclusive YYYY-MM-DD dates. All downstream APIs (RepCard, QuickBase `OBF`, Supabase `.lte`) treat dates as inclusive. NEVER add +1 day to the end date.
+- **Date range `to` is inclusive.** `useDateRange` hook returns `from`/`to` as inclusive YYYY-MM-DD dates. QuickBase (`OBF`) and Supabase (`.lte`) treat dates as inclusive. NEVER add +1 day to the end date in the hook or API routes.
+- **RepCard `to_date` is EXCLUSIVE.** RepCard API returns 0 results when `from_date == to_date`. The `rcExclusiveEnd()` helper in `repcard.ts` adds +1 day automatically. Direct RepCard URL calls (in `rep/[id]/route.ts`, `rep/[id]/appointments/route.ts`) must also add +1 day to `to_date`.
 - **Supabase UTC timestamp boundaries:** NEVER use hardcoded `T00:00:00Z`/`T23:59:59Z` suffixes — they align to UTC midnight, not Central time. Always use `dateBoundsUTC(from, to)` from `data.ts` which computes correct UTC boundaries for America/Chicago timezone.
 - **Server-side `getMonday()`/`getToday()`:** Use America/Chicago timezone, not UTC. UTC `.toISOString().split("T")[0]` gives wrong date during evening hours in Central time.
 - **Supabase default row limit is 1000.** Queries returning more rows (e.g. company-wide `door_knocks`) must paginate with `.range()`. Without pagination, results are silently truncated.

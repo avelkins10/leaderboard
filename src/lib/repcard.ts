@@ -2,6 +2,16 @@ import { REPCARD_API_KEY } from './config';
 
 const BASE_URL = 'https://app.repcard.com/api';
 
+/** RepCard's to_date is exclusive — add 1 day to our inclusive end date */
+function rcExclusiveEnd(inclusive: string): string {
+  const [y, m, d] = inclusive.split('-').map(Number);
+  const next = new Date(y, m - 1, d + 1);
+  const ny = next.getFullYear();
+  const nm = String(next.getMonth() + 1).padStart(2, '0');
+  const nd = String(next.getDate()).padStart(2, '0');
+  return `${ny}-${nm}-${nd}`;
+}
+
 async function rcFetch(path: string, params?: Record<string, string>) {
   const url = new URL(`${BASE_URL}${path}`);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -68,12 +78,12 @@ export interface Leaderboard {
 }
 
 export async function getLeaderboards(fromDate: string, toDate: string): Promise<Leaderboard[]> {
-  const data = await rcFetch('/leaderboards', { from_date: fromDate, to_date: toDate });
+  const data = await rcFetch('/leaderboards', { from_date: fromDate, to_date: rcExclusiveEnd(toDate) });
   return data.result;
 }
 
 export async function getTypedLeaderboards(type: 'closer' | 'setter', fromDate: string, toDate: string): Promise<Leaderboard[]> {
-  const data = await rcFetch('/leaderboards', { type, from_date: fromDate, to_date: toDate });
+  const data = await rcFetch('/leaderboards', { type, from_date: fromDate, to_date: rcExclusiveEnd(toDate) });
   return data.result;
 }
 
@@ -95,7 +105,7 @@ export async function getAppointments(fromDate: string, toDate: string): Promise
   while (true) {
     const data = await rcFetch('/appointments', {
       from_date: fromDate,
-      to_date: toDate,
+      to_date: rcExclusiveEnd(toDate),
       per_page: '100',
       page: String(page),
     });
