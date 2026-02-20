@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Section } from "@/components/Section";
 import { PowerBillModal } from "@/components/PowerBillModal";
+import { formatDateTime } from "@/lib/format";
 import {
   ArrowLeft,
   DoorOpen,
@@ -172,16 +173,7 @@ export default function ContactPage() {
                           </div>
                           <time className="shrink-0 text-2xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
                             {event.date
-                              ? new Date(event.date).toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  },
-                                )
+                              ? formatDateTime(event.date, data.timezone)
                               : "-"}
                           </time>
                         </div>

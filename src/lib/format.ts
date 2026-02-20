@@ -16,23 +16,38 @@ export function formatPercent(n: number, decimals = 1): string {
 }
 
 /** Format an ISO date string to a clean date: "2026-02-17T21:04:00Z" → "Feb 17, 2026" */
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string, tz?: string): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    ...(tz && { timeZone: tz }),
   });
 }
 
 /** Format a short date without year: "2026-02-17" → "Feb 17" */
-export function formatDateShort(dateStr: string): string {
+export function formatDateShort(dateStr: string, tz?: string): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    ...(tz && { timeZone: tz }),
+  });
+}
+
+/** Format an ISO date string with time: "2026-02-17T21:04:00Z" → "Feb 17, 9:04 PM" */
+export function formatDateTime(dateStr: string, tz?: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    ...(tz && { timeZone: tz }),
   });
 }
 

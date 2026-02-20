@@ -32,10 +32,12 @@ import {
 } from "lucide-react";
 import {
   formatDate,
+  formatDateShort,
   formatCurrency,
   formatKw,
   formatNumber,
 } from "@/lib/format";
+import { getOfficeTimezone } from "@/lib/config";
 
 const STATUS_COLORS: Record<string, string> = {
   Active: "bg-primary/10 text-primary",
@@ -1150,13 +1152,7 @@ export default function RepPage() {
                           <div className="flex items-center gap-1.5">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
                             {a.appointment_time
-                              ? new Date(a.appointment_time).toLocaleDateString(
-                                  "en-US",
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                  },
-                                )
+                              ? formatDateShort(a.appointment_time, data.user.office ? getOfficeTimezone(data.user.office) : undefined)
                               : "-"}
                           </div>
                         </td>

@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import useSWR, { mutate } from "swr";
 import { Section } from "@/components/Section";
 import { PowerBillModal } from "@/components/PowerBillModal";
+import { formatDateTime } from "@/lib/format";
 import { Eye, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 type Filter = "not_power_bill" | "power_bill_verified" | "all";
@@ -70,14 +71,9 @@ function PasswordGate({ onAuth }: { onAuth: (key: string) => void }) {
   );
 }
 
-function formatDate(iso: string | null) {
+function formatDateLocal(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(iso, "America/New_York");
 }
 
 export default function AdminAttachmentsPage() {
@@ -230,7 +226,7 @@ export default function AdminAttachmentsPage() {
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground">
-                      {formatDate(att.appointment_time || att.uploaded_at)}
+                      {formatDateLocal(att.appointment_time || att.uploaded_at)}
                     </div>
                   </div>
 
