@@ -7,7 +7,7 @@ const REPCARD_API_KEY = process.env.REPCARD_API_KEY!;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 const CRON_SECRET = process.env.CRON_SECRET || "backfill2026";
 
-const VISION_PROMPT = `Solar company reps upload photos when setting appointments. Is this image related to the homeowner's electricity or power usage? This includes: power bills, electric bills, utility bills, utility meters, energy usage charts/graphs, screenshots from utility apps, or any document showing kWh consumption. Reply with ONLY "YES" or "NO".`;
+const VISION_PROMPT = `Solar company reps upload photos when setting appointments. Is this image related to the homeowner's electricity or power usage? This includes: power bills, electric bills, utility bills, energy usage charts/graphs, screenshots from utility apps, or any document showing kWh consumption. Photos of utility meters do NOT count — only actual bills or usage documents. Reply with ONLY "YES" or "NO".`;
 
 /** Classify an image as power bill or not via GPT-4o-mini vision */
 async function classifyImage(imageUrl: string): Promise<boolean | null> {

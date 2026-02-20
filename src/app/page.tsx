@@ -59,6 +59,24 @@ interface SortState {
   dir: SortDir;
 }
 
+// ── Category filter constants ──
+const SETTER_CATEGORIES = [
+  { label: "Appts", key: "APPT" },
+  { label: "Sits", key: "SITS" },
+  { label: "Sit%", key: "sitRate" },
+  { label: "Closes", key: "qbCloses" },
+  { label: "Avg Stars", key: "avgStars" },
+  { label: "Waste%", key: "wasteRate" },
+] as const;
+
+const CLOSER_CATEGORIES = [
+  { label: "Closes", key: "qbCloses" },
+  { label: "kW", key: "totalKw" },
+  { label: "Sits", key: "SAT" },
+  { label: "Close%", key: "sitCloseRate" },
+  { label: "Cancel%", key: "cancelPct" },
+] as const;
+
 // ── Skeleton ──
 function Skeleton({ className = "" }: { className?: string }) {
   return (
@@ -721,27 +739,62 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── Tab Toggles ── */}
-          <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1 w-fit">
-            {(
-              [
-                { key: "setters", label: "Setters" },
-                { key: "closers", label: "Closers" },
-                { key: "offices", label: "Offices" },
-              ] as { key: TabKey; label: string }[]
-            ).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${
-                  tab === t.key
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+          {/* ── Tab Toggles + Rank-by pills ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1 w-fit">
+              {(
+                [
+                  { key: "setters", label: "Setters" },
+                  { key: "closers", label: "Closers" },
+                  { key: "offices", label: "Offices" },
+                ] as { key: TabKey; label: string }[]
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${
+                    tab === t.key
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {tab !== "offices" && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-2xs font-medium text-muted-foreground/60 uppercase tracking-widest mr-1">
+                  Rank by
+                </span>
+                {(tab === "setters"
+                  ? SETTER_CATEGORIES
+                  : CLOSER_CATEGORIES
+                ).map((cat) => {
+                  const sort = tab === "setters" ? setterSort : closerSort;
+                  const active = sort.key === cat.key;
+                  return (
+                    <button
+                      key={cat.key}
+                      onClick={() => {
+                        if (tab === "setters") {
+                          setSetterSort({ key: cat.key, dir: "desc" });
+                        } else {
+                          setCloserSort({ key: cat.key, dir: "desc" });
+                        }
+                      }}
+                      className={`rounded-md px-2.5 py-1 text-2xs font-medium transition-all ${
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ── SETTER LEADERBOARD ── */}
