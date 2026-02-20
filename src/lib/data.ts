@@ -151,6 +151,7 @@ export interface ScorecardResult {
   salesByOffice: Record<string, SalesAgg>;
   activeRepsByOffice: Record<string, number>;
   avgStarsByOffice: Record<string, number>;
+  avgFieldHoursByOffice: Record<string, number>;
 }
 
 // ── Core: process a RepCard leaderboard into typed array ──
@@ -532,6 +533,47 @@ export async function fetchScorecard(
     avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
   }
 
+  // Fetch per-office avg field hours from door_knocks
+  const avgFieldHoursByOffice: Record<string, number> = {};
+  {
+    const { data: knocks } = await supabaseAdmin
+      .from("door_knocks")
+      .select("rep_id, office_team, knocked_at")
+      .gte("knocked_at", `${fromDate}T00:00:00Z`)
+      .lte("knocked_at", `${toDate}T23:59:59Z`);
+
+    if (knocks && knocks.length > 0) {
+      // Group by office_team + rep_id + local date, find first/last knock per day
+      const byRepDay: Record<string, { min: number; max: number; office: string }> = {};
+      for (const k of knocks) {
+        if (!k.office_team) continue;
+        const ts = new Date(k.knocked_at).getTime();
+        const dateKey = k.knocked_at.slice(0, 10); // UTC date is close enough for daily grouping
+        const key = `${k.rep_id}|${dateKey}`;
+        if (!byRepDay[key]) {
+          byRepDay[key] = { min: ts, max: ts, office: k.office_team };
+        } else {
+          if (ts < byRepDay[key].min) byRepDay[key].min = ts;
+          if (ts > byRepDay[key].max) byRepDay[key].max = ts;
+        }
+      }
+      // Compute avg hours per office (only days with >1 knock)
+      const officeHours: Record<string, { sum: number; count: number }> = {};
+      for (const day of Object.values(byRepDay)) {
+        const hours = (day.max - day.min) / 3600000;
+        if (hours < 0.1) continue; // skip single-knock days
+        const qbOffice = repCardTeamToQBOffice(day.office);
+        if (!qbOffice) continue;
+        if (!officeHours[qbOffice]) officeHours[qbOffice] = { sum: 0, count: 0 };
+        officeHours[qbOffice].sum += hours;
+        officeHours[qbOffice].count++;
+      }
+      for (const [office, agg] of Object.entries(officeHours)) {
+        avgFieldHoursByOffice[office] = Math.round((agg.sum / agg.count) * 10) / 10;
+      }
+    }
+  }
+
   // Process setters with QB attribution
   const allSetters: ProcessedSetter[] = [];
   for (const s of setterStats) {
@@ -648,5 +690,6 @@ export async function fetchScorecard(
     salesByOffice: byOffice,
     activeRepsByOffice,
     avgStarsByOffice,
+    avgFieldHoursByOffice,
   };
 }

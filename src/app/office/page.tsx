@@ -54,6 +54,7 @@ export default function OfficeDirectory() {
         const activeReps = d.activeReps || 0;
         const cancelPct = d.sales?.cancelPct || 0;
         const closeRate = totalSits > 0 ? (deals / totalSits) * 100 : 0;
+        const avgFieldHours = data.avgFieldHoursByOffice?.[name] ?? null;
         return {
           name,
           deals,
@@ -63,6 +64,7 @@ export default function OfficeDirectory() {
           activeReps,
           cancelPct,
           closeRate,
+          avgFieldHours,
           setterCount: d.setters?.length || 0,
           closerCount: d.closers?.length || 0,
         };
@@ -189,17 +191,29 @@ export default function OfficeDirectory() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-3 border-t border-border/60 pt-3">
+                  <div className="mt-3 flex items-center gap-3 flex-wrap border-t border-border/60 pt-3">
                     <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
                       {formatNumber(o.totalAppts)} appts
                     </div>
                     <span className="text-border">|</span>
                     <span className="text-2xs text-muted-foreground">
+                      {formatNumber(o.totalSits)} sits
+                    </span>
+                    <span className="text-border">|</span>
+                    <span className="text-2xs text-muted-foreground">
                       {o.closeRate > 0
                         ? `${Math.round(o.closeRate)}% close rate`
-                        : "No sits yet"}
+                        : "No closes yet"}
                     </span>
+                    {o.avgFieldHours != null && (
+                      <>
+                        <span className="text-border">|</span>
+                        <span className="text-2xs text-muted-foreground">
+                          {o.avgFieldHours}h avg field
+                        </span>
+                      </>
+                    )}
                   </div>
                 </Link>
               ))}
