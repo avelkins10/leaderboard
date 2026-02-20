@@ -13,9 +13,13 @@ import {
   getSpeedToClose,
   getCloserQualityByStars,
   getFieldTimeStats,
+  getSetterActivity,
+  getCloserActivity,
   RepFieldTime,
+  type SetterActivity,
+  type CloserActivity,
 } from "@/lib/supabase-queries";
-import { isCancel, isValidPpw, getMonday, getToday } from "@/lib/data";
+import { isCancel, isValidPpw, cleanRepName, getMonday, getToday } from "@/lib/data";
 
 function getTzAbbrev(qbOfficeName: string): string {
   const tz = getOfficeTimezone(qbOfficeName);
@@ -43,25 +47,6 @@ export async function GET(
     // Get RepCard team names for this QB office (for Supabase queries)
     const repCardTeamNames = qbOfficeToRepCardTeams(officeName);
 
-    const [
-      closerBoards,
-      setterBoards,
-      users,
-      sales,
-      speedToClose,
-      installs,
-    ] = await Promise.all([
-      getTypedLeaderboards("closer", fromDate, toDate),
-      getTypedLeaderboards("setter", fromDate, toDate),
-      getUsers(),
-      getSales(fromDate, toDate),
-      getSpeedToClose(fromDate, toDate).catch(() => null),
-      getInstalls(fromDate, toDate).catch(() => []),
-    ]);
-
-    const userMap: Record<number, any> = {};
-    for (const u of users) userMap[u.id] = u;
-
     // Find team IDs that map to this office
     const teamIds = Object.entries(OFFICE_MAPPING)
       .filter(([, m]) => m.qbName === officeName && m.active)
@@ -71,65 +56,109 @@ export async function GET(
       Object.values(OFFICE_MAPPING).find((m) => m.qbName === officeName)
         ?.region || "Unknown";
 
-    // Process all leaderboards filtered to this office's teams
-    const processLB = (lb: any) => {
-      if (!lb?.stats?.headers) return [];
-      return (lb.stats.stats || [])
-        .filter(
-          (s: any) =>
-            s.item_type === "user" && teamIds.includes(s.office_team_id),
-        )
-        .map((s: any) => {
-          const user = userMap[s.item_id];
-          const values: Record<string, any> = {};
-          for (const h of lb.stats.headers)
-            values[h.short_name] = s[h.mapped_field] ?? 0;
-          return {
-            userId: s.item_id,
-            name: user
-              ? `${user.firstName} ${user.lastName}`
-              : `User #${s.item_id}`,
-            ...values,
-          };
-        });
-    };
+    // Phase 1: fetch users, sales, and other data in parallel
+    const [
+      users,
+      sales,
+      speedToClose,
+      installs,
+      setterBoards,
+    ] = await Promise.all([
+      getUsers(),
+      getSales(fromDate, toDate),
+      getSpeedToClose(fromDate, toDate).catch(() => null),
+      getInstalls(fromDate, toDate).catch(() => []),
+      getTypedLeaderboards("setter", fromDate, toDate), // only for QP/DQH
+    ]);
 
-    const setterLB = setterBoards.find(
-      (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
-    );
-    const closerLB = closerBoards.find(
-      (lb: any) => lb.leaderboard_name === "Closer Leaderboard",
-    );
-    const setterApptLB = setterBoards.find(
-      (lb: any) => lb.leaderboard_name === "Setter Appointment Data",
-    );
-    const closerApptLB = closerBoards.find(
-      (lb: any) => lb.leaderboard_name === "Closer Appointment Data",
-    );
-    const setters = processLB(setterLB);
-    const closers = processLB(closerLB);
-    const setterAppts = processLB(setterApptLB);
-    const closerAppts = processLB(closerApptLB);
+    const userMap: Record<number, any> = {};
+    for (const u of users) userMap[u.id] = u;
 
-    // Fetch Supabase data by setter_id (not office_team) to handle null office_team
-    const setterIds = setters.map((s: any) => s.userId);
-    const [qualityStats, partnerships, closerQualityByStars, fieldTimeData] = await Promise.all([
-      setterIds.length > 0
-        ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate, setterIds)
+    // Get setter/closer IDs for this office from user roster
+    const officeUserIds = users
+      .filter((u) => teamIds.includes(u.officeTeamId))
+      .map((u) => u.id);
+
+    // Phase 2: fetch Supabase activity data + quality queries using office user IDs
+    const [setterActivityMap, closerActivityMap, qualityStats, partnerships, closerQualityByStars, fieldTimeData] = await Promise.all([
+      officeUserIds.length > 0
+        ? getSetterActivity(fromDate, toDate, officeUserIds)
+        : Promise.resolve({} as Record<number, SetterActivity>),
+      officeUserIds.length > 0
+        ? getCloserActivity(fromDate, toDate, officeUserIds)
+        : Promise.resolve({} as Record<number, CloserActivity>),
+      officeUserIds.length > 0
+        ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate, officeUserIds)
         : Promise.resolve([]),
-      setterIds.length > 0
-        ? getOfficePartnerships(repCardTeamNames, fromDate, toDate, setterIds)
+      officeUserIds.length > 0
+        ? getOfficePartnerships(repCardTeamNames, fromDate, toDate, officeUserIds)
         : Promise.resolve([]),
-      setterIds.length > 0
-        ? getCloserQualityByStars(repCardTeamNames, fromDate, toDate, setterIds).catch(() => [])
+      officeUserIds.length > 0
+        ? getCloserQualityByStars(repCardTeamNames, fromDate, toDate, officeUserIds).catch(() => [])
         : Promise.resolve([]),
-      setterIds.length > 0
-        ? getFieldTimeStats(setterIds, null, fromDate, toDate, getOfficeTimezone(officeName))
+      officeUserIds.length > 0
+        ? getFieldTimeStats(officeUserIds, null, fromDate, toDate, getOfficeTimezone(officeName))
         : Promise.resolve([] as RepFieldTime[]),
     ]);
 
-    // Derive active rep counts from leaderboard data (DK > 0 for setters, SAT >= 1 for closers)
-    // Deduplicate: same person can be setter AND closer
+    // Extract QP/DQH from setter leaderboard (no raw Supabase source)
+    const qpMap: Record<number, { QP: number; "D/QH": number | string }> = {};
+    const setterLB = setterBoards.find(
+      (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
+    );
+    if (setterLB && !Array.isArray(setterLB.stats) && setterLB.stats?.headers) {
+      const headers = setterLB.stats.headers;
+      for (const s of (setterLB.stats as any).stats || []) {
+        if (s.item_type !== "user") continue;
+        const vals: Record<string, any> = {};
+        for (const h of headers) vals[h.short_name] = s[h.mapped_field] ?? 0;
+        qpMap[s.item_id] = { QP: vals.QP || 0, "D/QH": vals["D/QH"] || 0 };
+      }
+    }
+
+    // Build setters from Supabase activity data
+    const setters: any[] = [];
+    for (const idStr of Object.keys(setterActivityMap)) {
+      const id = Number(idStr);
+      const act = setterActivityMap[id];
+      const user = userMap[id];
+      if (!user || !teamIds.includes(user.officeTeamId)) continue;
+      const qp = qpMap[id];
+      setters.push({
+        userId: id,
+        name: user ? cleanRepName(`${user.firstName} ${user.lastName}`) : act.name,
+        DK: act.DK,
+        APPT: act.APPT,
+        SITS: act.SITS,
+        CLOS: act.CLOS,
+        "SIT%": act.APPT > 0 ? Math.round((act.SITS / act.APPT) * 1000) / 10 : 0,
+        QP: qp?.QP ?? 0,
+        "D/QH": qp?.["D/QH"] ?? 0,
+        avgStars: act.avgStars,
+        outcomes: act.outcomes,
+      });
+    }
+
+    // Build closers from Supabase activity data
+    const closers: any[] = [];
+    for (const idStr of Object.keys(closerActivityMap)) {
+      const id = Number(idStr);
+      const act = closerActivityMap[id];
+      const user = userMap[id];
+      if (!user || !teamIds.includes(user.officeTeamId)) continue;
+      closers.push({
+        userId: id,
+        name: user ? cleanRepName(`${user.firstName} ${user.lastName}`) : act.name,
+        LEAD: act.LEAD,
+        SAT: act.SAT,
+        CLOS: act.CLOS,
+        "SIT%": act.LEAD > 0 ? Math.round((act.SAT / act.LEAD) * 1000) / 10 : 0,
+        "CLOSE%": act.SAT > 0 ? Math.round((act.CLOS / act.SAT) * 1000) / 10 : 0,
+        outcomes: act.outcomes,
+      });
+    }
+
+    // Derive active rep counts (DK > 0 for setters, SAT >= 1 for closers)
     const activeRepIds = new Set<number>();
     const activeSetterIds = new Set<number>();
     const activeCloserIds = new Set<number>();
@@ -148,26 +177,26 @@ export async function GET(
     const activeSetterCount = activeSetterIds.size;
     const activeCloserCount = activeCloserIds.size;
 
-    // Derive appointment breakdown from leaderboard data
+    // Derive appointment breakdown from activity data
     const apptBreakdown = {
-      total: setterAppts.reduce((s: number, r: any) => s + (r.APPT || 0), 0),
-      sat: closerAppts.reduce((s: number, r: any) => s + (r.SAT || 0), 0),
-      closed: closerAppts.reduce((s: number, r: any) => s + (r.CLOS || 0), 0),
-      closer_fault: closerAppts.reduce(
-        (s: number, r: any) => s + (r.NOCL || 0) + (r.FUS || 0),
+      total: setters.reduce((s: number, r: any) => s + (r.APPT || 0), 0),
+      sat: closers.reduce((s: number, r: any) => s + (r.SAT || 0), 0),
+      closed: closers.reduce((s: number, r: any) => s + (r.CLOS || 0), 0),
+      closer_fault: closers.reduce(
+        (s: number, r: any) => s + (r.outcomes?.NOCL || 0) + (r.outcomes?.FUS || 0),
         0,
       ),
-      setter_fault: closerAppts.reduce(
-        (s: number, r: any) => s + (r.CF || 0) + (r.SHAD || 0),
+      setter_fault: closers.reduce(
+        (s: number, r: any) => s + (r.outcomes?.CF || 0) + (r.outcomes?.SHAD || 0),
         0,
       ),
-      no_show: setterAppts.reduce((s: number, r: any) => s + (r.NOSH || 0), 0),
-      canceled: setterAppts.reduce((s: number, r: any) => s + (r.CANC || 0), 0),
-      rescheduled: setterAppts.reduce(
-        (s: number, r: any) => s + (r.RSCH || 0),
+      no_show: setters.reduce((s: number, r: any) => s + (r.outcomes?.NOSH || 0), 0),
+      canceled: setters.reduce((s: number, r: any) => s + (r.outcomes?.CANC || 0), 0),
+      rescheduled: setters.reduce(
+        (s: number, r: any) => s + (r.outcomes?.RSCH || 0),
         0,
       ),
-      scheduled: 0, // leaderboard doesn't track pending separately
+      scheduled: 0,
       other: 0,
     };
 
@@ -232,9 +261,8 @@ export async function GET(
           (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
     }
 
-    // Attach QB stats + outcomes to closers — RepCard ID primary, name fallback
-    const closerApptMap: Record<number, any> = {};
-    for (const ca of closerAppts) closerApptMap[ca.userId] = ca;
+    // Attach QB stats to closers — RepCard ID primary, name fallback
+    // Outcomes already populated from Supabase activity data
     for (const c of closers) {
       const agg = qbByCloserRC[c.userId] || qbByCloserName[c.name];
       c.qbCloses = (agg?.deals || 0) + (agg?.cancelled || 0);
@@ -246,22 +274,7 @@ export async function GET(
         agg && agg.ppwCount > 0
           ? Math.round((agg.ppwSum / agg.ppwCount) * 100) / 100
           : 0;
-      const apptData = closerApptMap[c.userId];
-      c.outcomes = {
-        NOCL: apptData?.NOCL || 0,
-        CF: apptData?.CF || 0,
-        FUS: apptData?.FUS || 0,
-        SHAD: apptData?.SHAD || 0,
-        CANC: apptData?.CANC || 0,
-        NOSH: apptData?.NOSH || 0,
-        RSCH: apptData?.RSCH || 0,
-        NTR: apptData?.NTR || 0,
-      };
     }
-
-    // Build setter accountability by merging setter LB + setter appt data + QB closes + quality stats
-    const setterApptMap: Record<number, any> = {};
-    for (const sa of setterAppts) setterApptMap[sa.userId] = sa;
 
     // Index quality stats by setter_id for merge
     const qualityMap: Record<number, any> = {};
@@ -271,15 +284,15 @@ export async function GET(
     const fieldTimeMap: Record<number, RepFieldTime> = {};
     for (const ft of fieldTimeData) fieldTimeMap[ft.rep_id] = ft;
 
+    // Build setter accountability — outcomes already on setter objects from activity data
     const setterAccountability = setters.map((s: any) => {
-      const apptData = setterApptMap[s.userId] || {};
       const quality = qualityMap[s.userId];
       const qbCloses =
         qbClosesBySetterRC[s.userId] || qbClosesBySetter[s.name] || 0;
       const appt = s.APPT || 0;
       const sits = s.SITS || 0;
-      const nosh = apptData.NOSH || 0;
-      const canc = apptData.CANC || 0;
+      const nosh = s.outcomes?.NOSH || 0;
+      const canc = s.outcomes?.CANC || 0;
       const sitRate = appt > 0 ? (sits / appt) * 100 : 0;
       const sitCloseRate = sits > 0 ? (qbCloses / sits) * 100 : 0;
       const ft = fieldTimeMap[s.userId];
@@ -291,7 +304,7 @@ export async function GET(
         qbCloses,
         sitRate,
         sitCloseRate,
-        avgStars: quality?.avg_stars || 0,
+        avgStars: s.avgStars || quality?.avg_stars || 0,
         powerBillCount: pb,
         qualityCount: quality?.quality_count || 0,
         pbPct: (quality?.total_appts || appt) > 0 ? Math.round((pb / (quality?.total_appts || appt)) * 100) : 0,
@@ -430,7 +443,6 @@ export async function GET(
       period: { from: fromDate, to: toDate },
       setters: setterAccountability,
       closers,
-      closerAppts,
       sales: officeSales,
       activeSetters: activeSetterCount,
       activeClosers: activeCloserCount,

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeaderboards, getUsers } from "@/lib/repcard";
+import { getUsers, fetchRepCardAppointmentsCT } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import { teamIdToQBOffice } from "@/lib/config";
+import {
+  getSetterActivity,
+  getCloserActivity,
+} from "@/lib/supabase-queries";
 import {
   format,
   parseISO,
@@ -34,9 +38,8 @@ export async function GET(req: NextRequest) {
     }[] = [];
 
     if (fromParam && toParam) {
-      // Compute Sun-Sat weekly buckets within the from/to range
       let cursor = startOfWeek(parseISO(fromParam), { weekStartsOn: 0 });
-      const rangeEnd = parseISO(toParam); // exclusive
+      const rangeEnd = parseISO(toParam);
       while (isBefore(cursor, rangeEnd)) {
         const wEnd = endOfWeek(cursor, { weekStartsOn: 0 });
         weekRanges.push({
@@ -48,7 +51,6 @@ export async function GET(req: NextRequest) {
         cursor = addWeeks(cursor, 1);
       }
     } else {
-      // Legacy: use weeks param
       const weeks = Number(weeksParam || "4");
       for (let w = weeks - 1; w >= 0; w--) {
         const wStart = startOfWeek(subWeeks(new Date(), w), {
@@ -64,16 +66,26 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Fetch RepCard appointments + activity + sales for each week in parallel
+    // One RepCard fetch per week, then derive setter + closer activity from it
     const weekResults = await Promise.all(
-      weekRanges.map(({ from, to }) =>
-        Promise.all([getLeaderboards(from, to), getSales(from, to)]),
-      ),
+      weekRanges.map(async ({ from, to }) => {
+        const [prefetchedAppts, sales] = await Promise.all([
+          fetchRepCardAppointmentsCT(from, to),
+          getSales(from, to),
+        ]);
+        const [setterActivityMap, closerActivityMap] = await Promise.all([
+          getSetterActivity(from, to, undefined, prefetchedAppts),
+          getCloserActivity(from, to, undefined, prefetchedAppts),
+        ]);
+        return [setterActivityMap, closerActivityMap, sales] as const;
+      }),
     );
 
     const weeklyData = weekRanges.map(({ weekStart, from, to }, i) => {
-      const [leaderboards, sales] = weekResults[i];
+      const [setterActivityMap, closerActivityMap, sales] = weekResults[i];
 
-      // Aggregate by office
+      // Aggregate by office using user→office mapping
       const officeData: Record<
         string,
         {
@@ -87,105 +99,50 @@ export async function GET(req: NextRequest) {
         }
       > = {};
 
-      const setterLB = leaderboards.find(
-        (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
-      ) as any;
-      if (setterLB?.stats?.headers) {
-        const dkHeader = setterLB.stats.headers.find(
-          (h: any) => h.short_name === "DK",
-        );
-        const apptHeader = setterLB.stats.headers.find(
-          (h: any) => h.short_name === "APPT",
-        );
-        const sitsHeader = setterLB.stats.headers.find(
-          (h: any) => h.short_name === "SITS",
-        );
-        for (const s of setterLB.stats.stats) {
-          if (s.item_type !== "user") continue;
-          const office = teamIdToQBOffice(s.office_team_id);
-          if (!office) continue;
-          if (!officeData[office])
-            officeData[office] = {
-              doors: 0,
-              appts: 0,
-              sits: 0,
-              closes: 0,
-              deals: 0,
-              kw: 0,
-              activeReps: 0,
-            };
-          officeData[office].doors += dkHeader
-            ? s[dkHeader.mapped_field] || 0
-            : 0;
-          officeData[office].appts += apptHeader
-            ? s[apptHeader.mapped_field] || 0
-            : 0;
-          // Use setter SITS (not closer SAT) — sits belong to the setter's office
-          officeData[office].sits += sitsHeader
-            ? s[sitsHeader.mapped_field] || 0
-            : 0;
-        }
-      }
+      const newOffice = () => ({
+        doors: 0,
+        appts: 0,
+        sits: 0,
+        closes: 0,
+        deals: 0,
+        kw: 0,
+        activeReps: 0,
+      });
 
-      const closerLB = leaderboards.find(
-        (lb: any) => lb.leaderboard_name === "Closer Leaderboard",
-      ) as any;
-      if (closerLB?.stats?.headers) {
-        const closHeader = closerLB.stats.headers.find(
-          (h: any) => h.short_name === "CLOS",
-        );
-        for (const s of closerLB.stats.stats) {
-          if (s.item_type !== "user") continue;
-          const office = teamIdToQBOffice(s.office_team_id);
-          if (!office) continue;
-          if (!officeData[office])
-            officeData[office] = {
-              doors: 0,
-              appts: 0,
-              sits: 0,
-              closes: 0,
-              deals: 0,
-              kw: 0,
-              activeReps: 0,
-            };
-          officeData[office].closes += closHeader
-            ? s[closHeader.mapped_field] || 0
-            : 0;
-        }
-      }
-
-      // Count active reps per office (deduplicated by userId)
       const activeByOffice: Record<string, Set<number>> = {};
-      if (setterLB?.stats?.headers) {
-        const dkHeader = setterLB.stats.headers.find(
-          (h: any) => h.short_name === "DK",
-        );
-        for (const s of setterLB.stats.stats) {
-          if (s.item_type !== "user") continue;
-          const office = teamIdToQBOffice(s.office_team_id);
-          if (!office) continue;
-          const dk = dkHeader ? s[dkHeader.mapped_field] || 0 : 0;
-          if (dk > 0) {
-            if (!activeByOffice[office]) activeByOffice[office] = new Set();
-            activeByOffice[office].add(s.item_id);
-          }
+
+      // Setter activity → office aggregation
+      for (const idStr of Object.keys(setterActivityMap)) {
+        const id = Number(idStr);
+        const act = setterActivityMap[id];
+        const user = userMap[id];
+        const office = user ? teamIdToQBOffice(user.officeTeamId) : null;
+        if (!office) continue;
+        if (!officeData[office]) officeData[office] = newOffice();
+        officeData[office].doors += act.DK;
+        officeData[office].appts += act.APPT;
+        officeData[office].sits += act.SITS;
+        if (act.DK > 0) {
+          if (!activeByOffice[office]) activeByOffice[office] = new Set();
+          activeByOffice[office].add(id);
         }
       }
-      if (closerLB?.stats?.headers) {
-        const satHeader = closerLB.stats.headers.find(
-          (h: any) => h.short_name === "SAT",
-        );
-        for (const s of closerLB.stats.stats) {
-          if (s.item_type !== "user") continue;
-          const office = teamIdToQBOffice(s.office_team_id);
-          if (!office) continue;
-          const sat = satHeader ? s[satHeader.mapped_field] || 0 : 0;
-          if (sat >= 1) {
-            if (!activeByOffice[office]) activeByOffice[office] = new Set();
-            activeByOffice[office].add(s.item_id);
-          }
+
+      // Closer activity → office aggregation
+      for (const idStr of Object.keys(closerActivityMap)) {
+        const id = Number(idStr);
+        const act = closerActivityMap[id];
+        const user = userMap[id];
+        const office = user ? teamIdToQBOffice(user.officeTeamId) : null;
+        if (!office) continue;
+        if (!officeData[office]) officeData[office] = newOffice();
+        officeData[office].closes += act.CLOS;
+        if (act.SAT >= 1) {
+          if (!activeByOffice[office]) activeByOffice[office] = new Set();
+          activeByOffice[office].add(id);
         }
       }
+
       for (const [office, ids] of Object.entries(activeByOffice)) {
         if (officeData[office]) {
           officeData[office].activeReps = ids.size;
@@ -194,16 +151,7 @@ export async function GET(req: NextRequest) {
 
       for (const sale of sales) {
         const office = sale.salesOffice || "Unknown";
-        if (!officeData[office])
-          officeData[office] = {
-            doors: 0,
-            appts: 0,
-            sits: 0,
-            closes: 0,
-            deals: 0,
-            kw: 0,
-            activeReps: 0,
-          };
+        if (!officeData[office]) officeData[office] = newOffice();
         officeData[office].deals++;
         officeData[office].kw += sale.systemSizeKw;
       }

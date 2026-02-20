@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getActiveOffices, teamIdToQBOffice } from "@/lib/config";
-import { getTypedLeaderboards } from "@/lib/repcard";
+import { getUsers, fetchRepCardAppointmentsCT } from "@/lib/repcard";
+import { getSetterActivity, getCloserActivity } from "@/lib/supabase-queries";
 
 export async function GET(req: NextRequest) {
   // Verify cron secret in production
@@ -17,105 +18,87 @@ export async function GET(req: NextRequest) {
     const weekStart = getMonday();
     const weekEnd = getSunday(weekStart);
 
-    const [setterBoards, closerBoards] = await Promise.all([
-      getTypedLeaderboards("setter", weekStart, weekEnd),
-      getTypedLeaderboards("closer", weekStart, weekEnd),
+    // Prefetch RepCard appointments once, derive both setter + closer activity
+    const [prefetchedAppts, users] = await Promise.all([
+      fetchRepCardAppointmentsCT(weekStart, weekEnd),
+      getUsers(),
+    ]);
+    const [setterActivityMap, closerActivityMap] = await Promise.all([
+      getSetterActivity(weekStart, weekEnd, undefined, prefetchedAppts),
+      getCloserActivity(weekStart, weekEnd, undefined, prefetchedAppts),
     ]);
 
-    // Process leaderboard into per-office stats
-    const processLB = (boards: any[], lbName: string) => {
-      const lb = boards.find((b: any) => b.leaderboard_name === lbName);
-      if (!lb?.stats?.headers) return [];
-      return (lb.stats.stats || [])
-        .filter((s: any) => s.item_type === "user")
-        .map((s: any) => {
-          const values: Record<string, any> = {};
-          for (const h of lb.stats.headers)
-            values[h.short_name] = s[h.mapped_field] ?? 0;
-          return {
-            userId: s.item_id,
-            office_team_id: s.office_team_id,
-            qbOffice: teamIdToQBOffice(s.office_team_id),
-            ...values,
-          };
-        })
-        .filter((s: any) => s.qbOffice);
-    };
-
-    const setterStats = processLB(setterBoards, "Setter Leaderboard");
-    const setterApptStats = processLB(
-      setterBoards,
-      "Setter Appointment Data",
-    );
-    const closerStats = processLB(closerBoards, "Closer Leaderboard");
-    const closerApptStats = processLB(
-      closerBoards,
-      "Closer Appointment Data",
-    );
-
-    // Build per-office setter appt map for quick lookup
-    const setterApptByOffice: Record<string, any[]> = {};
-    for (const sa of setterApptStats) {
-      if (!setterApptByOffice[sa.qbOffice])
-        setterApptByOffice[sa.qbOffice] = [];
-      setterApptByOffice[sa.qbOffice].push(sa);
+    // Build user→office mapping
+    const userOfficeMap: Record<number, string> = {};
+    for (const u of users) {
+      const office = teamIdToQBOffice(u.officeTeamId);
+      if (office) userOfficeMap[u.id] = office;
     }
 
-    const closerApptByOffice: Record<string, any[]> = {};
-    for (const ca of closerApptStats) {
-      if (!closerApptByOffice[ca.qbOffice])
-        closerApptByOffice[ca.qbOffice] = [];
-      closerApptByOffice[ca.qbOffice].push(ca);
+    // Aggregate activity by office
+    const officeSetterData: Record<string, any[]> = {};
+    const officeCloserData: Record<string, any[]> = {};
+    const activeByOffice: Record<string, Set<number>> = {};
+
+    for (const idStr of Object.keys(setterActivityMap)) {
+      const id = Number(idStr);
+      const act = setterActivityMap[id];
+      const office = userOfficeMap[id];
+      if (!office) continue;
+      if (!officeSetterData[office]) officeSetterData[office] = [];
+      officeSetterData[office].push(act);
+      if (act.DK > 0) {
+        if (!activeByOffice[office]) activeByOffice[office] = new Set();
+        activeByOffice[office].add(id);
+      }
+    }
+
+    for (const idStr of Object.keys(closerActivityMap)) {
+      const id = Number(idStr);
+      const act = closerActivityMap[id];
+      const office = userOfficeMap[id];
+      if (!office) continue;
+      if (!officeCloserData[office]) officeCloserData[office] = [];
+      officeCloserData[office].push(act);
+      if (act.SAT >= 1) {
+        if (!activeByOffice[office]) activeByOffice[office] = new Set();
+        activeByOffice[office].add(id);
+      }
     }
 
     const offices = getActiveOffices();
     const snapshots = offices.map((office) => {
-      const officeSetters = setterStats.filter(
-        (s: any) => s.qbOffice === office,
-      );
-      const officeClosers = closerStats.filter(
-        (s: any) => s.qbOffice === office,
-      );
-      const officeSetterAppts = setterApptByOffice[office] || [];
-      const officeCloserAppts = closerApptByOffice[office] || [];
-
-      // Active reps: setters with DK > 0, closers with SAT >= 1, deduplicated
-      const activeIds = new Set<number>();
-      for (const s of officeSetters) {
-        if ((s.DK || 0) > 0) activeIds.add(s.userId);
-      }
-      for (const c of officeClosers) {
-        if ((c.SAT || 0) >= 1) activeIds.add(c.userId);
-      }
+      const officeSetters = officeSetterData[office] || [];
+      const officeClosers = officeCloserData[office] || [];
 
       return {
         week_start: weekStart,
         office,
         data: {
-          setters: officeSetterAppts.map((s: any) => ({
+          setters: officeSetters.map((s) => ({
             setter_id: s.userId,
             office_team: office,
             total_appts: s.APPT || 0,
-            no_show: s.NOSH || 0,
-            canceled: s.CANC || 0,
-            reschedule: s.RSCH || 0,
+            no_show: s.outcomes?.NOSH || 0,
+            canceled: s.outcomes?.CANC || 0,
+            reschedule: s.outcomes?.RSCH || 0,
           })),
-          closers: officeCloserAppts.map((c: any) => ({
+          closers: officeClosers.map((c) => ({
             closer_id: c.userId,
             office_team: office,
             total_appts: c.LEAD || c.SAT || 0,
             closed: c.CLOS || 0,
-            no_show: c.NOSH || 0,
-            canceled: c.CANC || 0,
+            no_show: c.outcomes?.NOSH || 0,
+            canceled: c.outcomes?.CANC || 0,
           })),
-          active_reps: activeIds.size,
-          total_appts: officeSetterAppts.reduce(
-            (sum: number, s: any) => sum + (s.APPT || 0),
+          active_reps: activeByOffice[office]?.size || 0,
+          total_appts: officeSetters.reduce(
+            (sum: number, s) => sum + (s.APPT || 0),
             0,
           ),
-          quality_count: 0, // quality data lives in Supabase (webhooks), not in leaderboard
-          closed: officeCloserAppts.reduce(
-            (sum: number, c: any) => sum + (c.CLOS || 0),
+          quality_count: 0,
+          closed: officeClosers.reduce(
+            (sum: number, c) => sum + (c.CLOS || 0),
             0,
           ),
         },

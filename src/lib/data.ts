@@ -3,16 +3,25 @@
  * Used by /api/scorecard, /api/rep/[id], and /api/office/[name].
  */
 
-import { getTypedLeaderboards, getUsers, type RepUser } from "./repcard";
+import { getTypedLeaderboards, getUsers, type RepUser, fetchRepCardAppointmentsCT } from "./repcard";
 import { getSales, type QBSale } from "./quickbase";
 import {
   OFFICE_MAPPING,
   teamIdToQBOffice,
   normalizeQBOffice,
-  repCardTeamToQBOffice,
   getOfficeTimezone,
 } from "./config";
 import { supabaseAdmin } from "./supabase";
+import {
+  getSetterActivity,
+  getCloserActivity,
+  type SetterActivity,
+  type CloserActivity,
+} from "./supabase-queries";
+
+// Re-export date utils for backward compatibility
+export { dateBoundsUTC, getMonday, getToday, CT_TZ } from "./date-utils";
+import { dateBoundsUTC } from "./date-utils";
 
 // ── Name cleanup — strip "R - " recruit prefix ──
 export function cleanRepName(name: string): string {
@@ -39,70 +48,6 @@ const PPW_MIN = 0.5;
 const PPW_MAX = 8.0;
 export function isValidPpw(ppw: number): boolean {
   return ppw >= PPW_MIN && ppw <= PPW_MAX;
-}
-
-// ── Date helpers ──
-const CT_TZ = "America/Chicago";
-
-export function getMonday(): string {
-  // Get current date in Central time
-  const now = new Date();
-  const ctDate = new Date(
-    now.toLocaleString("en-US", { timeZone: CT_TZ }),
-  );
-  const day = ctDate.getDay();
-  const diff = ctDate.getDate() - day + (day === 0 ? -6 : 1);
-  ctDate.setDate(diff);
-  const y = ctDate.getFullYear();
-  const m = String(ctDate.getMonth() + 1).padStart(2, "0");
-  const d = String(ctDate.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-export function getToday(): string {
-  const now = new Date();
-  const ctDate = new Date(
-    now.toLocaleString("en-US", { timeZone: CT_TZ }),
-  );
-  const y = ctDate.getFullYear();
-  const m = String(ctDate.getMonth() + 1).padStart(2, "0");
-  const d = String(ctDate.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/**
- * Convert YYYY-MM-DD date range to UTC timestamp boundaries aligned to
- * America/Chicago timezone. Most KIN offices are Central; the small offset
- * for Mountain offices is acceptable for aggregate queries.
- */
-export function dateBoundsUTC(
-  from: string,
-  to: string,
-): { gte: string; lte: string } {
-  function getOffset(dateStr: string): number {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    // Probe at 18:00 UTC — safely in the middle of a CT day
-    const dt = new Date(Date.UTC(y, m - 1, d, 18, 0, 0));
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: CT_TZ,
-      hour: "numeric",
-      hour12: false,
-    }).formatToParts(dt);
-    const ctHour = parseInt(parts.find((p) => p.type === "hour")!.value);
-    return 18 - ctHour; // 6 for CST, 5 for CDT
-  }
-
-  const [fy, fm, fd] = from.split("-").map(Number);
-  const fromOff = getOffset(from);
-  const toOff = getOffset(to);
-  const [ty, tm, td] = to.split("-").map(Number);
-
-  return {
-    gte: new Date(Date.UTC(fy, fm - 1, fd, fromOff, 0, 0)).toISOString(),
-    lte: new Date(
-      Date.UTC(ty, tm - 1, td + 1, toOff, 0, 0) - 1000,
-    ).toISOString(),
-  };
 }
 
 // ── Types ──
@@ -207,35 +152,66 @@ export interface ScorecardResult {
   avgFieldHoursByOffice: Record<string, number>;
 }
 
-// ── Core: process a RepCard leaderboard into typed array ──
-function processLeaderboard(lb: any, userMap: Record<number, any>): any[] {
-  if (!lb || !lb.stats?.headers) return [];
-  const headers = lb.stats.headers;
-  const stats = lb.stats.stats || [];
-  return stats
-    .filter((s: any) => s.item_type === "user")
-    .map((s: any) => {
-      const user = userMap[s.item_id];
-      const values: Record<string, any> = {};
-      for (const h of headers) values[h.short_name] = s[h.mapped_field] ?? 0;
-      const qbOffice = teamIdToQBOffice(s.office_team_id);
-      return {
-        userId: s.item_id,
-        name: user
-          ? cleanRepName(`${user.firstName} ${user.lastName}`)
-          : `User #${s.item_id}`,
-        isRecruit: user ? isRecruit(user.firstName) : false,
-        region: user?.office || OFFICE_MAPPING[s.office_id]?.name || "Unknown",
-        team: user?.team || OFFICE_MAPPING[s.office_team_id]?.name || "Unknown",
-        qbOffice: qbOffice || "Unknown",
-        teamId: s.office_team_id,
-        ...values,
-      };
-    })
-    .filter((s: any) => {
-      const mapping = OFFICE_MAPPING[s.teamId];
-      return mapping?.active !== false;
-    });
+/**
+ * Build a ProcessedSetter from Supabase activity + user info + QP/DQH from leaderboard.
+ */
+function buildSetterFromActivity(
+  act: SetterActivity,
+  user: RepUser | undefined,
+  qpMap: Record<number, { QP: number; "D/QH": number | string }>,
+): ProcessedSetter {
+  const qp = qpMap[act.userId];
+  const qbOffice = user ? teamIdToQBOffice(user.officeTeamId) || "Unknown" : "Unknown";
+  return {
+    userId: act.userId,
+    name: user ? cleanRepName(`${user.firstName} ${user.lastName}`) : act.name,
+    isRecruit: user ? isRecruit(user.firstName) : false,
+    region: user?.office || "Unknown",
+    team: user?.team || "Unknown",
+    qbOffice,
+    teamId: user?.officeTeamId || 0,
+    DK: act.DK,
+    APPT: act.APPT,
+    SITS: act.SITS,
+    "SIT%": act.APPT > 0 ? Math.round((act.SITS / act.APPT) * 1000) / 10 : 0,
+    "D/QH": qp?.["D/QH"] ?? 0,
+    QP: qp?.QP ?? 0,
+    CLOS: act.CLOS,
+    avgStars: act.avgStars,
+    qbCloses: 0,
+    qbCancelled: 0,
+    outcomes: act.outcomes,
+  } as ProcessedSetter;
+}
+
+/**
+ * Build a ProcessedCloser from Supabase activity + user info.
+ */
+function buildCloserFromActivity(
+  act: CloserActivity,
+  user: RepUser | undefined,
+): ProcessedCloser {
+  const qbOffice = user ? teamIdToQBOffice(user.officeTeamId) || "Unknown" : "Unknown";
+  return {
+    userId: act.userId,
+    name: user ? cleanRepName(`${user.firstName} ${user.lastName}`) : act.name,
+    isRecruit: user ? isRecruit(user.firstName) : false,
+    region: user?.office || "Unknown",
+    team: user?.team || "Unknown",
+    qbOffice,
+    teamId: user?.officeTeamId || 0,
+    SAT: act.SAT,
+    CLOS: act.CLOS,
+    LEAD: act.LEAD,
+    "SIT%": act.LEAD > 0 ? Math.round((act.SAT / act.LEAD) * 1000) / 10 : 0,
+    "CLOSE%": act.SAT > 0 ? Math.round((act.CLOS / act.SAT) * 1000) / 10 : 0,
+    qbCloses: 0,
+    qbCancelled: 0,
+    cancelPct: 0,
+    totalKw: 0,
+    avgPpw: 0,
+    outcomes: act.outcomes,
+  } as ProcessedCloser;
 }
 
 // ── Core: aggregate QB sales by closer/setter (RepCard ID primary, name fallback) ──
@@ -411,70 +387,6 @@ export function computeCloserQBStats(closerSales: QBSale[]) {
   };
 }
 
-// ── Attach QB attribution to setter ──
-function attachSetterQB(
-  setter: any,
-  bySetterRC: Record<string, SalesAgg>,
-  bySetterName: Record<string, SalesAgg>,
-  setterApptMap: Record<number, any>,
-): ProcessedSetter {
-  // RepCard ID primary, name fallback — a close is a close (active, cancelled, rejected all count)
-  const qbData = bySetterRC[setter.userId] || bySetterName[setter.name];
-  setter.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
-  setter.qbCancelled = qbData?.cancelled || 0;
-
-  // Merge outcomes from appointment data LB
-  const apptData = setterApptMap[setter.userId];
-  setter.outcomes = {
-    CANC: apptData?.CANC || 0,
-    NOSH: apptData?.NOSH || 0,
-    NTR: apptData?.NTR || 0,
-    RSCH: apptData?.RSCH || 0,
-    CF: apptData?.CF || 0,
-    SHAD: apptData?.SHAD || 0,
-  };
-
-  return setter;
-}
-
-// ── Attach QB attribution to closer ──
-function attachCloserQB(
-  closer: any,
-  byCloserRC: Record<string, SalesAgg>,
-  byCloserName: Record<string, SalesAgg & { office?: string }>,
-  closerApptMap: Record<number, any>,
-): ProcessedCloser {
-  // RepCard ID primary, name fallback — a close is a close (active, cancelled, rejected all count)
-  const qbData = byCloserRC[closer.userId] || byCloserName[closer.name];
-  closer.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
-  closer.qbCancelled = qbData?.cancelled || 0;
-  closer.totalKw = qbData?.kw || 0;
-  closer.avgPpw =
-    qbData && qbData.ppwCount > 0
-      ? Math.round((qbData.ppwSum / qbData.ppwCount) * 100) / 100
-      : 0;
-
-  closer.cancelPct =
-    closer.qbCloses > 0
-      ? Math.round((closer.qbCancelled / closer.qbCloses) * 100)
-      : 0;
-
-  // Merge outcomes from appointment data LB
-  const apptData = closerApptMap[closer.userId];
-  closer.outcomes = {
-    CANC: apptData?.CANC || 0,
-    NOSH: apptData?.NOSH || 0,
-    NTR: apptData?.NTR || 0,
-    RSCH: apptData?.RSCH || 0,
-    CF: apptData?.CF || 0,
-    SHAD: apptData?.SHAD || 0,
-    FUS: apptData?.FUS || 0,
-    NOCL: apptData?.NOCL || 0,
-  };
-
-  return closer;
-}
-
 /**
  * fetchScorecard — the single source of truth for all dashboard data.
  * Used by /api/scorecard. Rep and office APIs can also call individual pieces.
@@ -483,45 +395,43 @@ export async function fetchScorecard(
   fromDate: string,
   toDate: string,
 ): Promise<ScorecardResult> {
-  const [closerBoards, setterBoards, users, sales] = await Promise.all([
-    getTypedLeaderboards("closer", fromDate, toDate),
-    getTypedLeaderboards("setter", fromDate, toDate),
-    getUsers(),
-    getSales(fromDate, toDate),
+  // Phase 1: fetch RepCard appointments (ONE call, company-wide), users, sales, QP/DQH
+  const [prefetchedAppts, setterBoards, users, sales] =
+    await Promise.all([
+      fetchRepCardAppointmentsCT(fromDate, toDate),
+      getTypedLeaderboards("setter", fromDate, toDate), // only for QP and D/QH
+      getUsers(),
+      getSales(fromDate, toDate),
+    ]);
+
+  // Phase 2: derive setter + closer activity from prefetched appointments
+  const [setterActivityMap, closerActivityMap] = await Promise.all([
+    getSetterActivity(fromDate, toDate, undefined, prefetchedAppts),
+    getCloserActivity(fromDate, toDate, undefined, prefetchedAppts),
   ]);
 
   // Build user lookup
   const userMap: Record<number, RepUser> = {};
   for (const u of users) userMap[u.id] = u;
 
-  // Process leaderboards
+  // Extract QP and D/QH from setter leaderboard (no raw Supabase source for these)
+  const qpMap: Record<number, { QP: number; "D/QH": number | string }> = {};
   const setterLB = setterBoards.find(
     (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
   );
-  const closerLB = closerBoards.find(
-    (lb: any) => lb.leaderboard_name === "Closer Leaderboard",
-  );
-  const setterApptLB = setterBoards.find(
-    (lb: any) => lb.leaderboard_name === "Setter Appointment Data",
-  );
-  const closerApptLB = closerBoards.find(
-    (lb: any) => lb.leaderboard_name === "Closer Appointment Data",
-  );
-
-  const setterStats = processLeaderboard(setterLB, userMap);
-  const closerStats = processLeaderboard(closerLB, userMap);
-  const setterApptStats = processLeaderboard(setterApptLB, userMap);
-  const closerApptStats = processLeaderboard(closerApptLB, userMap);
+  if (setterLB && !Array.isArray(setterLB.stats) && setterLB.stats?.headers) {
+    const headers = setterLB.stats.headers;
+    for (const s of (setterLB.stats as any).stats || []) {
+      if (s.item_type !== "user") continue;
+      const vals: Record<string, any> = {};
+      for (const h of headers) vals[h.short_name] = s[h.mapped_field] ?? 0;
+      qpMap[s.item_id] = { QP: vals.QP || 0, "D/QH": vals["D/QH"] || 0 };
+    }
+  }
 
   // Aggregate sales
   const { byOffice, byCloserRC, byCloserName, bySetterRC, bySetterName } =
     aggregateSales(sales);
-
-  // Build lookup maps for appointment data
-  const setterApptMap: Record<number, any> = {};
-  for (const sa of setterApptStats) setterApptMap[sa.userId] = sa;
-  const closerApptMap: Record<number, any> = {};
-  for (const ca of closerApptStats) closerApptMap[ca.userId] = ca;
 
   // Build office scorecards
   const offices: Record<string, OfficeSummary> = {};
@@ -545,26 +455,9 @@ export async function fetchScorecard(
     return offices[office];
   };
 
-  // Fetch avg star ratings per setter from Supabase (also grab office_team for 7F)
-  const bounds = dateBoundsUTC(fromDate, toDate);
-  const { data: starRows } = await supabaseAdmin
-    .from("appointments")
-    .select("setter_id, star_rating, office_team")
-    .gte("appointment_time", bounds.gte)
-    .lte("appointment_time", bounds.lte)
-    .not("star_rating", "is", null);
-
-  const starBySetter: Record<number, { sum: number; count: number }> = {};
-  for (const row of starRows || []) {
-    if (!row.setter_id) continue;
-    if (!starBySetter[row.setter_id])
-      starBySetter[row.setter_id] = { sum: 0, count: 0 };
-    starBySetter[row.setter_id].sum += row.star_rating;
-    starBySetter[row.setter_id].count++;
-  }
-
-  // Fetch door_knocks for field time computation (processed after setters are built)
+  // Fetch door_knocks for field time computation (need raw timestamps, not just counts)
   // Must paginate — Supabase default limit is 1000 rows, company-wide knocks easily exceed that
+  const bounds = dateBoundsUTC(fromDate, toDate);
   const allKnocks: { rep_id: number; knocked_at: string }[] = [];
   {
     let from = 0;
@@ -583,46 +476,54 @@ export async function fetchScorecard(
     }
   }
 
-  // Process setters with QB attribution
+  // Build setters from Supabase activity + QB attribution
   const allSetters: ProcessedSetter[] = [];
-  for (const s of setterStats) {
-    const setter = attachSetterQB(s, bySetterRC, bySetterName, setterApptMap);
-    const starData = starBySetter[setter.userId];
-    (setter as any).avgStars = starData
-      ? Math.round((starData.sum / starData.count) * 100) / 100
-      : 0;
+  for (const idStr of Object.keys(setterActivityMap)) {
+    const id = Number(idStr);
+    const act = setterActivityMap[id];
+    const user = userMap[id];
+    // Skip reps from inactive offices
+    if (user) {
+      const mapping = OFFICE_MAPPING[user.officeTeamId];
+      if (mapping?.active === false) continue;
+    }
+    const setter = buildSetterFromActivity(act, user, qpMap);
+    // Attach QB sales
+    const qbData = bySetterRC[setter.userId] || bySetterName[setter.name];
+    setter.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
+    setter.qbCancelled = qbData?.cancelled || 0;
+
     allSetters.push(setter);
     if (setter.qbOffice !== "Unknown") {
       getOrCreate(setter.qbOffice).setters.push(setter);
     }
   }
 
-  // Compute avgStarsByOffice using setter → office mapping (not office_team which can be null)
+  // Compute avgStarsByOffice from activity data
   const avgStarsByOffice: Record<string, number> = {};
   const officeStarAgg: Record<string, { sum: number; count: number }> = {};
   for (const s of allSetters) {
-    const starData = starBySetter[s.userId];
-    if (!starData || s.qbOffice === "Unknown") continue;
-    if (!officeStarAgg[s.qbOffice])
-      officeStarAgg[s.qbOffice] = { sum: 0, count: 0 };
-    officeStarAgg[s.qbOffice].sum += starData.sum;
-    officeStarAgg[s.qbOffice].count += starData.count;
+    if ((s as any).avgStars > 0 && s.qbOffice !== "Unknown") {
+      if (!officeStarAgg[s.qbOffice])
+        officeStarAgg[s.qbOffice] = { sum: 0, count: 0 };
+      // avgStars is per-setter average; weight by APPT count for proper office average
+      officeStarAgg[s.qbOffice].sum += (s as any).avgStars * s.APPT;
+      officeStarAgg[s.qbOffice].count += s.APPT;
+    }
   }
   for (const [office, agg] of Object.entries(officeStarAgg)) {
-    avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
+    avgStarsByOffice[office] =
+      agg.count > 0 ? Math.round((agg.sum / agg.count) * 100) / 100 : 0;
   }
 
   // Compute avgFieldHoursByOffice using setter→office mapping + local timezone
   const avgFieldHoursByOffice: Record<string, number> = {};
   if (allKnocks.length > 0) {
-    // Build setter→office map from leaderboard data
     const setterOfficeMap: Record<number, string> = {};
     for (const s of allSetters) {
       if (s.qbOffice !== "Unknown") setterOfficeMap[s.userId] = s.qbOffice;
     }
-    // Filter knocks to known setters only
     const relevantKnocks = allKnocks.filter((k) => setterOfficeMap[k.rep_id]);
-    // Group by rep_id + local date (using office timezone)
     const byRepDay: Record<string, { min: number; max: number; office: string }> = {};
     for (const k of relevantKnocks) {
       const office = setterOfficeMap[k.rep_id];
@@ -637,11 +538,10 @@ export async function fetchScorecard(
         if (ts > byRepDay[key].max) byRepDay[key].max = ts;
       }
     }
-    // Per-rep avg hours, then per-office avg across reps (matches getFieldTimeStats)
     const repHours: Record<number, { days: number[]; office: string }> = {};
     for (const [key, day] of Object.entries(byRepDay)) {
       const hours = (day.max - day.min) / 3600000;
-      if (hours < 0.1) continue; // skip single-knock days
+      if (hours < 0.1) continue;
       const repId = parseInt(key.split("|")[0], 10);
       if (!repHours[repId]) repHours[repId] = { days: [], office: day.office };
       repHours[repId].days.push(hours);
@@ -658,10 +558,31 @@ export async function fetchScorecard(
     }
   }
 
-  // Process closers with QB attribution
+  // Build closers from Supabase activity + QB attribution
   const allClosers: ProcessedCloser[] = [];
-  for (const c of closerStats) {
-    const closer = attachCloserQB(c, byCloserRC, byCloserName, closerApptMap);
+  for (const idStr of Object.keys(closerActivityMap)) {
+    const id = Number(idStr);
+    const act = closerActivityMap[id];
+    const user = userMap[id];
+    if (user) {
+      const mapping = OFFICE_MAPPING[user.officeTeamId];
+      if (mapping?.active === false) continue;
+    }
+    const closer = buildCloserFromActivity(act, user);
+    // Attach QB sales
+    const qbData = byCloserRC[closer.userId] || byCloserName[closer.name];
+    closer.qbCloses = (qbData?.deals || 0) + (qbData?.cancelled || 0);
+    closer.qbCancelled = qbData?.cancelled || 0;
+    closer.totalKw = qbData?.kw || 0;
+    closer.avgPpw =
+      qbData && qbData.ppwCount > 0
+        ? Math.round((qbData.ppwSum / qbData.ppwCount) * 100) / 100
+        : 0;
+    closer.cancelPct =
+      closer.qbCloses > 0
+        ? Math.round((closer.qbCancelled / closer.qbCloses) * 100)
+        : 0;
+
     allClosers.push(closer);
     if (closer.qbOffice !== "Unknown") {
       getOrCreate(closer.qbOffice).closers.push(closer);
@@ -683,15 +604,13 @@ export async function fetchScorecard(
     };
   }
 
-  // Derive active reps from leaderboard data:
-  // Active = knocked doors (DK > 0) OR sat appointments (SAT >= 1)
-  // Deduplicate: same person can appear as both setter and closer
+  // Derive active reps from activity data
   const activeRepsByOffice: Record<string, number> = {};
   const activeRepsSeen: Record<string, Set<number>> = {};
   const activeSettersSeen: Record<string, Set<number>> = {};
   const activeClosersSeen: Record<string, Set<number>> = {};
   for (const s of allSetters) {
-    if ((s as any).DK > 0) {
+    if (s.DK > 0) {
       const office = s.qbOffice;
       if (office && office !== "Unknown") {
         if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
@@ -702,7 +621,7 @@ export async function fetchScorecard(
     }
   }
   for (const c of allClosers) {
-    if ((c as any).SAT >= 1) {
+    if (c.SAT >= 1) {
       const office = c.qbOffice;
       if (office && office !== "Unknown") {
         if (!activeRepsSeen[office]) activeRepsSeen[office] = new Set();
@@ -749,8 +668,7 @@ export async function fetchScorecard(
           ? Math.round((cancelledSales.length / sales.length) * 100)
           : 0,
       totalAppts: allSetters.reduce((sum, s) => sum + (s.APPT || 0), 0),
-      // Use setter SITS as authoritative — sits belong to the setter's office
-      totalSits: allSetters.reduce((sum, s) => sum + ((s as any).SITS || 0), 0),
+      totalSits: allSetters.reduce((sum, s) => sum + (s.SITS || 0), 0),
     },
     offices,
     allSetters,

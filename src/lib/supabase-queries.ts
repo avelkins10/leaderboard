@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { getTimezoneForTeam } from "./config";
-import { dateBoundsUTC } from "./data";
+import { dateBoundsUTC } from "./date-utils";
+import type { RCAppointment } from "./repcard";
 
 // ── Types ──
 
@@ -48,6 +49,44 @@ export interface TimelineEvent {
   type: string;
   date: string;
   [key: string]: any;
+}
+
+// ── Activity types (timezone-correct stats from raw Supabase data) ──
+
+export interface SetterActivity {
+  userId: number;
+  name: string;
+  DK: number;
+  APPT: number;
+  SITS: number;
+  CLOS: number;
+  avgStars: number;
+  outcomes: {
+    CANC: number;
+    NOSH: number;
+    NTR: number;
+    RSCH: number;
+    CF: number;
+    SHAD: number;
+  };
+}
+
+export interface CloserActivity {
+  userId: number;
+  name: string;
+  LEAD: number;
+  SAT: number;
+  CLOS: number;
+  outcomes: {
+    NOCL: number;
+    CF: number;
+    FUS: number;
+    SHAD: number;
+    CANC: number;
+    NOSH: number;
+    RSCH: number;
+    NTR: number;
+  };
 }
 
 // ── Helpers ──
@@ -124,6 +163,301 @@ function aggregateStats(
         star_count > 0 ? Math.round((star_sum / star_count) * 10) / 10 : 0,
     };
   });
+}
+
+const SIT_CATS = new Set([
+  "closed",
+  "credit_fail",
+  "no_close",
+  "follow_up",
+  "shade",
+  "one_legger",
+]);
+
+// ── Activity queries (timezone-correct via dateBoundsUTC) ──
+
+/**
+ * Paginated Supabase query helper. Handles the 1000 row limit.
+ */
+async function paginatedQuery<T>(
+  buildQuery: (offset: number, limit: number) => any,
+): Promise<T[]> {
+  const results: T[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery(offset, pageSize);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    results.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return results;
+}
+
+/**
+ * Compute setter activity stats.
+ * APPT/SITS/CLOS/outcomes from RepCard Appointments API (source of truth).
+ * DK from Supabase door_knocks (no RepCard API for individual knocks).
+ * avgStars from Supabase appointments (webhook-enriched, no RepCard equivalent).
+ *
+ * @param prefetchedAppts - When provided, filter from this array instead of making a new RepCard API call.
+ *   Used by company-wide callers (fetchScorecard, trends) to avoid duplicate fetches.
+ */
+export async function getSetterActivity(
+  from: string,
+  to: string,
+  setterIds?: number[],
+  prefetchedAppts?: RCAppointment[],
+): Promise<Record<number, SetterActivity>> {
+  const bounds = dateBoundsUTC(from, to);
+
+  // 1. RepCard appointments (source of truth for APPT/SITS/CLOS/outcomes)
+  let rcAppts: RCAppointment[];
+  if (prefetchedAppts) {
+    // Filter prefetched data to setter scope
+    rcAppts = setterIds
+      ? prefetchedAppts.filter((a) => a.setterId != null && setterIds.includes(a.setterId))
+      : prefetchedAppts;
+  } else {
+    // Fetch from RepCard (scoped calls: office/rep)
+    const { fetchRepCardAppointmentsCT } = await import("./repcard");
+    rcAppts = await fetchRepCardAppointmentsCT(from, to,
+      setterIds ? { setterIds } : undefined);
+  }
+
+  // 2. Supabase door_knocks for DK (paginated)
+  const knocks = await paginatedQuery<{ rep_id: number; rep_name: string }>(
+    (offset, limit) => {
+      let q = supabaseAdmin
+        .from("door_knocks")
+        .select("rep_id, rep_name")
+        .gte("knocked_at", bounds.gte)
+        .lte("knocked_at", bounds.lte);
+      if (setterIds && setterIds.length > 0) q = q.in("rep_id", setterIds);
+      return q.range(offset, offset + limit - 1);
+    },
+  );
+
+  // 3. Supabase star_rating for avgStars (paginated)
+  const starRows = await paginatedQuery<{
+    setter_id: number;
+    star_rating: number | null;
+  }>((offset, limit) => {
+    let q = supabaseAdmin
+      .from("appointments")
+      .select("setter_id, star_rating")
+      .gte("appointment_time", bounds.gte)
+      .lte("appointment_time", bounds.lte)
+      .not("star_rating", "is", null);
+    if (setterIds && setterIds.length > 0) q = q.in("setter_id", setterIds);
+    return q.range(offset, offset + limit - 1);
+  });
+
+  // Build per-setter aggregation
+  const map = new Map<
+    number,
+    {
+      name: string;
+      dk: number;
+      appt: number;
+      sits: number;
+      clos: number;
+      starSum: number;
+      starCount: number;
+      canc: number;
+      nosh: number;
+      ntr: number;
+      rsch: number;
+      cf: number;
+      shad: number;
+    }
+  >();
+
+  const getOrCreate = (id: number, name: string) => {
+    if (!map.has(id)) {
+      map.set(id, {
+        name,
+        dk: 0,
+        appt: 0,
+        sits: 0,
+        clos: 0,
+        starSum: 0,
+        starCount: 0,
+        canc: 0,
+        nosh: 0,
+        ntr: 0,
+        rsch: 0,
+        cf: 0,
+        shad: 0,
+      });
+    }
+    const entry = map.get(id)!;
+    if (name && entry.name.startsWith("Unknown")) entry.name = name;
+    return entry;
+  };
+
+  // DK from Supabase
+  for (const k of knocks) {
+    if (!k.rep_id) continue;
+    getOrCreate(k.rep_id, k.rep_name || `Unknown #${k.rep_id}`).dk++;
+  }
+
+  // APPT/SITS/CLOS/outcomes from RepCard
+  for (const a of rcAppts) {
+    if (!a.setterId) continue;
+    const entry = getOrCreate(
+      a.setterId,
+      a.setterName || `Unknown #${a.setterId}`,
+    );
+    entry.appt++;
+    const cat = dispositionCategory(a.disposition);
+    if (SIT_CATS.has(cat)) entry.sits++;
+    if (cat === "closed") entry.clos++;
+    else if (cat === "canceled") entry.canc++;
+    else if (cat === "no_show") entry.nosh++;
+    else if (cat === "reschedule") entry.rsch++;
+    else if (cat === "credit_fail") entry.cf++;
+    else if (cat === "shade") entry.shad++;
+    else if (cat === "other" || cat === "one_legger") entry.ntr++;
+  }
+
+  // avgStars from Supabase
+  for (const s of starRows) {
+    if (!s.setter_id || s.star_rating == null) continue;
+    const entry = getOrCreate(s.setter_id, `Unknown #${s.setter_id}`);
+    entry.starSum += s.star_rating;
+    entry.starCount++;
+  }
+
+  const result: Record<number, SetterActivity> = {};
+  map.forEach((entry, id) => {
+    result[id] = {
+      userId: id,
+      name: entry.name,
+      DK: entry.dk,
+      APPT: entry.appt,
+      SITS: entry.sits,
+      CLOS: entry.clos,
+      avgStars:
+        entry.starCount > 0
+          ? Math.round((entry.starSum / entry.starCount) * 100) / 100
+          : 0,
+      outcomes: {
+        CANC: entry.canc,
+        NOSH: entry.nosh,
+        NTR: entry.ntr,
+        RSCH: entry.rsch,
+        CF: entry.cf,
+        SHAD: entry.shad,
+      },
+    };
+  });
+
+  return result;
+}
+
+/**
+ * Compute closer activity stats.
+ * LEAD/SAT/CLOS/outcomes from RepCard Appointments API (source of truth).
+ *
+ * @param prefetchedAppts - When provided, filter from this array instead of making a new RepCard API call.
+ */
+export async function getCloserActivity(
+  from: string,
+  to: string,
+  closerIds?: number[],
+  prefetchedAppts?: RCAppointment[],
+): Promise<Record<number, CloserActivity>> {
+  // RepCard appointments (source of truth for LEAD/SAT/CLOS/outcomes)
+  let rcAppts: RCAppointment[];
+  if (prefetchedAppts) {
+    rcAppts = closerIds
+      ? prefetchedAppts.filter((a) => a.closerId != null && closerIds.includes(a.closerId))
+      : prefetchedAppts;
+  } else {
+    const { fetchRepCardAppointmentsCT } = await import("./repcard");
+    rcAppts = await fetchRepCardAppointmentsCT(from, to,
+      closerIds ? { closerIds } : undefined);
+  }
+
+  const map = new Map<
+    number,
+    {
+      name: string;
+      lead: number;
+      sat: number;
+      clos: number;
+      nocl: number;
+      cf: number;
+      fus: number;
+      shad: number;
+      canc: number;
+      nosh: number;
+      rsch: number;
+      ntr: number;
+    }
+  >();
+
+  for (const a of rcAppts) {
+    if (!a.closerId) continue;
+    if (!map.has(a.closerId)) {
+      map.set(a.closerId, {
+        name: a.closerName || `Unknown #${a.closerId}`,
+        lead: 0,
+        sat: 0,
+        clos: 0,
+        nocl: 0,
+        cf: 0,
+        fus: 0,
+        shad: 0,
+        canc: 0,
+        nosh: 0,
+        rsch: 0,
+        ntr: 0,
+      });
+    }
+    const entry = map.get(a.closerId)!;
+    if (a.closerName && entry.name.startsWith("Unknown"))
+      entry.name = a.closerName;
+    entry.lead++;
+
+    const cat = dispositionCategory(a.disposition);
+    if (SIT_CATS.has(cat)) entry.sat++;
+    if (cat === "closed") entry.clos++;
+    else if (cat === "no_close") entry.nocl++;
+    else if (cat === "credit_fail") entry.cf++;
+    else if (cat === "follow_up") entry.fus++;
+    else if (cat === "shade") entry.shad++;
+    else if (cat === "canceled") entry.canc++;
+    else if (cat === "no_show") entry.nosh++;
+    else if (cat === "reschedule") entry.rsch++;
+    else if (cat === "other" || cat === "one_legger") entry.ntr++;
+  }
+
+  const result: Record<number, CloserActivity> = {};
+  map.forEach((entry, id) => {
+    result[id] = {
+      userId: id,
+      name: entry.name,
+      LEAD: entry.lead,
+      SAT: entry.sat,
+      CLOS: entry.clos,
+      outcomes: {
+        NOCL: entry.nocl,
+        CF: entry.cf,
+        FUS: entry.fus,
+        SHAD: entry.shad,
+        CANC: entry.canc,
+        NOSH: entry.nosh,
+        RSCH: entry.rsch,
+        NTR: entry.ntr,
+      },
+    };
+  });
+
+  return result;
 }
 
 // ── Query Functions ──
@@ -418,15 +752,6 @@ export interface CloserQualityByStars {
   star3Count: number;
 }
 
-const SIT_DISPOSITIONS = new Set([
-  "closed",
-  "credit_fail",
-  "no_close",
-  "follow_up",
-  "shade",
-  "one_legger",
-]);
-
 export async function getCloserQualityByStars(
   teamNames: string[],
   from: string,
@@ -475,7 +800,7 @@ export async function getCloserQualityByStars(
     }
     closerMap[row.closer_id].byStar[star].total++;
     const cat = dispositionCategory(row.disposition);
-    if (SIT_DISPOSITIONS.has(cat)) {
+    if (SIT_CATS.has(cat)) {
       closerMap[row.closer_id].byStar[star].sat++;
     }
   }

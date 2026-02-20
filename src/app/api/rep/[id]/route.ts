@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeaderboards, getTypedLeaderboards, getUsers } from "@/lib/repcard";
+import { getTypedLeaderboards, getUsers } from "@/lib/repcard";
 import { getSales } from "@/lib/quickbase";
 import {
   OFFICE_MAPPING,
@@ -9,7 +9,14 @@ import {
 } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
 import { dateBoundsUTC } from "@/lib/data";
-import { dispositionCategory, getFieldTimeStats } from "@/lib/supabase-queries";
+import {
+  dispositionCategory,
+  getFieldTimeStats,
+  getSetterActivity,
+  getCloserActivity,
+  type SetterActivity,
+  type CloserActivity,
+} from "@/lib/supabase-queries";
 import {
   getRepSales,
   computeCloserQBStats,
@@ -48,8 +55,10 @@ export async function GET(
   const qualityTo = toDate;
 
   try {
-    const [leaderboards, users, sales] = await Promise.all([
-      getLeaderboards(fromDate, toDate),
+    const [setterActivityMap, closerActivityMap, setterBoards, users, sales] = await Promise.all([
+      getSetterActivity(fromDate, toDate, [userId]),
+      getCloserActivity(fromDate, toDate, [userId]),
+      getTypedLeaderboards("setter", fromDate, toDate), // only for QP/DQH
       getUsers(),
       getSales(fromDate, toDate),
     ]);
@@ -61,25 +70,80 @@ export async function GET(
     const qbOffice = teamIdToQBOffice(user.officeTeamId) || "Unknown";
     const region = OFFICE_MAPPING[user.officeTeamId]?.region || user.office;
 
-    // Find user in leaderboards
-    const findInLB = (lbName: string) => {
-      const lb = leaderboards.find((l: any) => l.leaderboard_name === lbName);
-      if (!lb || Array.isArray(lb.stats) || !lb.stats?.headers) return null;
-      const stat = (lb.stats as any).stats.find(
+    // Extract QP/DQH from setter leaderboard
+    let qpVal = 0;
+    let dqhVal: number | string = 0;
+    const setterLB = setterBoards.find(
+      (lb: any) => lb.leaderboard_name === "Setter Leaderboard",
+    );
+    if (setterLB && !Array.isArray(setterLB.stats) && setterLB.stats?.headers) {
+      const stat = (setterLB.stats as any).stats?.find(
         (s: any) => s.item_id === userId && s.item_type === "user",
       );
-      if (!stat) return null;
-      const values: Record<string, any> = {};
-      for (const h of (lb.stats as any).headers)
-        values[h.short_name] = stat[h.mapped_field] ?? 0;
-      return values;
-    };
+      if (stat) {
+        const vals: Record<string, any> = {};
+        for (const h of (setterLB.stats as any).headers) vals[h.short_name] = stat[h.mapped_field] ?? 0;
+        qpVal = vals.QP || 0;
+        dqhVal = vals["D/QH"] || 0;
+      }
+    }
 
-    const setterStats = findInLB("Setter Leaderboard");
-    const closerStats = findInLB("Closer Leaderboard");
-    const setterApptStats = findInLB("Setter Appointment Data");
-    const closerApptStats = findInLB("Closer Appointment Data");
-    // Determine role — check RepCard role field first, then fall back to leaderboard presence
+    // Build stats objects from activity data
+    const setterAct = setterActivityMap[userId];
+    const closerAct = closerActivityMap[userId];
+
+    const setterStats = setterAct
+      ? {
+          DK: setterAct.DK,
+          APPT: setterAct.APPT,
+          SITS: setterAct.SITS,
+          CLOS: setterAct.CLOS,
+          "SIT%": setterAct.APPT > 0 ? Math.round((setterAct.SITS / setterAct.APPT) * 1000) / 10 : 0,
+          QP: qpVal,
+          "D/QH": dqhVal,
+          avgStars: setterAct.avgStars,
+        }
+      : null;
+
+    const closerStats = closerAct
+      ? {
+          LEAD: closerAct.LEAD,
+          SAT: closerAct.SAT,
+          CLOS: closerAct.CLOS,
+          "SIT%": closerAct.LEAD > 0 ? Math.round((closerAct.SAT / closerAct.LEAD) * 1000) / 10 : 0,
+          "CLOSE%": closerAct.SAT > 0 ? Math.round((closerAct.CLOS / closerAct.SAT) * 1000) / 10 : 0,
+        }
+      : null;
+
+    const setterApptStats = setterAct
+      ? {
+          APPT: setterAct.APPT,
+          NOSH: setterAct.outcomes.NOSH,
+          CANC: setterAct.outcomes.CANC,
+          RSCH: setterAct.outcomes.RSCH,
+          NTR: setterAct.outcomes.NTR,
+          CF: setterAct.outcomes.CF,
+          SHAD: setterAct.outcomes.SHAD,
+        }
+      : null;
+
+    const closerApptStats = closerAct
+      ? {
+          LEAD: closerAct.LEAD,
+          SAT: closerAct.SAT,
+          CLOS: closerAct.CLOS,
+          NOCL: closerAct.outcomes.NOCL,
+          CF: closerAct.outcomes.CF,
+          FUS: closerAct.outcomes.FUS,
+          SHAD: closerAct.outcomes.SHAD,
+          CANC: closerAct.outcomes.CANC,
+          NOSH: closerAct.outcomes.NOSH,
+          RSCH: closerAct.outcomes.RSCH,
+          NTR: closerAct.outcomes.NTR,
+        }
+      : null;
+
+    // Determine role — check RepCard role field first, then fall back to activity data presence
     const rcRole = (user.role || "").toLowerCase();
     const role =
       rcRole.includes("closer") ||
@@ -88,9 +152,9 @@ export async function GET(
         ? "closer"
         : rcRole.includes("setter")
           ? "setter"
-          : closerStats
+          : closerAct
             ? "closer"
-            : setterStats
+            : setterAct
               ? "setter"
               : "unknown";
 
@@ -322,7 +386,7 @@ export async function GET(
       const rsch = setterApptStats?.RSCH || 0;
       const ntr = setterApptStats?.NTR || 0;
       const cf = setterApptStats?.CF || 0;
-      const shad = setterApptStats?.SHAD || setterApptStats?.SHADE || 0;
+      const shad = setterApptStats?.SHAD || 0;
       const qbCloses = repSetterSales.length;
       // "Good sits" = sits minus credit fails and shade (not closeable leads)
       const goodSits = Math.max(0, sits - cf - shad);
@@ -396,7 +460,7 @@ export async function GET(
     const closerQBStats =
       repCloserSales.length > 0 ? computeCloserQBStats(repCloserSales) : null;
 
-    // Weekly trend — last 4 weeks of leaderboard data
+    // Weekly trend — last 4 weeks from Supabase activity (timezone-correct)
     const weeklyTrend: any[] = [];
     try {
       const weeks: { weekLabel: string; from: string; to: string }[] = [];
@@ -413,53 +477,27 @@ export async function GET(
         });
       }
 
-      const weekBoards = await Promise.all(
+      const weekActivity = await Promise.all(
         weeks.map((w) =>
-          getTypedLeaderboards(
-            role === "closer" ? "closer" : "setter",
-            w.from,
-            w.to,
-          ).catch(() => []),
+          Promise.all([
+            getSetterActivity(w.from, w.to, [userId]).catch(() => ({} as Record<number, SetterActivity>)),
+            getCloserActivity(w.from, w.to, [userId]).catch(() => ({} as Record<number, CloserActivity>)),
+          ]),
         ),
       );
 
       for (let i = 0; i < weeks.length; i++) {
-        const boards = weekBoards[i];
-        const lbName =
-          role === "closer" ? "Closer Leaderboard" : "Setter Leaderboard";
-        const lb = boards.find(
-          (b: any) => b.leaderboard_name === lbName,
-        ) as any;
-        if (!lb || !lb.stats?.headers) continue;
-
-        const stat = (lb.stats as any).stats?.find(
-          (s: any) => s.item_id === userId && s.item_type === "user",
-        );
-        if (!stat) {
-          weeklyTrend.push({
-            week: weeks[i].weekLabel,
-            DK: 0,
-            APPT: 0,
-            SITS: 0,
-            CLOS: 0,
-            SAT: 0,
-            LEAD: 0,
-          });
-          continue;
-        }
-
-        const values: Record<string, any> = {};
-        for (const h of (lb.stats as any).headers) {
-          values[h.short_name] = stat[h.mapped_field] ?? 0;
-        }
+        const [sMap, cMap] = weekActivity[i];
+        const sAct = sMap[userId];
+        const cAct = cMap[userId];
         weeklyTrend.push({
           week: weeks[i].weekLabel,
-          DK: values.DK || 0,
-          APPT: values.APPT || 0,
-          SITS: values.SITS || 0,
-          CLOS: values.CLOS || 0,
-          SAT: values.SAT || 0,
-          LEAD: values.LEAD || 0,
+          DK: sAct?.DK || 0,
+          APPT: sAct?.APPT || 0,
+          SITS: sAct?.SITS || 0,
+          CLOS: sAct?.CLOS || 0,
+          SAT: cAct?.SAT || 0,
+          LEAD: cAct?.LEAD || 0,
         });
       }
     } catch {
