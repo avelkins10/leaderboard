@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
           const dk = dkHeader ? s[dkHeader.mapped_field] || 0 : 0;
           if (dk > 0) {
             if (!activeByOffice[office]) activeByOffice[office] = new Set();
-            activeByOffice[office].add(s.user_id);
+            activeByOffice[office].add(s.item_id);
           }
         }
       }
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
           const sat = satHeader ? s[satHeader.mapped_field] || 0 : 0;
           if (sat >= 1) {
             if (!activeByOffice[office]) activeByOffice[office] = new Set();
-            activeByOffice[office].add(s.user_id);
+            activeByOffice[office].add(s.item_id);
           }
         }
       }
