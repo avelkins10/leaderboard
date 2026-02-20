@@ -114,12 +114,13 @@ ALL QuickBase deals count as closes regardless of status. `totalSales` = all dea
 
 ### Data Layer
 
-- `src/lib/data.ts` — Core data processing: aggregation, cancel detection, office mapping, rep attribution
+- `src/lib/data.ts` — Core data processing: aggregation, cancel detection, office mapping, rep attribution, field time computation (`avgFieldHoursByOffice`)
 - `src/lib/repcard.ts` — RepCard API client (leaderboards, users, appointments)
-- `src/lib/quickbase.ts` — QuickBase API client (sales/deals)
+- `src/lib/quickbase.ts` — QuickBase API client (sales/deals). `QBSale` interface has `setterName`, `closerName`, `salesOffice`, `setterRepCardId`, `closerRepCardId`.
 - `src/lib/supabase.ts` — Supabase client (admin + anon)
-- `src/lib/supabase-queries.ts` — Supabase query functions (quality stats, partnerships)
-- `src/lib/config.ts` — Office mapping, API keys, team→QB office mapping
+- `src/lib/supabase-queries.ts` — Supabase query functions: `getOfficeSetterQualityStats`, `getOfficePartnerships`, `getCloserQualityByStars`, `getFieldTimeStats` (all take setter IDs), `dispositionCategory`
+- `src/lib/config.ts` — Office mapping, API keys, team→QB office mapping, `getOfficeTimezone()`
+- `src/lib/format.ts` — `formatDate`, `formatDateShort` (timezone-aware), `formatNumber`, `formatKw`, `formatCurrency`
 
 ### Config
 
@@ -143,10 +144,34 @@ Inline in `page.tsx` (~line 238). Lazy-loads `/api/rep/{id}/appointments` via us
 - Appointment table with setter/closer name, disposition, stars (setter), schedule-out (setter)
 - QB Sales table (closer only) with setter name, kW, PPW, status
 
-### Office Detail Page
-- Setter accountability table with QB closes, PB%, avg stars, field time
+### Office Directory (`/office`)
+- Cards per office showing: closes, kW, appts, sits, active reps, close rate, avg field hours
+- Data comes from `/api/scorecard` — uses `avgFieldHoursByOffice` from `data.ts`
+- Sits = `Math.max(setterSits, closerSats)` for directory cards
+
+### Office Detail Page (`/office/[name]`)
+- Setter accountability table with QB closes, PB%, avg stars, field time (start/end/avg hours)
 - Closer table with sits breakdown (CLS, NC, CF, FU on lg screens), outcomes attached via office API
 - Only active setters shown (DK > 0 filter)
+- Appointment funnel visualization (total → sat → closed → closer fault → setter fault)
+
+### Field Time
+- Source: Supabase `door_knocks` table (`rep_id`, `knocked_at`)
+- `getFieldTimeStats()` in `supabase-queries.ts` — computes per-rep: avg hours/day, avg start time, avg end time
+- `avgFieldHoursByOffice` in `data.ts` — groups knocks by rep + LOCAL date (timezone-aware), computes per-rep avg, then per-office avg
+- Both must use setter→office mapping (not `office_team` from door_knocks) and local timezone date grouping
+
+### Trends Page (`/trends`)
+- Weekly snapshots from Supabase `weekly_snapshots` table
+- Live current-week data from `/api/trends` (fetches leaderboards + sales for current period)
+- Active reps counted from leaderboard `item_id` (NOT `user_id`)
+- Charts: closes, kW, appts, sits, active reps per office over time
+
+### Filter Chips (Rank By)
+- All three tabs (setters, closers, offices) have filter chip rows for quick re-sorting
+- Defined as `SETTER_CATEGORIES`, `CLOSER_CATEGORIES`, `OFFICE_CATEGORIES` constants in `page.tsx`
+- Clicking a chip sets the sort key + descending direction, highlights the active metric
+- Column headers remain independently sortable via `SortHeader` component
 
 ## Common Patterns
 
