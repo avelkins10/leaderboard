@@ -523,6 +523,7 @@ function RepDrillDown({
                 <tr className="border-b border-border/40 bg-secondary/20 text-2xs uppercase tracking-widest text-muted-foreground">
                   <th className="py-2 px-3 text-left font-medium">Date</th>
                   <th className="py-2 px-3 text-left font-medium">Customer</th>
+                  <th className="py-2 px-3 text-left font-medium">Setter</th>
                   <th className="py-2 px-3 text-right font-medium">kW</th>
                   <th className="py-2 px-3 text-right font-medium">PPW</th>
                   <th className="py-2 px-3 text-left font-medium">Status</th>
@@ -539,6 +540,9 @@ function RepDrillDown({
                     </td>
                     <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
                       {s.customerName || "-"}
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground max-w-[120px] truncate">
+                      {s.setterName || "-"}
                     </td>
                     <td className="py-2 px-3 text-right font-mono tabular-nums">
                       {formatKw(s.systemSizeKw)}
@@ -1378,6 +1382,26 @@ export default function Dashboard() {
                               }
                               tooltip="Appointments sat"
                             />
+                            <th className="py-3 px-3 text-right font-medium hidden xl:table-cell">
+                              <Tooltip text="Closed deals from sits">
+                                <span className="text-primary/70">CLS</span>
+                              </Tooltip>
+                            </th>
+                            <th className="py-3 px-3 text-right font-medium hidden xl:table-cell">
+                              <Tooltip text="No Close">
+                                <span className="text-warning/70">NC</span>
+                              </Tooltip>
+                            </th>
+                            <th className="py-3 px-3 text-right font-medium hidden xl:table-cell">
+                              <Tooltip text="Credit Fail">
+                                <span className="text-muted-foreground/70">CF</span>
+                              </Tooltip>
+                            </th>
+                            <th className="py-3 px-3 text-right font-medium hidden xl:table-cell">
+                              <Tooltip text="Follow Up">
+                                <span className="text-info/70">FU</span>
+                              </Tooltip>
+                            </th>
                             <SortHeader
                               label="Close %"
                               sortKey="sitCloseRate"
@@ -1462,6 +1486,18 @@ export default function Dashboard() {
                                   </td>
                                   <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
                                     {sits}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-primary/70 hidden xl:table-cell">
+                                    {c.CLOS || 0}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-warning/70 hidden xl:table-cell">
+                                    {c.outcomes?.NOCL || 0}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground/70 hidden xl:table-cell">
+                                    {c.outcomes?.CF || 0}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-info/70 hidden xl:table-cell">
+                                    {c.outcomes?.FUS || 0}
                                   </td>
                                   <td className="py-3 px-3 text-right">
                                     {sits > 0 ? (
@@ -1624,6 +1660,16 @@ export default function Dashboard() {
                                     </span>
                                     <span className="font-mono tabular-nums">
                                       {sits}
+                                      {sits > 0 && (
+                                        <span className="text-[10px] text-muted-foreground/60 ml-1">
+                                          ({c.CLOS || 0}
+                                          <span className="text-primary/60">C</span>
+                                          {(c.outcomes?.NOCL || 0) > 0 && <> {c.outcomes.NOCL}<span className="text-warning/60">NC</span></>}
+                                          {(c.outcomes?.CF || 0) > 0 && <> {c.outcomes.CF}<span className="text-muted-foreground/50">CF</span></>}
+                                          {(c.outcomes?.FUS || 0) > 0 && <> {c.outcomes.FUS}<span className="text-info/60">FU</span></>}
+                                          )
+                                        </span>
+                                      )}
                                     </span>
                                   </div>
                                   <div className="flex justify-between">

@@ -232,7 +232,9 @@ export async function GET(
           (qbClosesBySetterRC[sale.setterRepCardId] || 0) + 1;
     }
 
-    // Attach QB stats to closers — RepCard ID primary, name fallback
+    // Attach QB stats + outcomes to closers — RepCard ID primary, name fallback
+    const closerApptMap: Record<number, any> = {};
+    for (const ca of closerAppts) closerApptMap[ca.userId] = ca;
     for (const c of closers) {
       const agg = qbByCloserRC[c.userId] || qbByCloserName[c.name];
       c.qbCloses = (agg?.deals || 0) + (agg?.cancelled || 0);
@@ -244,6 +246,17 @@ export async function GET(
         agg && agg.ppwCount > 0
           ? Math.round((agg.ppwSum / agg.ppwCount) * 100) / 100
           : 0;
+      const apptData = closerApptMap[c.userId];
+      c.outcomes = {
+        NOCL: apptData?.NOCL || 0,
+        CF: apptData?.CF || 0,
+        FUS: apptData?.FUS || 0,
+        SHAD: apptData?.SHAD || 0,
+        CANC: apptData?.CANC || 0,
+        NOSH: apptData?.NOSH || 0,
+        RSCH: apptData?.RSCH || 0,
+        NTR: apptData?.NTR || 0,
+      };
     }
 
     // Build setter accountability by merging setter LB + setter appt data + QB closes + quality stats

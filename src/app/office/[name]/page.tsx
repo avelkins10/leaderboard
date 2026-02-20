@@ -668,6 +668,18 @@ export default function OfficePage() {
                           Sat <Tooltip text="Appointments this closer sat on" />
                         </span>
                       </th>
+                      <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                        <Tooltip text="Closed from sits"><span className="text-primary/70">CLS</span></Tooltip>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                        <Tooltip text="No Close"><span className="text-warning/70">NC</span></Tooltip>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                        <Tooltip text="Credit Fail"><span className="text-muted-foreground/70">CF</span></Tooltip>
+                      </th>
+                      <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                        <Tooltip text="Follow Up"><span className="text-info/70">FU</span></Tooltip>
+                      </th>
                       <th className="py-3 px-3 text-right font-medium">
                         <span className="inline-flex items-center gap-1">
                           Closes <Tooltip text="Verified from QuickBase" />
@@ -727,6 +739,18 @@ export default function OfficePage() {
                             </td>
                             <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground">
                               {c.SAT || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-primary/70 hidden lg:table-cell">
+                              {c.CLOS || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-warning/70 hidden lg:table-cell">
+                              {c.outcomes?.NOCL || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground/70 hidden lg:table-cell">
+                              {c.outcomes?.CF || 0}
+                            </td>
+                            <td className="py-3.5 px-3 text-right font-mono tabular-nums text-info/70 hidden lg:table-cell">
+                              {c.outcomes?.FUS || 0}
                             </td>
                             <td className="py-3.5 px-3 text-right font-mono tabular-nums font-semibold text-primary">
                               {c.qbCloses || 0}
