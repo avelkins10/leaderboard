@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { Section } from "@/components/Section";
 import { MetricCard } from "@/components/MetricCard";
+import { CompactMetricCard } from "@/components/CompactMetricCard";
 import { DateFilter } from "@/components/DateFilter";
 import { useDateRange } from "@/hooks/useDateRange";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -214,21 +215,15 @@ export default function RepPage() {
         <div className="animate-enter space-y-8">
           {data.user.role === "setter" && data.setterCoaching && (
             <>
-              {/* Top row — funnel metrics (coaching front and center) */}
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+              {/* Row 1 — funnel (big cards) */}
+              <div className="grid grid-cols-3 gap-3">
                 <MetricCard
                   label="Appts Set"
                   value={data.setterCoaching.appointments}
-                  color="blue"
-                  subtitle={
-                    data.setterCoaching.doors > 0
-                      ? `${data.setterCoaching.doorToAppt}% of doors`
-                      : undefined
-                  }
                   tooltip="Appointments set"
                 />
                 <MetricCard
-                  label="Sits"
+                  label="Sat"
                   value={data.setterCoaching.sits}
                   color="blue"
                   tooltip="Appointments that sat"
@@ -239,61 +234,97 @@ export default function RepPage() {
                   color="green"
                   tooltip="Verified closes from QuickBase"
                 />
-                <MetricCard
-                  label="Sit %"
-                  value={`${data.setterCoaching.sitRate}%`}
-                  color={
-                    data.setterCoaching.sitRate >= 50
-                      ? "green"
-                      : data.setterCoaching.sitRate >= 30
-                        ? "yellow"
-                        : "red"
-                  }
-                  tooltip="Appointments that sat / total set"
-                />
-                <MetricCard
-                  label="Close %"
-                  value={`${data.setterCoaching.closeRate}%`}
-                  color={
-                    data.setterCoaching.closeRate >= 15
-                      ? "green"
-                      : data.setterCoaching.closeRate >= 8
-                        ? "yellow"
-                        : "red"
-                  }
-                  tooltip="QB Closes / appointments set"
-                />
               </div>
 
-              {/* Second row — context metrics */}
+              {/* Row 2 — compact combo cards */}
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                <MetricCard
-                  label="Doors"
-                  value={data.setterCoaching.doors}
-                  tooltip="Total unique doors knocked"
+                <CompactMetricCard
+                  title="Conversion"
+                  tooltip="Appointment conversion rates"
+                  rows={[
+                    {
+                      label: "Sit %",
+                      value: `${data.setterCoaching.sitRate}%`,
+                      color:
+                        data.setterCoaching.sitRate >= 50
+                          ? "green"
+                          : data.setterCoaching.sitRate >= 30
+                            ? "yellow"
+                            : "red",
+                    },
+                    {
+                      label: "Close %",
+                      value: `${data.setterCoaching.closeRate}%`,
+                      color:
+                        data.setterCoaching.closeRate >= 15
+                          ? "green"
+                          : data.setterCoaching.closeRate >= 8
+                            ? "yellow"
+                            : "red",
+                    },
+                  ]}
                 />
-                <MetricCard
-                  label="Pitches"
-                  value={data.setterCoaching.qualifiedPitches}
-                  color="blue"
-                  subtitle={
-                    data.setterCoaching.doors > 0
-                      ? `${data.setterCoaching.doorToQP}% of doors`
-                      : undefined
-                  }
-                  tooltip="Qualified pitches -- homeowner engaged"
+                <CompactMetricCard
+                  title="Quality"
+                  tooltip="Appointment quality indicators"
+                  rows={[
+                    ...(data.qualityStats
+                      ? [
+                          {
+                            label: "PB %",
+                            value: `${Math.round((data.qualityStats.withPowerBill / data.qualityStats.total) * 100)}%`,
+                            color: (Math.round(
+                              (data.qualityStats.withPowerBill /
+                                data.qualityStats.total) *
+                                100,
+                            ) >= 80
+                              ? "green"
+                              : Math.round(
+                                    (data.qualityStats.withPowerBill /
+                                      data.qualityStats.total) *
+                                      100,
+                                  ) >= 50
+                                ? "yellow"
+                                : "red") as "green" | "yellow" | "red",
+                          },
+                        ]
+                      : [{ label: "PB %", value: "—" }]),
+                    ...(data.setterCoaching.avgScheduleOutHours != null
+                      ? [
+                          {
+                            label: "Sched Out",
+                            value:
+                              data.setterCoaching.avgScheduleOutHours < 48
+                                ? `${Math.round(data.setterCoaching.avgScheduleOutHours)}h`
+                                : `${(data.setterCoaching.avgScheduleOutHours / 24).toFixed(1)}d`,
+                            color: (data.setterCoaching.avgScheduleOutHours <=
+                            48
+                              ? "green"
+                              : data.setterCoaching.avgScheduleOutHours <= 72
+                                ? "yellow"
+                                : "red") as "green" | "yellow" | "red",
+                          },
+                        ]
+                      : [{ label: "Sched Out", value: "—" }]),
+                  ]}
                 />
-                <MetricCard
-                  label="Waste %"
-                  value={`${data.setterCoaching.wasteRate}%`}
-                  color={
-                    data.setterCoaching.wasteRate <= 15
-                      ? "green"
-                      : data.setterCoaching.wasteRate <= 30
-                        ? "yellow"
-                        : "red"
-                  }
-                  tooltip="(No Shows + Cancels) / appointments set"
+                <CompactMetricCard
+                  title="Field Time"
+                  tooltip="Average knocking hours, start and end times"
+                  rows={[
+                    {
+                      label: "Qty Hrs",
+                      value: data.setterCoaching.qualityHours ?? "—",
+                    },
+                    {
+                      label: "Start",
+                      value: data.setterCoaching.firstDoorKnock ?? "—",
+                    },
+                    {
+                      label: "End",
+                      value: data.setterCoaching.lastDoorKnock ?? "—",
+                    },
+                  ]}
                 />
               </div>
 
@@ -485,48 +516,83 @@ export default function RepPage() {
           )}
 
           {data.user.role === "closer" && data.stats && (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-              <MetricCard
-                label="Leads"
-                value={data.stats.LEAD || 0}
-                tooltip="Assigned leads"
-              />
-              <MetricCard
-                label="Sits"
-                value={data.stats.SAT || 0}
-                color="blue"
-                tooltip="Appointments sat"
-              />
-              <MetricCard
-                label="Closes"
-                value={data.stats.CLOS || 0}
-                color="green"
-                tooltip="RepCard self-reported closes (not verified)"
-              />
-              <MetricCard
-                label="Close %"
-                value={`${data.stats.CLSE || 0}%`}
-                color={
-                  (data.stats.CLSE || 0) >= 35
-                    ? "green"
-                    : (data.stats.CLSE || 0) >= 25
-                      ? "yellow"
-                      : "red"
-                }
-                tooltip="Sit/Close %. Target: 35%+"
-              />
-              <MetricCard
-                label="Credit Fails"
-                value={data.stats.CF || 0}
-                color="red"
-                tooltip="Credit fails"
-              />
-              <MetricCard
-                label="Follow Ups"
-                value={data.stats.FUS || 0}
-                tooltip="Follow ups scheduled"
-              />
-            </div>
+            <>
+              {/* Row 1 — funnel (big cards) */}
+              <div className="grid grid-cols-3 gap-3">
+                <MetricCard
+                  label="Assigned"
+                  value={data.stats.LEAD || 0}
+                  tooltip="Leads assigned from setters"
+                />
+                <MetricCard
+                  label="Sat"
+                  value={data.stats.SAT || 0}
+                  color="blue"
+                  tooltip="Appointments sat"
+                />
+                <MetricCard
+                  label="QB Closes"
+                  value={data.closerQBStats?.totalDeals || 0}
+                  color="green"
+                  tooltip="Verified closes from QuickBase"
+                />
+              </div>
+
+              {/* Row 2 — compact combo cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {(() => {
+                  const sat = data.stats.SAT || 0;
+                  const qbCloses = data.closerQBStats?.totalDeals || 0;
+                  const closeRate =
+                    sat > 0 ? Math.round((qbCloses / sat) * 1000) / 10 : 0;
+                  return (
+                    <CompactMetricCard
+                      title="Close %"
+                      tooltip="QB Closes / Appointments Sat"
+                      rows={[
+                        {
+                          label: "Rate",
+                          value: `${closeRate}%`,
+                          color:
+                            closeRate >= 35
+                              ? "green"
+                              : closeRate >= 25
+                                ? "yellow"
+                                : "red",
+                        },
+                      ]}
+                    />
+                  );
+                })()}
+                {(() => {
+                  const cancels = data.closerQBStats?.cancelled || 0;
+                  const cancelPct = data.closerQBStats?.cancelPct || 0;
+                  return (
+                    <CompactMetricCard
+                      title="Cancels"
+                      tooltip="Cancelled deals from QuickBase"
+                      rows={[
+                        {
+                          label: "Count",
+                          value: cancels,
+                          color: cancels > 0 ? "red" : "green",
+                        },
+                        {
+                          label: "Rate",
+                          value: `${cancelPct}%`,
+                          color:
+                            cancelPct <= 10
+                              ? "green"
+                              : cancelPct <= 20
+                                ? "yellow"
+                                : "red",
+                        },
+                      ]}
+                    />
+                  );
+                })()}
+              </div>
+            </>
           )}
 
           {/* Closer Weekly Trend */}
@@ -626,9 +692,9 @@ export default function RepPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={Object.entries(data.dispositions)
-                            .filter(([k]) => !["LEAD"].includes(k))
-                            .map(([k, v]) => ({ name: k, value: v as number }))}
+                          data={Object.entries(data.dispositions).map(
+                            ([k, v]) => ({ name: k, value: v as number }),
+                          )}
                           cx="50%"
                           cy="50%"
                           innerRadius={55}
@@ -1036,11 +1102,10 @@ export default function RepPage() {
             </Section>
           )}
 
-          {/* Appointment History from Supabase */}
           {data.appointmentHistory && data.appointmentHistory.length > 0 && (
             <Section
               title="Appointment History"
-              subtitle={`Last ${data.appointmentHistory.length} appointments from Supabase`}
+              subtitle={`Last ${data.appointmentHistory.length} appointments`}
               noPadding
             >
               <div className="overflow-x-auto">

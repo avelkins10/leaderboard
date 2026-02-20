@@ -78,18 +78,14 @@ function eventDescription(event: any): string {
 
 function Skeleton({ className = "" }: { className?: string }) {
   return (
-    <div
-      className={`animate-skeleton rounded-xl bg-secondary ${className}`}
-    />
+    <div className={`animate-skeleton rounded-xl bg-secondary ${className}`} />
   );
 }
 
 export default function ContactPage() {
   const params = useParams();
   const contactId = params.id as string;
-  const { data, error, isLoading } = useSWR(
-    `/api/contact/${contactId}`,
-  );
+  const { data, error, isLoading } = useSWR(`/api/contact/${contactId}`);
 
   return (
     <div className="space-y-8">
@@ -104,7 +100,7 @@ export default function ContactPage() {
           Contact #{contactId}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Full activity timeline from Supabase
+          Full activity timeline
         </p>
       </div>
 
@@ -128,7 +124,7 @@ export default function ContactPage() {
             title="Timeline"
             subtitle={`${data.timeline?.length || 0} events`}
           >
-            {(!data.timeline || data.timeline.length === 0) ? (
+            {!data.timeline || data.timeline.length === 0 ? (
               <p className="py-16 text-center text-sm text-muted-foreground">
                 No events found for this contact
               </p>

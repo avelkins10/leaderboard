@@ -120,11 +120,17 @@ export async function GET(
       });
     }
 
-    // Disposition breakdown for closers
+    // Disposition breakdown for closers (exclude non-disposition stats like LEAD)
+    const NON_DISPOSITION_KEYS = new Set(["LEAD", "SAT"]);
     const dispositions: Record<string, number> = {};
     if (closerApptStats) {
       for (const [key, val] of Object.entries(closerApptStats)) {
-        if (typeof val === "number" && val > 0) dispositions[key] = val;
+        if (
+          typeof val === "number" &&
+          val > 0 &&
+          !NON_DISPOSITION_KEYS.has(key)
+        )
+          dispositions[key] = val;
       }
     }
 
@@ -327,6 +333,10 @@ export async function GET(
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,
         doorToQP: dk > 0 ? Math.round((qp / dk) * 1000) / 10 : 0,
         avgScheduleOutHours: avgScheduleOut,
+        qualityHours: setterStats.QHST || null,
+        firstDoorKnock: setterStats.FDK || null,
+        lastDoorKnock: setterStats.LDK || null,
+        timeSinceFirst: setterStats.TSF || null,
       };
     }
 
