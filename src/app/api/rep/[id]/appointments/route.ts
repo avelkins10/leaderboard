@@ -56,9 +56,7 @@ export async function GET(
 
     // Fetch appointments from RepCard API directly (with setter_ids / closer_ids filter)
     const filterParam =
-      role === "closer"
-        ? `closer_ids=${userId}`
-        : `setter_ids=${userId}`;
+      role === "closer" ? `closer_ids=${userId}` : `setter_ids=${userId}`;
 
     const rcUrl = `https://app.repcard.com/api/appointments?${filterParam}&from_date=${fromDate}&to_date=${toDate}&per_page=100`;
     const rcRes = await fetch(rcUrl, {
@@ -70,38 +68,48 @@ export async function GET(
     if (rcRes.ok) {
       const rcData = await rcRes.json();
       const apptRows = rcData.result?.data || rcData.data || [];
-      appointments = apptRows.map((a: any) => {
-        const statusTitle = a.status?.title || null;
-        // Schedule-out: hours between when appointment was created and when it's scheduled
-        let hoursScheduledOut: number | null = null;
-        if (a.createdAt && a.startAt) {
-          const created = new Date(a.createdAt);
-          const start = new Date(a.startAt);
-          hoursScheduledOut = Math.max(0, (start.getTime() - created.getTime()) / (1000 * 60 * 60));
-        }
+      const seen = new Set<number>();
+      appointments = apptRows
+        .filter((a: any) => {
+          if (seen.has(a.id)) return false;
+          seen.add(a.id);
+          return true;
+        })
+        .map((a: any) => {
+          const statusTitle = a.status?.title || null;
+          // Schedule-out: hours between when appointment was created and when it's scheduled
+          let hoursScheduledOut: number | null = null;
+          if (a.createdAt && a.startAt) {
+            const created = new Date(a.createdAt);
+            const start = new Date(a.startAt);
+            hoursScheduledOut = Math.max(
+              0,
+              (start.getTime() - created.getTime()) / (1000 * 60 * 60),
+            );
+          }
 
-        return {
-          id: a.id,
-          contact_name: a.contact?.fullName || a.contact?.name || null,
-          contact_address:
-            a.appointmentLocation ||
-            a.contact?.fullAddress ||
-            [a.contact?.address, a.contact?.city, a.contact?.state]
-              .filter(Boolean)
-              .join(", ") ||
-            null,
-          appointment_time: a.startAt || null,
-          created_at: a.createdAt || null,
-          hours_scheduled_out: hoursScheduledOut,
-          disposition: statusTitle,
-          disposition_category: dispositionCategory(statusTitle),
-          star_rating: a.contact?.rating ?? null,
-          setter_name: a.setter?.fullName || a.setter?.name || null,
-          closer_name: a.closer?.fullName || a.closer?.name || null,
-          has_power_bill: a.contact?.hasPowerBill ?? null,
-          office_team: a.setter?.team || null,
-        };
-      });
+          return {
+            id: a.id,
+            contact_name: a.contact?.fullName || a.contact?.name || null,
+            contact_address:
+              a.appointmentLocation ||
+              a.contact?.fullAddress ||
+              [a.contact?.address, a.contact?.city, a.contact?.state]
+                .filter(Boolean)
+                .join(", ") ||
+              null,
+            appointment_time: a.startAt || null,
+            created_at: a.createdAt || null,
+            hours_scheduled_out: hoursScheduledOut,
+            disposition: statusTitle,
+            disposition_category: dispositionCategory(statusTitle),
+            star_rating: a.contact?.rating ?? null,
+            setter_name: a.setter?.fullName || a.setter?.name || null,
+            closer_name: a.closer?.fullName || a.closer?.name || null,
+            has_power_bill: a.contact?.hasPowerBill ?? null,
+            office_team: a.setter?.team || null,
+          };
+        });
     }
 
     // Enrich with star ratings from Supabase (webhooks compute these)
@@ -131,9 +139,11 @@ export async function GET(
     const schedHours = appointments
       .map((a: any) => a.hours_scheduled_out)
       .filter((h: any) => h != null && h >= 0);
-    const avgScheduleOutHours = schedHours.length > 0
-      ? schedHours.reduce((sum: number, h: number) => sum + h, 0) / schedHours.length
-      : null;
+    const avgScheduleOutHours =
+      schedHours.length > 0
+        ? schedHours.reduce((sum: number, h: number) => sum + h, 0) /
+          schedHours.length
+        : null;
 
     return NextResponse.json({
       role,
