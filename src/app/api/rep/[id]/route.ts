@@ -17,35 +17,45 @@ import {
 } from "@/lib/data";
 import repRoles from "@/lib/rep-roles.json";
 
-/** Parse RepCard time value (could be "H:MM", "HH:MM", or a number) to 12-hour format */
-function formatTime12h(raw: any): string | null {
+/** Convert RepCard UTC HH:MM time to local 12-hour format */
+function formatTimeLocal(raw: any, tz: string): string | null {
   if (raw == null || raw === 0) return null;
-  const str = String(raw);
-  // Match H:MM or HH:MM patterns
-  const match = str.match(/^(\d{1,2}):(\d{1,2})$/);
-  if (match) {
-    let h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    // If h > 23, this isn't a clock time (it's duration like QHST "64:9")
-    if (h > 23) return null;
-    const ampm = h >= 12 ? "PM" : "AM";
-    if (h === 0) h = 12;
-    else if (h > 12) h -= 12;
-    return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
-  }
-  return null;
+  const str = String(raw).trim();
+  const match = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (h > 23) return null;
+  // Build a UTC date with that time (date doesn't matter, just need time conversion)
+  const utc = new Date(Date.UTC(2026, 0, 1, h, m));
+  return utc.toLocaleTimeString("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
-/** Parse RepCard duration value like "64:9" (hours:minutes) to readable format */
+/** Parse RepCard duration value like "64 : 9" or "4 : 0" to readable format */
 function formatDuration(raw: any): string | null {
   if (raw == null || raw === 0) return null;
-  const str = String(raw);
-  const match = str.match(/^(\d+):(\d+)$/);
+  const str = String(raw).trim();
+  // Match "H : M", "H:M", "HH : MM" patterns (with optional spaces)
+  const match = str.match(/^(\d+)\s*:\s*(\d+)$/);
   if (match) {
     const h = parseInt(match[1], 10);
     const m = parseInt(match[2], 10);
     if (h === 0 && m === 0) return null;
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  // Handle "20.95 h" format (TSF)
+  const hMatch = str.match(/^([\d.]+)\s*h$/i);
+  if (hMatch) {
+    const hours = parseFloat(hMatch[1]);
+    const hrs = Math.floor(hours);
+    const mins = Math.round((hours - hrs) * 60);
+    if (hrs === 0 && mins === 0) return null;
+    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
   }
   // If it's already a number, treat as hours
   const num = Number(raw);
@@ -68,11 +78,12 @@ function getTzAbbrev(qbOffice: string): string {
 }
 
 function formatFieldTime(stats: Record<string, any>, qbOffice: string) {
+  const tz = getOfficeTimezone(qbOffice);
   const tzAbbrev = getTzAbbrev(qbOffice);
   return {
     qualityHours: formatDuration(stats.QHST),
-    firstDoorKnock: formatTime12h(stats.FDK),
-    lastDoorKnock: formatTime12h(stats.LDK),
+    firstDoorKnock: formatTimeLocal(stats.FDK, tz),
+    lastDoorKnock: formatTimeLocal(stats.LDK, tz),
     timeSinceFirst: formatDuration(stats.TSF),
     timezone: tzAbbrev,
   };
