@@ -441,13 +441,25 @@ export async function getOfficeSetterQualityStats(
   teamNames: string[],
   from: string,
   to: string,
+  setterIds?: number[],
 ): Promise<SetterApptStats[]> {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("appointments")
     .select("*")
-    .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
     .lte("appointment_time", `${to}T23:59:59Z`);
+
+  if (setterIds && setterIds.length > 0) {
+    // Primary: query by setter_id (works even when office_team is null)
+    query = query.in("setter_id", setterIds);
+  } else if (teamNames.length > 0) {
+    // Fallback: query by office_team
+    query = query.in("office_team", teamNames);
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return aggregateStats(
     data || [],

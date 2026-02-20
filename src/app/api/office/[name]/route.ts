@@ -48,7 +48,6 @@ export async function GET(
       setterBoards,
       users,
       sales,
-      qualityStats,
       partnerships,
       speedToClose,
       closerQualityByStars,
@@ -59,9 +58,6 @@ export async function GET(
       getTypedLeaderboards("setter", fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      repCardTeamNames.length > 0
-        ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate)
-        : Promise.resolve([]),
       repCardTeamNames.length > 0
         ? getOfficePartnerships(repCardTeamNames, fromDate, toDate)
         : Promise.resolve([]),
@@ -134,6 +130,12 @@ export async function GET(
     const closers = processLB(closerLB);
     const setterAppts = processLB(setterApptLB);
     const closerAppts = processLB(closerApptLB);
+
+    // Fetch quality stats by setter_id (not office_team) to handle null office_team
+    const setterIds = setters.map((s: any) => s.userId);
+    const qualityStats = setterIds.length > 0
+      ? await getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate, setterIds)
+      : [];
 
     // Derive active rep counts from leaderboard data (DK > 0 for setters, SAT >= 1 for closers)
     // Deduplicate: same person can be setter AND closer

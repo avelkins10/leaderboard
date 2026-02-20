@@ -501,36 +501,12 @@ export async function fetchScorecard(
     .not("star_rating", "is", null);
 
   const starBySetter: Record<number, { sum: number; count: number }> = {};
-  const starByOfficeTeam: Record<string, { sum: number; count: number }> = {};
   for (const row of starRows || []) {
     if (!row.setter_id) continue;
     if (!starBySetter[row.setter_id])
       starBySetter[row.setter_id] = { sum: 0, count: 0 };
     starBySetter[row.setter_id].sum += row.star_rating;
     starBySetter[row.setter_id].count++;
-
-    // Aggregate by office team for avg stars by office
-    if (row.office_team) {
-      if (!starByOfficeTeam[row.office_team])
-        starByOfficeTeam[row.office_team] = { sum: 0, count: 0 };
-      starByOfficeTeam[row.office_team].sum += row.star_rating;
-      starByOfficeTeam[row.office_team].count++;
-    }
-  }
-
-  // Map office team names to QB office names for avgStarsByOffice
-  const avgStarsByOffice: Record<string, number> = {};
-  const officeStarAgg: Record<string, { sum: number; count: number }> = {};
-  for (const [teamName, agg] of Object.entries(starByOfficeTeam)) {
-    const qbOffice = repCardTeamToQBOffice(teamName);
-    if (!qbOffice) continue;
-    if (!officeStarAgg[qbOffice])
-      officeStarAgg[qbOffice] = { sum: 0, count: 0 };
-    officeStarAgg[qbOffice].sum += agg.sum;
-    officeStarAgg[qbOffice].count += agg.count;
-  }
-  for (const [office, agg] of Object.entries(officeStarAgg)) {
-    avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
   }
 
   // Fetch per-office avg field hours from door_knocks
@@ -586,6 +562,21 @@ export async function fetchScorecard(
     if (setter.qbOffice !== "Unknown") {
       getOrCreate(setter.qbOffice).setters.push(setter);
     }
+  }
+
+  // Compute avgStarsByOffice using setter → office mapping (not office_team which can be null)
+  const avgStarsByOffice: Record<string, number> = {};
+  const officeStarAgg: Record<string, { sum: number; count: number }> = {};
+  for (const s of allSetters) {
+    const starData = starBySetter[s.userId];
+    if (!starData || s.qbOffice === "Unknown") continue;
+    if (!officeStarAgg[s.qbOffice])
+      officeStarAgg[s.qbOffice] = { sum: 0, count: 0 };
+    officeStarAgg[s.qbOffice].sum += starData.sum;
+    officeStarAgg[s.qbOffice].count += starData.count;
+  }
+  for (const [office, agg] of Object.entries(officeStarAgg)) {
+    avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
   }
 
   // Process closers with QB attribution
