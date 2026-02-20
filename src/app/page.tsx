@@ -648,7 +648,7 @@ export default function Dashboard() {
   const setterList = useMemo(() => {
     if (!data) return [];
     const withComputed = data.allSetters
-      .filter((s) => (s.DK || 0) > 0 || (s.APPT || 0) > 0)
+      .filter((s) => (s.DK || 0) > 0)
       .map((s) => {
         const appts = s.APPT || 0;
         const sits = s.SITS || 0;

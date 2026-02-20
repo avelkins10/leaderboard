@@ -60,7 +60,7 @@ export default function QualityPage() {
     const setters = data.allSetters || [];
 
     return setters
-      .filter((s: any) => (s.APPT || 0) > 0 || (s.DK || 0) > 0)
+      .filter((s: any) => (s.DK || 0) > 0)
       .map((s: any) => {
         const appt = s.APPT || 0;
         const sits = s.SITS || 0;
