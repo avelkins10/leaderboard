@@ -697,8 +697,9 @@ export default function Dashboard() {
           d.setters?.reduce((s: number, r: any) => s + (r.DK || 0), 0) || 0;
         const totalAppts =
           d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
+        // Use setter SITS (not closer SAT) — sits belong to the setter's office
         const totalSits =
-          d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
+          d.setters?.reduce((s: number, r: any) => s + (r.SITS || 0), 0) || 0;
         const qbCloses = d.sales?.deals || 0;
         const cancelled = d.sales?.cancelled || 0;
         const kw = d.sales?.kw || 0;

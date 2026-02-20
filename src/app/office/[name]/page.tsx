@@ -242,7 +242,7 @@ export default function OfficePage() {
               />
               <CompactMetricCard
                 title={`Field Time${data.timezone ? ` (${data.timezone})` : ""}`}
-                tooltip="Average hours per day and first knock from door knocks"
+                tooltip="Average hours per day, first and last knock from door knocks"
                 rows={[
                   {
                     label: "Hours",
@@ -254,6 +254,10 @@ export default function OfficePage() {
                   {
                     label: "First Knock",
                     value: data.setterSummary.avgFieldStart || "--",
+                  },
+                  {
+                    label: "Last Knock",
+                    value: data.setterSummary.avgFieldEnd || "--",
                   },
                 ]}
               />
@@ -504,6 +508,11 @@ export default function OfficePage() {
                           Start <Tooltip text="Avg first door knock time" />
                         </span>
                       </th>
+                      <th className="py-3 px-3 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          End <Tooltip text="Avg last door knock time" />
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
@@ -594,6 +603,13 @@ export default function OfficePage() {
                           </td>
                           <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground text-xs">
                             {s.fieldStart || (
+                              <span className="text-muted-foreground/25">
+                                --
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-mono tabular-nums text-muted-foreground text-xs">
+                            {s.fieldEnd || (
                               <span className="text-muted-foreground/25">
                                 --
                               </span>

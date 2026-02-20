@@ -291,6 +291,7 @@ export async function GET(
         pbPct: appt > 0 ? Math.round((pb / appt) * 100) : 0,
         fieldHours: ft?.avgHoursPerDay ?? null,
         fieldStart: ft?.avgStartTime ?? null,
+        fieldEnd: ft?.avgEndTime ?? null,
       };
     });
 
@@ -374,31 +375,34 @@ export async function GET(
               10,
           ) / 10
         : null;
-    // Average first-knock from field time data
-    const sAvgFieldStart = (() => {
-      const fts = fieldTimeData.filter((ft) => ft.avgStartTime);
-      if (fts.length === 0) return null;
-      const parseTime = (t: string) => {
-        const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
-        if (!m) return null;
-        let h = parseInt(m[1]);
-        const min = parseInt(m[2]);
-        if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
-        if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
-        return h * 60 + min;
-      };
-      const mins = fts
-        .map((ft) => parseTime(ft.avgStartTime))
-        .filter((m): m is number => m !== null);
-      if (mins.length === 0) return null;
-      const avgMin = Math.round(mins.reduce((s, m) => s + m, 0) / mins.length);
+    // Average first/last knock from field time data
+    const parseTime = (t: string) => {
+      const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (!m) return null;
+      let h = parseInt(m[1]);
+      const min = parseInt(m[2]);
+      if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+      if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+      return h * 60 + min;
+    };
+    const formatMins = (avgMin: number) => {
       let h = Math.floor(avgMin / 60);
       const mm = avgMin % 60;
       const ampm = h >= 12 ? "PM" : "AM";
       if (h === 0) h = 12;
       else if (h > 12) h -= 12;
       return `${h}:${String(mm).padStart(2, "0")} ${ampm}`;
-    })();
+    };
+    const avgTimeOf = (getter: (ft: any) => string | null) => {
+      const mins = fieldTimeData
+        .map((ft) => { const v = getter(ft); return v ? parseTime(v) : null; })
+        .filter((m): m is number => m !== null);
+      return mins.length > 0
+        ? formatMins(Math.round(mins.reduce((s, m) => s + m, 0) / mins.length))
+        : null;
+    };
+    const sAvgFieldStart = avgTimeOf((ft) => ft.avgStartTime);
+    const sAvgFieldEnd = avgTimeOf((ft) => ft.avgEndTime);
 
     // ── Closer summary for cards ──
     const cTotalAssigned = closers.reduce(
@@ -470,6 +474,7 @@ export async function GET(
         avgStars: sAvgStars,
         avgFieldHours: sAvgFieldHours,
         avgFieldStart: sAvgFieldStart,
+        avgFieldEnd: sAvgFieldEnd,
       },
       closerSummary: {
         totalAssigned: cTotalAssigned,

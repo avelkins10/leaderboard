@@ -91,8 +91,9 @@ export default function QualityPage() {
         .map(([name, d]: [string, any]) => {
           const totalAppts =
             d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
+          // Use setter SITS (not closer SAT) — sits should be attributed to the setter's office
           const totalSits =
-            d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
+            d.setters?.reduce((s: number, r: any) => s + (r.SITS || 0), 0) || 0;
           const sitRate =
             totalAppts > 0 ? Math.min((totalSits / totalAppts) * 100, 100) : 0;
           return {
