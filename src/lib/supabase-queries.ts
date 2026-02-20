@@ -482,13 +482,23 @@ export async function getOfficePartnerships(
   teamNames: string[],
   from: string,
   to: string,
+  setterIds?: number[],
 ): Promise<PartnershipStats[]> {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("appointments")
     .select("setter_id, setter_name, closer_id, closer_name, disposition")
-    .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
     .lte("appointment_time", `${to}T23:59:59Z`);
+
+  if (setterIds && setterIds.length > 0) {
+    query = query.in("setter_id", setterIds);
+  } else if (teamNames.length > 0) {
+    query = query.in("office_team", teamNames);
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   const map: Record<string, PartnershipStats> = {};
@@ -674,15 +684,25 @@ export async function getCloserQualityByStars(
   teamNames: string[],
   from: string,
   to: string,
+  setterIds?: number[],
 ): Promise<CloserQualityByStars[]> {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("appointments")
     .select("closer_id, closer_name, star_rating, disposition")
-    .in("office_team", teamNames)
     .gte("appointment_time", `${from}T00:00:00Z`)
     .lte("appointment_time", `${to}T23:59:59Z`)
     .not("closer_id", "is", null)
     .not("star_rating", "is", null);
+
+  if (setterIds && setterIds.length > 0) {
+    query = query.in("setter_id", setterIds);
+  } else if (teamNames.length > 0) {
+    query = query.in("office_team", teamNames);
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   // Group by closer_id + star_rating

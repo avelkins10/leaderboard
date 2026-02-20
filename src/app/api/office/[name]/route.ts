@@ -48,35 +48,15 @@ export async function GET(
       setterBoards,
       users,
       sales,
-      partnerships,
       speedToClose,
-      closerQualityByStars,
       installs,
-      fieldTimeData,
     ] = await Promise.all([
       getTypedLeaderboards("closer", fromDate, toDate),
       getTypedLeaderboards("setter", fromDate, toDate),
       getUsers(),
       getSales(fromDate, toDate),
-      repCardTeamNames.length > 0
-        ? getOfficePartnerships(repCardTeamNames, fromDate, toDate)
-        : Promise.resolve([]),
       getSpeedToClose(fromDate, toDate).catch(() => null),
-      repCardTeamNames.length > 0
-        ? getCloserQualityByStars(repCardTeamNames, fromDate, toDate).catch(
-            () => [],
-          )
-        : Promise.resolve([]),
       getInstalls(fromDate, toDate).catch(() => []),
-      repCardTeamNames.length > 0
-        ? getFieldTimeStats(
-            null,
-            repCardTeamNames,
-            fromDate,
-            toDate,
-            getOfficeTimezone(officeName),
-          )
-        : Promise.resolve([] as RepFieldTime[]),
     ]);
 
     const userMap: Record<number, any> = {};
@@ -131,11 +111,22 @@ export async function GET(
     const setterAppts = processLB(setterApptLB);
     const closerAppts = processLB(closerApptLB);
 
-    // Fetch quality stats by setter_id (not office_team) to handle null office_team
+    // Fetch Supabase data by setter_id (not office_team) to handle null office_team
     const setterIds = setters.map((s: any) => s.userId);
-    const qualityStats = setterIds.length > 0
-      ? await getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate, setterIds)
-      : [];
+    const [qualityStats, partnerships, closerQualityByStars, fieldTimeData] = await Promise.all([
+      setterIds.length > 0
+        ? getOfficeSetterQualityStats(repCardTeamNames, fromDate, toDate, setterIds)
+        : Promise.resolve([]),
+      setterIds.length > 0
+        ? getOfficePartnerships(repCardTeamNames, fromDate, toDate, setterIds)
+        : Promise.resolve([]),
+      setterIds.length > 0
+        ? getCloserQualityByStars(repCardTeamNames, fromDate, toDate, setterIds).catch(() => [])
+        : Promise.resolve([]),
+      setterIds.length > 0
+        ? getFieldTimeStats(setterIds, null, fromDate, toDate, getOfficeTimezone(officeName))
+        : Promise.resolve([] as RepFieldTime[]),
+    ]);
 
     // Derive active rep counts from leaderboard data (DK > 0 for setters, SAT >= 1 for closers)
     // Deduplicate: same person can be setter AND closer
@@ -290,7 +281,7 @@ export async function GET(
         avgStars: quality?.avg_stars || 0,
         powerBillCount: pb,
         qualityCount: quality?.quality_count || 0,
-        pbPct: appt > 0 ? Math.round((pb / appt) * 100) : 0,
+        pbPct: (quality?.total_appts || appt) > 0 ? Math.round((pb / (quality?.total_appts || appt)) * 100) : 0,
         fieldHours: ft?.avgHoursPerDay ?? null,
         fieldStart: ft?.avgStartTime ?? null,
         fieldEnd: ft?.avgEndTime ?? null,
@@ -347,6 +338,10 @@ export async function GET(
     );
     const sTotalPB = setterAccountability.reduce(
       (s: number, r: any) => s + (r.powerBillCount || 0),
+      0,
+    );
+    const sTotalSbAppts = qualityStats.reduce(
+      (s: number, r: any) => s + (r.total_appts || 0),
       0,
     );
     const sWithStars = setterAccountability.filter(
@@ -466,7 +461,7 @@ export async function GET(
           sTotalAppts > 0 ? Math.round((sTotalSits / sTotalAppts) * 100) : 0,
         sitClosePct:
           sTotalSits > 0 ? Math.round((sTotalQBCloses / sTotalSits) * 100) : 0,
-        pbPct: sTotalAppts > 0 ? Math.round((sTotalPB / sTotalAppts) * 100) : 0,
+        pbPct: (sTotalSbAppts || sTotalAppts) > 0 ? Math.round((sTotalPB / (sTotalSbAppts || sTotalAppts)) * 100) : 0,
         avgStars: sAvgStars,
         avgFieldHours: sAvgFieldHours,
         avgFieldStart: sAvgFieldStart,

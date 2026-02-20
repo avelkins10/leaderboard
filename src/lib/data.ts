@@ -10,6 +10,7 @@ import {
   teamIdToQBOffice,
   normalizeQBOffice,
   repCardTeamToQBOffice,
+  getOfficeTimezone,
 } from "./config";
 import { supabaseAdmin } from "./supabase";
 
@@ -509,46 +510,12 @@ export async function fetchScorecard(
     starBySetter[row.setter_id].count++;
   }
 
-  // Fetch per-office avg field hours from door_knocks
-  const avgFieldHoursByOffice: Record<string, number> = {};
-  {
-    const { data: knocks } = await supabaseAdmin
-      .from("door_knocks")
-      .select("rep_id, office_team, knocked_at")
-      .gte("knocked_at", `${fromDate}T00:00:00Z`)
-      .lte("knocked_at", `${toDate}T23:59:59Z`);
-
-    if (knocks && knocks.length > 0) {
-      // Group by office_team + rep_id + local date, find first/last knock per day
-      const byRepDay: Record<string, { min: number; max: number; office: string }> = {};
-      for (const k of knocks) {
-        if (!k.office_team) continue;
-        const ts = new Date(k.knocked_at).getTime();
-        const dateKey = k.knocked_at.slice(0, 10); // UTC date is close enough for daily grouping
-        const key = `${k.rep_id}|${dateKey}`;
-        if (!byRepDay[key]) {
-          byRepDay[key] = { min: ts, max: ts, office: k.office_team };
-        } else {
-          if (ts < byRepDay[key].min) byRepDay[key].min = ts;
-          if (ts > byRepDay[key].max) byRepDay[key].max = ts;
-        }
-      }
-      // Compute avg hours per office (only days with >1 knock)
-      const officeHours: Record<string, { sum: number; count: number }> = {};
-      for (const day of Object.values(byRepDay)) {
-        const hours = (day.max - day.min) / 3600000;
-        if (hours < 0.1) continue; // skip single-knock days
-        const qbOffice = repCardTeamToQBOffice(day.office);
-        if (!qbOffice) continue;
-        if (!officeHours[qbOffice]) officeHours[qbOffice] = { sum: 0, count: 0 };
-        officeHours[qbOffice].sum += hours;
-        officeHours[qbOffice].count++;
-      }
-      for (const [office, agg] of Object.entries(officeHours)) {
-        avgFieldHoursByOffice[office] = Math.round((agg.sum / agg.count) * 10) / 10;
-      }
-    }
-  }
+  // Fetch door_knocks for field time computation (processed after setters are built)
+  const { data: allKnocks } = await supabaseAdmin
+    .from("door_knocks")
+    .select("rep_id, knocked_at")
+    .gte("knocked_at", `${fromDate}T00:00:00Z`)
+    .lte("knocked_at", `${toDate}T23:59:59Z`);
 
   // Process setters with QB attribution
   const allSetters: ProcessedSetter[] = [];
@@ -577,6 +544,52 @@ export async function fetchScorecard(
   }
   for (const [office, agg] of Object.entries(officeStarAgg)) {
     avgStarsByOffice[office] = Math.round((agg.sum / agg.count) * 100) / 100;
+  }
+
+  // Compute avgFieldHoursByOffice using setter→office mapping + local timezone
+  const avgFieldHoursByOffice: Record<string, number> = {};
+  if (allKnocks && allKnocks.length > 0) {
+    // Build setter→office map from leaderboard data
+    const setterOfficeMap: Record<number, string> = {};
+    for (const s of allSetters) {
+      if (s.qbOffice !== "Unknown") setterOfficeMap[s.userId] = s.qbOffice;
+    }
+    // Filter knocks to known setters only
+    const relevantKnocks = allKnocks.filter((k) => setterOfficeMap[k.rep_id]);
+    // Group by rep_id + local date (using office timezone)
+    const byRepDay: Record<string, { min: number; max: number; office: string }> = {};
+    for (const k of relevantKnocks) {
+      const office = setterOfficeMap[k.rep_id];
+      const tz = getOfficeTimezone(office);
+      const ts = new Date(k.knocked_at).getTime();
+      const localDate = new Date(k.knocked_at).toLocaleDateString("en-CA", { timeZone: tz });
+      const key = `${k.rep_id}|${localDate}`;
+      if (!byRepDay[key]) {
+        byRepDay[key] = { min: ts, max: ts, office };
+      } else {
+        if (ts < byRepDay[key].min) byRepDay[key].min = ts;
+        if (ts > byRepDay[key].max) byRepDay[key].max = ts;
+      }
+    }
+    // Per-rep avg hours, then per-office avg across reps (matches getFieldTimeStats)
+    const repHours: Record<number, { days: number[]; office: string }> = {};
+    for (const [key, day] of Object.entries(byRepDay)) {
+      const hours = (day.max - day.min) / 3600000;
+      if (hours < 0.1) continue; // skip single-knock days
+      const repId = parseInt(key.split("|")[0], 10);
+      if (!repHours[repId]) repHours[repId] = { days: [], office: day.office };
+      repHours[repId].days.push(hours);
+    }
+    const officeFieldAgg: Record<string, { sum: number; count: number }> = {};
+    for (const { days, office } of Object.values(repHours)) {
+      const repAvg = days.reduce((s, h) => s + h, 0) / days.length;
+      if (!officeFieldAgg[office]) officeFieldAgg[office] = { sum: 0, count: 0 };
+      officeFieldAgg[office].sum += repAvg;
+      officeFieldAgg[office].count++;
+    }
+    for (const [office, agg] of Object.entries(officeFieldAgg)) {
+      avgFieldHoursByOffice[office] = Math.round((agg.sum / agg.count) * 10) / 10;
+    }
   }
 
   // Process closers with QB attribution
