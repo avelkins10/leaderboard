@@ -294,121 +294,193 @@ function RepDrillDown({
       </div>
 
       {appts.length > 0 ? (
-        <div className="mt-2 overflow-x-auto rounded-lg border border-border/40">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border/40 bg-secondary/20 text-2xs uppercase tracking-widest text-muted-foreground">
-                <th className="py-2 px-3 text-left font-medium">Date</th>
-                <th className="py-2 px-3 text-left font-medium">Customer</th>
-                {type === "closer" && (
-                  <th className="py-2 px-3 text-left font-medium">Setter</th>
-                )}
-                {type === "setter" && (
-                  <th className="py-2 px-3 text-left font-medium">Closer</th>
-                )}
-                <th className="py-2 px-3 text-left font-medium">Disposition</th>
-                {type === "setter" && (
-                  <th className="py-2 px-3 text-center font-medium">Sched</th>
-                )}
-                {type === "setter" && (
-                  <th className="py-2 px-3 text-center font-medium">Stars</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {appts.slice(0, 10).map((a) => (
-                <tr
-                  key={a.id}
-                  className="border-b border-border/20 hover:bg-secondary/20 transition-colors"
-                >
-                  <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+        <>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-border/40 hidden sm:block">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border/40 bg-secondary/20 text-2xs uppercase tracking-widest text-muted-foreground">
+                  <th className="py-2 px-3 text-left font-medium">Date</th>
+                  <th className="py-2 px-3 text-left font-medium">Customer</th>
+                  {type === "closer" && (
+                    <th className="py-2 px-3 text-left font-medium">Setter</th>
+                  )}
+                  {type === "setter" && (
+                    <th className="py-2 px-3 text-left font-medium">Closer</th>
+                  )}
+                  <th className="py-2 px-3 text-left font-medium">
+                    Disposition
+                  </th>
+                  {type === "setter" && (
+                    <th className="py-2 px-3 text-center font-medium">Sched</th>
+                  )}
+                  {type === "setter" && (
+                    <th className="py-2 px-3 text-center font-medium">Stars</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {appts.slice(0, 10).map((a) => (
+                  <tr
+                    key={a.id}
+                    className="border-b border-border/20 hover:bg-secondary/20 transition-colors"
+                  >
+                    <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                      {a.appointment_time
+                        ? new Date(a.appointment_time).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric" },
+                          )
+                        : "-"}
+                    </td>
+                    <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
+                      {a.contact_name || "-"}
+                    </td>
+                    {type === "closer" && (
+                      <td className="py-2 px-3 text-muted-foreground">
+                        {a.setter_name || "-"}
+                      </td>
+                    )}
+                    {type === "setter" && (
+                      <td className="py-2 px-3 text-muted-foreground">
+                        {a.closer_name || "-"}
+                      </td>
+                    )}
+                    <td className="py-2 px-3">
+                      {a.disposition ? (
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-2xs font-medium ${dispositionBadgeClass(a.disposition_category)}`}
+                        >
+                          {a.disposition}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-info/10 px-1.5 py-0.5 text-2xs font-medium text-info">
+                          Scheduled
+                        </span>
+                      )}
+                    </td>
+                    {type === "setter" && (
+                      <td className="py-2 px-3 text-center font-mono tabular-nums text-2xs">
+                        {a.hours_scheduled_out != null ? (
+                          <span
+                            className={
+                              a.hours_scheduled_out <= 48
+                                ? "text-primary"
+                                : a.hours_scheduled_out <= 72
+                                  ? "text-warning"
+                                  : "text-destructive"
+                            }
+                          >
+                            {a.hours_scheduled_out < 48
+                              ? `${Math.round(a.hours_scheduled_out)}h`
+                              : `${(a.hours_scheduled_out / 24).toFixed(1)}d`}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/25">-</span>
+                        )}
+                      </td>
+                    )}
+                    {type === "setter" && (
+                      <td className="py-2 px-3 text-center font-mono">
+                        {a.star_rating ? (
+                          <span
+                            className={
+                              a.star_rating === 3
+                                ? "text-primary"
+                                : a.star_rating === 2
+                                  ? "text-warning"
+                                  : "text-destructive"
+                            }
+                          >
+                            {a.star_rating}★
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/25">-</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {appts.length > 10 && (
+              <Link
+                href={`/rep/${repId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="block px-3 py-2 text-2xs text-primary text-center border-t border-border/20 hover:bg-secondary/30 transition-colors"
+              >
+                +{appts.length - 10} more — view full profile &rarr;
+              </Link>
+            )}
+          </div>
+          {/* Mobile appointment cards */}
+          <div className="sm:hidden mt-2 space-y-2">
+            {appts.slice(0, 10).map((a) => (
+              <div
+                key={a.id}
+                className="rounded-lg border border-border/40 px-3 py-2.5 bg-secondary/10"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono tabular-nums text-xs text-muted-foreground">
                     {a.appointment_time
                       ? new Date(a.appointment_time).toLocaleDateString(
                           "en-US",
                           { month: "short", day: "numeric" },
                         )
                       : "-"}
-                  </td>
-                  <td className="py-2 px-3 text-foreground max-w-[160px] truncate">
+                  </span>
+                  <span className="text-xs text-foreground truncate ml-2 flex-1 text-right">
                     {a.contact_name || "-"}
-                  </td>
-                  {type === "closer" && (
-                    <td className="py-2 px-3 text-muted-foreground">
-                      {a.setter_name || "-"}
-                    </td>
-                  )}
-                  {type === "setter" && (
-                    <td className="py-2 px-3 text-muted-foreground">
-                      {a.closer_name || "-"}
-                    </td>
-                  )}
-                  <td className="py-2 px-3">
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <div className="flex items-center gap-2">
                     {a.disposition ? (
                       <span
-                        className={`rounded px-1.5 py-0.5 text-2xs font-medium ${dispositionBadgeClass(a.disposition_category)}`}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${dispositionBadgeClass(a.disposition_category)}`}
                       >
                         {a.disposition}
                       </span>
                     ) : (
-                      <span className="rounded bg-info/10 px-1.5 py-0.5 text-2xs font-medium text-info">
+                      <span className="rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
                         Scheduled
                       </span>
                     )}
-                  </td>
-                  {type === "setter" && (
-                    <td className="py-2 px-3 text-center font-mono tabular-nums text-2xs">
-                      {a.hours_scheduled_out != null ? (
-                        <span
-                          className={
-                            a.hours_scheduled_out <= 48
-                              ? "text-primary"
-                              : a.hours_scheduled_out <= 72
-                                ? "text-warning"
-                                : "text-destructive"
-                          }
-                        >
-                          {a.hours_scheduled_out < 48
-                            ? `${Math.round(a.hours_scheduled_out)}h`
-                            : `${(a.hours_scheduled_out / 24).toFixed(1)}d`}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/25">-</span>
-                      )}
-                    </td>
-                  )}
-                  {type === "setter" && (
-                    <td className="py-2 px-3 text-center font-mono">
-                      {a.star_rating ? (
-                        <span
-                          className={
-                            a.star_rating === 3
-                              ? "text-primary"
-                              : a.star_rating === 2
-                                ? "text-warning"
-                                : "text-destructive"
-                          }
-                        >
-                          {a.star_rating}★
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/25">-</span>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {appts.length > 10 && (
-            <Link
-              href={`/rep/${repId}`}
-              onClick={(e) => e.stopPropagation()}
-              className="block px-3 py-2 text-2xs text-primary text-center border-t border-border/20 hover:bg-secondary/30 transition-colors"
-            >
-              +{appts.length - 10} more — view full profile &rarr;
-            </Link>
-          )}
-        </div>
+                    {type === "setter" && a.star_rating && (
+                      <span
+                        className={`font-mono text-xs ${a.star_rating === 3 ? "text-primary" : a.star_rating === 2 ? "text-warning" : "text-destructive"}`}
+                      >
+                        {a.star_rating}★
+                      </span>
+                    )}
+                    {type === "setter" && a.hours_scheduled_out != null && (
+                      <span
+                        className={`font-mono text-[10px] ${a.hours_scheduled_out <= 48 ? "text-primary" : a.hours_scheduled_out <= 72 ? "text-warning" : "text-destructive"}`}
+                      >
+                        {a.hours_scheduled_out < 48
+                          ? `${Math.round(a.hours_scheduled_out)}h`
+                          : `${(a.hours_scheduled_out / 24).toFixed(1)}d`}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground truncate ml-2">
+                    {type === "closer"
+                      ? a.setter_name || "-"
+                      : a.closer_name || "-"}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {appts.length > 10 && (
+              <Link
+                href={`/rep/${repId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="block text-xs text-primary text-center py-2 hover:underline"
+              >
+                +{appts.length - 10} more — view full profile &rarr;
+              </Link>
+            )}
+          </div>
+        </>
       ) : (
         data && (
           <p className="text-2xs text-muted-foreground/40">
@@ -783,7 +855,7 @@ export default function Dashboard() {
                           setCloserSort({ key: cat.key, dir: "desc" });
                         }
                       }}
-                      className={`rounded-md px-2.5 py-1 text-2xs font-medium transition-all ${
+                      className={`rounded-md px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-2xs font-medium transition-all ${
                         active
                           ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
@@ -816,104 +888,251 @@ export default function Dashboard() {
                     </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto scrollable-table">
-                    <table className="w-full min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                          <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
-                            #
-                          </th>
-                          <SortHeader
-                            label="Name"
-                            sortKey="name"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            align="left"
-                          />
-                          <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
-                            Office
-                          </th>
-                          <SortHeader
-                            label="Appts"
-                            sortKey="APPT"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Appointments set"
-                          />
-                          <SortHeader
-                            label="Sits"
-                            sortKey="SITS"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Appointments that sat"
-                          />
-                          <SortHeader
-                            label="Sit %"
-                            sortKey="sitRate"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Sits / appointments"
-                          />
-                          <SortHeader
-                            label="Closes"
-                            sortKey="qbCloses"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Verified closes from QuickBase"
-                          />
-                          <SortHeader
-                            label="Close %"
-                            sortKey="closeRate"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Closes / sits"
-                          />
-                          <SortHeader
-                            label="Avg Stars"
-                            sortKey="avgStars"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="Average appointment quality (1-3 stars)"
-                          />
-                          <SortHeader
-                            label="Waste %"
-                            sortKey="wasteRate"
-                            sort={setterSort}
-                            onSort={(k) =>
-                              handleSort(setterSort, setSetterSort, k)
-                            }
-                            tooltip="(No shows + Cancels) / Appointments"
-                          />
-                        </tr>
-                      </thead>
-                      <tbody className="text-[13px]">
-                        {setterList.map((s, i) => {
-                          const id = `setter-${s.userId}`;
-                          const isExpanded = expanded.has(id);
-                          const sits = s.SITS || 0;
-                          const appts = s.APPT || 0;
-                          const { sitRate, closeRate, wasteRate } = s;
-                          return (
-                            <Fragment key={s.userId}>
-                              <tr
-                                className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
-                                onClick={() => toggleExpand(id)}
-                              >
-                                <td className="py-3 px-4 sm:px-6">
+                  <>
+                    <div className="overflow-x-auto scrollable-table hidden sm:block">
+                      <table className="w-full min-w-[700px]">
+                        <thead>
+                          <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                            <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                              #
+                            </th>
+                            <SortHeader
+                              label="Name"
+                              sortKey="name"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              align="left"
+                            />
+                            <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                              Office
+                            </th>
+                            <SortHeader
+                              label="Appts"
+                              sortKey="APPT"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Appointments set"
+                            />
+                            <SortHeader
+                              label="Sits"
+                              sortKey="SITS"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Appointments that sat"
+                            />
+                            <SortHeader
+                              label="Sit %"
+                              sortKey="sitRate"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Sits / appointments"
+                            />
+                            <SortHeader
+                              label="Closes"
+                              sortKey="qbCloses"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Verified closes from QuickBase"
+                            />
+                            <SortHeader
+                              label="Close %"
+                              sortKey="closeRate"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Closes / sits"
+                            />
+                            <SortHeader
+                              label="Avg Stars"
+                              sortKey="avgStars"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="Average appointment quality (1-3 stars)"
+                            />
+                            <SortHeader
+                              label="Waste %"
+                              sortKey="wasteRate"
+                              sort={setterSort}
+                              onSort={(k) =>
+                                handleSort(setterSort, setSetterSort, k)
+                              }
+                              tooltip="(No shows + Cancels) / Appointments"
+                            />
+                          </tr>
+                        </thead>
+                        <tbody className="text-[13px]">
+                          {setterList.map((s, i) => {
+                            const id = `setter-${s.userId}`;
+                            const isExpanded = expanded.has(id);
+                            const sits = s.SITS || 0;
+                            const appts = s.APPT || 0;
+                            const { sitRate, closeRate, wasteRate } = s;
+                            return (
+                              <Fragment key={s.userId}>
+                                <tr
+                                  className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
+                                  onClick={() => toggleExpand(id)}
+                                >
+                                  <td className="py-3 px-4 sm:px-6">
+                                    <span
+                                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                        i === 0
+                                          ? "bg-primary/15 text-primary"
+                                          : i < 3
+                                            ? "bg-secondary text-foreground"
+                                            : "text-muted-foreground/40"
+                                      }`}
+                                    >
+                                      {i + 1}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="flex items-center gap-2">
+                                      <ChevronRight
+                                        className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
+                                      />
+                                      <Link
+                                        href={`/rep/${s.userId}`}
+                                        onMouseEnter={() =>
+                                          prefetchRep(s.userId)
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-medium text-foreground transition-colors hover:text-primary"
+                                      >
+                                        {s.name}
+                                        {s.isRecruit && (
+                                          <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">
+                                            R
+                                          </span>
+                                        )}
+                                      </Link>
+                                    </div>
+                                    <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                      {s.qbOffice?.split(" - ")[0]}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                    {s.qbOffice?.split(" - ")[0]}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">
+                                    {appts}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                    {sits}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    {appts > 0 ? (
+                                      <StatusBadge
+                                        value={sitRate}
+                                        good={THRESHOLDS.sitRate.good}
+                                        ok={THRESHOLDS.sitRate.ok}
+                                      />
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                    {s.qbCloses || 0}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    {sits > 0 ? (
+                                      <StatusBadge
+                                        value={closeRate}
+                                        good={THRESHOLDS.closeRatePerSit.good}
+                                        ok={THRESHOLDS.closeRatePerSit.ok}
+                                      />
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                    {s.avgStars > 0
+                                      ? `${s.avgStars.toFixed(1)}`
+                                      : "--"}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    {appts > 0 ? (
+                                      <span
+                                        className={`font-mono tabular-nums text-2xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
+                                      >
+                                        {wasteRate}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className="bg-secondary/10 border-b border-border/40">
+                                    <td
+                                      colSpan={99}
+                                      className="py-3 px-6 sm:px-12"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                          <RepDrillDown
+                                            repId={s.userId}
+                                            type="setter"
+                                            from={from}
+                                            to={to}
+                                            outcomes={s.outcomes}
+                                          />
+                                        </div>
+                                        <Link
+                                          href={`/rep/${s.userId}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-2xs text-primary hover:underline shrink-0"
+                                        >
+                                          Full profile &rarr;
+                                        </Link>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Mobile setter rows */}
+                    <div className="sm:hidden divide-y divide-border/60">
+                      {setterList.map((s, i) => {
+                        const id = `setter-${s.userId}`;
+                        const isExpanded = expanded.has(id);
+                        const sits = s.SITS || 0;
+                        const appts = s.APPT || 0;
+                        const { sitRate, closeRate, wasteRate } = s;
+                        return (
+                          <div
+                            key={s.userId}
+                            className={`${isExpanded ? "bg-secondary/20" : ""}`}
+                          >
+                            <button
+                              className="w-full px-4 py-3 text-left active:bg-secondary/30 transition-colors"
+                              onClick={() => toggleExpand(id)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   <span
                                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
                                       i === 0
@@ -925,40 +1144,37 @@ export default function Dashboard() {
                                   >
                                     {i + 1}
                                   </span>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <ChevronRight
-                                      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
-                                    />
-                                    <Link
-                                      href={`/rep/${s.userId}`}
-                                      onMouseEnter={() => prefetchRep(s.userId)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="font-medium text-foreground transition-colors hover:text-primary"
-                                    >
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-sm text-foreground truncate">
                                       {s.name}
                                       {s.isRecruit && (
                                         <span className="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">
                                           R
                                         </span>
                                       )}
-                                    </Link>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {s.qbOffice?.split(" - ")[0]}
+                                    </div>
                                   </div>
-                                  <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
-                                    {s.qbOffice?.split(" - ")[0]}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
-                                  {s.qbOffice?.split(" - ")[0]}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-info">
-                                  {appts}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                  {sits}
-                                </td>
-                                <td className="py-3 px-3 text-right">
+                                </div>
+                                <ChevronRight
+                                  className={`h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground/40 ${isExpanded ? "rotate-90" : ""}`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 ml-[38px]">
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    APT{" "}
+                                  </span>
+                                  <span className="font-mono font-semibold text-info">
+                                    {appts}
+                                  </span>
+                                </span>
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    SIT%{" "}
+                                  </span>
                                   {appts > 0 ? (
                                     <StatusBadge
                                       value={sitRate}
@@ -970,75 +1186,92 @@ export default function Dashboard() {
                                       --
                                     </span>
                                   )}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                                  {s.qbCloses || 0}
-                                </td>
-                                <td className="py-3 px-3 text-right">
-                                  {sits > 0 ? (
-                                    <StatusBadge
-                                      value={closeRate}
-                                      good={THRESHOLDS.closeRatePerSit.good}
-                                      ok={THRESHOLDS.closeRatePerSit.ok}
-                                    />
-                                  ) : (
-                                    <span className="text-muted-foreground/25 font-mono">
-                                      --
+                                </span>
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    CLS{" "}
+                                  </span>
+                                  <span className="font-mono font-semibold text-primary">
+                                    {s.qbCloses || 0}
+                                  </span>
+                                </span>
+                              </div>
+                            </button>
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-1 ml-[38px] space-y-3">
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Sits
                                     </span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                  {s.avgStars > 0
-                                    ? `${s.avgStars.toFixed(1)}`
-                                    : "--"}
-                                </td>
-                                <td className="py-3 px-3 text-right">
-                                  {appts > 0 ? (
-                                    <span
-                                      className={`font-mono tabular-nums text-2xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
-                                    >
-                                      {wasteRate}%
+                                    <span className="font-mono tabular-nums">
+                                      {sits}
                                     </span>
-                                  ) : (
-                                    <span className="text-muted-foreground/25 font-mono">
-                                      --
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Close%
                                     </span>
-                                  )}
-                                </td>
-                              </tr>
-                              {isExpanded && (
-                                <tr className="bg-secondary/10 border-b border-border/40">
-                                  <td
-                                    colSpan={99}
-                                    className="py-3 px-6 sm:px-12"
-                                  >
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="flex-1 min-w-0">
-                                        <RepDrillDown
-                                          repId={s.userId}
-                                          type="setter"
-                                          from={from}
-                                          to={to}
-                                          outcomes={s.outcomes}
-                                        />
-                                      </div>
-                                      <Link
-                                        href={`/rep/${s.userId}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
+                                    {sits > 0 ? (
+                                      <StatusBadge
+                                        value={closeRate}
+                                        good={THRESHOLDS.closeRatePerSit.good}
+                                        ok={THRESHOLDS.closeRatePerSit.ok}
+                                      />
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Avg Stars
+                                    </span>
+                                    <span className="font-mono tabular-nums">
+                                      {s.avgStars > 0
+                                        ? s.avgStars.toFixed(1)
+                                        : "--"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Waste%
+                                    </span>
+                                    {appts > 0 ? (
+                                      <span
+                                        className={`font-mono tabular-nums text-xs font-semibold ${wasteRate > 50 ? "text-destructive" : wasteRate > 30 ? "text-warning" : "text-muted-foreground"}`}
                                       >
-                                        Full profile &rarr;
-                                      </Link>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                        {wasteRate}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <Link
+                                  href={`/rep/${s.userId}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  Full profile &rarr;
+                                </Link>
+                                <RepDrillDown
+                                  repId={s.userId}
+                                  type="setter"
+                                  from={from}
+                                  to={to}
+                                  outcomes={s.outcomes}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </Section>
             </div>
@@ -1063,97 +1296,229 @@ export default function Dashboard() {
                     </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto scrollable-table">
-                    <table className="w-full min-w-[800px]">
-                      <thead>
-                        <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
-                          <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
-                            #
-                          </th>
-                          <SortHeader
-                            label="Name"
-                            sortKey="name"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            align="left"
-                          />
-                          <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
-                            Office
-                          </th>
-                          <SortHeader
-                            label="Closes"
-                            sortKey="qbCloses"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Verified closes from QuickBase"
-                          />
-                          <SortHeader
-                            label="kW"
-                            sortKey="totalKw"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Total kilowatts sold"
-                          />
-                          <SortHeader
-                            label="Avg PPW"
-                            sortKey="avgPpw"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Average net price per watt"
-                          />
-                          <SortHeader
-                            label="Sits"
-                            sortKey="SAT"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Appointments sat"
-                          />
-                          <SortHeader
-                            label="Close %"
-                            sortKey="sitCloseRate"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Closes / sits"
-                          />
-                          <SortHeader
-                            label="Cancel %"
-                            sortKey="cancelPct"
-                            sort={closerSort}
-                            onSort={(k) =>
-                              handleSort(closerSort, setCloserSort, k)
-                            }
-                            tooltip="Cancelled / total closes"
-                          />
-                          <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
-                            Cancels
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-[13px]">
-                        {closerList.map((c, i) => {
-                          const id = `closer-${c.userId}`;
-                          const isExpanded = expanded.has(id);
-                          const sits = c.SAT || 0;
-                          const { sitCloseRate } = c;
-                          return (
-                            <Fragment key={c.userId}>
-                              <tr
-                                className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
-                                onClick={() => toggleExpand(id)}
-                              >
-                                <td className="py-3 px-4 sm:px-6">
+                  <>
+                    <div className="overflow-x-auto scrollable-table hidden sm:block">
+                      <table className="w-full min-w-[800px]">
+                        <thead>
+                          <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
+                            <th className="py-3 px-4 text-left font-medium w-8 sm:px-6">
+                              #
+                            </th>
+                            <SortHeader
+                              label="Name"
+                              sortKey="name"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              align="left"
+                            />
+                            <th className="py-3 px-3 text-left font-medium hidden sm:table-cell">
+                              Office
+                            </th>
+                            <SortHeader
+                              label="Closes"
+                              sortKey="qbCloses"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Verified closes from QuickBase"
+                            />
+                            <SortHeader
+                              label="kW"
+                              sortKey="totalKw"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Total kilowatts sold"
+                            />
+                            <SortHeader
+                              label="Avg PPW"
+                              sortKey="avgPpw"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Average net price per watt"
+                            />
+                            <SortHeader
+                              label="Sits"
+                              sortKey="SAT"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Appointments sat"
+                            />
+                            <SortHeader
+                              label="Close %"
+                              sortKey="sitCloseRate"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Closes / sits"
+                            />
+                            <SortHeader
+                              label="Cancel %"
+                              sortKey="cancelPct"
+                              sort={closerSort}
+                              onSort={(k) =>
+                                handleSort(closerSort, setCloserSort, k)
+                              }
+                              tooltip="Cancelled / total closes"
+                            />
+                            <th className="py-3 px-3 text-right font-medium hidden lg:table-cell">
+                              Cancels
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-[13px]">
+                          {closerList.map((c, i) => {
+                            const id = `closer-${c.userId}`;
+                            const isExpanded = expanded.has(id);
+                            const sits = c.SAT || 0;
+                            const { sitCloseRate } = c;
+                            return (
+                              <Fragment key={c.userId}>
+                                <tr
+                                  className={`border-b border-border/60 transition-colors hover:bg-secondary/30 cursor-pointer min-h-[44px] ${isExpanded ? "bg-secondary/20" : ""}`}
+                                  onClick={() => toggleExpand(id)}
+                                >
+                                  <td className="py-3 px-4 sm:px-6">
+                                    <span
+                                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                        i === 0
+                                          ? "bg-primary/15 text-primary"
+                                          : i < 3
+                                            ? "bg-secondary text-foreground"
+                                            : "text-muted-foreground/40"
+                                      }`}
+                                    >
+                                      {i + 1}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="flex items-center gap-2">
+                                      <ChevronRight
+                                        className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
+                                      />
+                                      <Link
+                                        href={`/rep/${c.userId}`}
+                                        onMouseEnter={() =>
+                                          prefetchRep(c.userId)
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-medium text-foreground transition-colors hover:text-primary"
+                                      >
+                                        {c.name}
+                                      </Link>
+                                    </div>
+                                    <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
+                                      {c.qbOffice?.split(" - ")[0]}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                                    {c.qbOffice?.split(" - ")[0]}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
+                                    {c.qbCloses || 0}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                    {formatKw(c.totalKw || 0)}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                    {c.avgPpw > 0
+                                      ? formatCurrency(c.avgPpw)
+                                      : "--"}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
+                                    {sits}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    {sits > 0 ? (
+                                      <StatusBadge
+                                        value={sitCloseRate}
+                                        good={THRESHOLDS.closeRatePerSit.good}
+                                        ok={THRESHOLDS.closeRatePerSit.ok}
+                                      />
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    {(c.qbCloses || 0) + (c.qbCancelled || 0) >
+                                    0 ? (
+                                      <span
+                                        className={`font-mono tabular-nums text-2xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                      >
+                                        {c.cancelPct}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground hidden lg:table-cell">
+                                    {c.qbCancelled || 0}
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className="bg-secondary/10 border-b border-border/40">
+                                    <td
+                                      colSpan={99}
+                                      className="py-3 px-6 sm:px-12"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                          <RepDrillDown
+                                            repId={c.userId}
+                                            type="closer"
+                                            from={from}
+                                            to={to}
+                                            outcomes={c.outcomes}
+                                          />
+                                        </div>
+                                        <Link
+                                          href={`/rep/${c.userId}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-2xs text-primary hover:underline shrink-0"
+                                        >
+                                          Full profile &rarr;
+                                        </Link>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Mobile closer rows */}
+                    <div className="sm:hidden divide-y divide-border/60">
+                      {closerList.map((c, i) => {
+                        const id = `closer-${c.userId}`;
+                        const isExpanded = expanded.has(id);
+                        const sits = c.SAT || 0;
+                        const { sitCloseRate } = c;
+                        return (
+                          <div
+                            key={c.userId}
+                            className={`${isExpanded ? "bg-secondary/20" : ""}`}
+                          >
+                            <button
+                              className="w-full px-4 py-3 text-left active:bg-secondary/30 transition-colors"
+                              onClick={() => toggleExpand(id)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   <span
                                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
                                       i === 0
@@ -1165,43 +1530,40 @@ export default function Dashboard() {
                                   >
                                     {i + 1}
                                   </span>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <ChevronRight
-                                      className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90 text-muted-foreground" : "text-muted-foreground/30"}`}
-                                    />
-                                    <Link
-                                      href={`/rep/${c.userId}`}
-                                      onMouseEnter={() => prefetchRep(c.userId)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="font-medium text-foreground transition-colors hover:text-primary"
-                                    >
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-sm text-foreground truncate">
                                       {c.name}
-                                    </Link>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {c.qbOffice?.split(" - ")[0]}
+                                    </div>
                                   </div>
-                                  <div className="sm:hidden text-2xs text-muted-foreground mt-0.5 ml-5.5">
-                                    {c.qbOffice?.split(" - ")[0]}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
-                                  {c.qbOffice?.split(" - ")[0]}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-primary">
-                                  {c.qbCloses || 0}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                  {formatKw(c.totalKw || 0)}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                  {c.avgPpw > 0
-                                    ? formatCurrency(c.avgPpw)
-                                    : "--"}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground">
-                                  {sits}
-                                </td>
-                                <td className="py-3 px-3 text-right">
+                                </div>
+                                <ChevronRight
+                                  className={`h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground/40 ${isExpanded ? "rotate-90" : ""}`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-4 mt-2 ml-[38px]">
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    CLS{" "}
+                                  </span>
+                                  <span className="font-mono font-semibold text-primary">
+                                    {c.qbCloses || 0}
+                                  </span>
+                                </span>
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    kW{" "}
+                                  </span>
+                                  <span className="font-mono text-muted-foreground">
+                                    {formatKw(c.totalKw || 0)}
+                                  </span>
+                                </span>
+                                <span className="text-xs">
+                                  <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                    CLS%{" "}
+                                  </span>
                                   {sits > 0 ? (
                                     <StatusBadge
                                       value={sitCloseRate}
@@ -1213,58 +1575,77 @@ export default function Dashboard() {
                                       --
                                     </span>
                                   )}
-                                </td>
-                                <td className="py-3 px-3 text-right">
-                                  {(c.qbCloses || 0) + (c.qbCancelled || 0) >
-                                  0 ? (
-                                    <span
-                                      className={`font-mono tabular-nums text-2xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
-                                    >
-                                      {c.cancelPct}%
+                                </span>
+                              </div>
+                            </button>
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-1 ml-[38px] space-y-3">
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Avg PPW
                                     </span>
-                                  ) : (
-                                    <span className="text-muted-foreground/25 font-mono">
-                                      --
+                                    <span className="font-mono tabular-nums">
+                                      {c.avgPpw > 0
+                                        ? formatCurrency(c.avgPpw)
+                                        : "--"}
                                     </span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono tabular-nums text-muted-foreground hidden lg:table-cell">
-                                  {c.qbCancelled || 0}
-                                </td>
-                              </tr>
-                              {isExpanded && (
-                                <tr className="bg-secondary/10 border-b border-border/40">
-                                  <td
-                                    colSpan={99}
-                                    className="py-3 px-6 sm:px-12"
-                                  >
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="flex-1 min-w-0">
-                                        <RepDrillDown
-                                          repId={c.userId}
-                                          type="closer"
-                                          from={from}
-                                          to={to}
-                                          outcomes={c.outcomes}
-                                        />
-                                      </div>
-                                      <Link
-                                        href={`/rep/${c.userId}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="text-2xs text-primary hover:underline shrink-0 hidden sm:inline"
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Sits
+                                    </span>
+                                    <span className="font-mono tabular-nums">
+                                      {sits}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Cancel%
+                                    </span>
+                                    {(c.qbCloses || 0) + (c.qbCancelled || 0) >
+                                    0 ? (
+                                      <span
+                                        className={`font-mono tabular-nums text-xs font-semibold ${c.cancelPct > 30 ? "text-destructive" : c.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
                                       >
-                                        Full profile &rarr;
-                                      </Link>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                        {c.cancelPct}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/25 font-mono">
+                                        --
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                      Cancels
+                                    </span>
+                                    <span className="font-mono tabular-nums">
+                                      {c.qbCancelled || 0}
+                                    </span>
+                                  </div>
+                                </div>
+                                <Link
+                                  href={`/rep/${c.userId}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  Full profile &rarr;
+                                </Link>
+                                <RepDrillDown
+                                  repId={c.userId}
+                                  type="closer"
+                                  from={from}
+                                  to={to}
+                                  outcomes={c.outcomes}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </Section>
             </div>
@@ -1278,7 +1659,7 @@ export default function Dashboard() {
                 subtitle="Click any office for detailed breakdown"
                 noPadding
               >
-                <div className="overflow-x-auto scrollable-table">
+                <div className="overflow-x-auto scrollable-table hidden sm:block">
                   <table className="w-full min-w-[1000px]">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30 text-2xs uppercase tracking-widest text-muted-foreground">
@@ -1662,6 +2043,230 @@ export default function Dashboard() {
                       </tr>
                     </tfoot>
                   </table>
+                </div>
+                {/* Mobile office rows */}
+                <div className="sm:hidden divide-y divide-border/60">
+                  {officeList.map((o, i) => {
+                    const id = `office-${o.name}`;
+                    const isExpanded = expanded.has(id);
+                    return (
+                      <div
+                        key={o.name}
+                        className={`${o.qbCloses === 0 ? "opacity-40" : ""} ${isExpanded ? "bg-secondary/20" : ""}`}
+                      >
+                        <button
+                          className="w-full px-4 py-3 text-left active:bg-secondary/30 transition-colors"
+                          onClick={() => toggleExpand(id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold font-mono ${
+                                  i === 0
+                                    ? "bg-primary/15 text-primary"
+                                    : i < 3
+                                      ? "bg-secondary text-foreground"
+                                      : "text-muted-foreground/40"
+                                }`}
+                              >
+                                {i + 1}
+                              </span>
+                              <span className="font-medium text-sm text-foreground truncate">
+                                {o.name}
+                              </span>
+                            </div>
+                            <ChevronRight
+                              className={`h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground/40 ${isExpanded ? "rotate-90" : ""}`}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 ml-[38px]">
+                            <span className="text-xs">
+                              <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                CLS{" "}
+                              </span>
+                              <span className="font-mono font-semibold text-primary">
+                                {formatNumber(o.qbCloses)}
+                              </span>
+                            </span>
+                            <span className="text-xs">
+                              <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                kW{" "}
+                              </span>
+                              <span className="font-mono text-muted-foreground">
+                                {formatKw(o.kw)}
+                              </span>
+                            </span>
+                            <span className="text-xs">
+                              <span className="text-muted-foreground/60 uppercase tracking-wider text-[10px]">
+                                SIT%{" "}
+                              </span>
+                              {o.totalAppts > 0 ? (
+                                <StatusBadge
+                                  value={Math.round(o.sitRate)}
+                                  good={THRESHOLDS.sitRate.good}
+                                  ok={THRESHOLDS.sitRate.ok}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground/25 font-mono">
+                                  --
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-1 ml-[38px] space-y-3">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Appts
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {formatNumber(o.totalAppts)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Sits
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {formatNumber(o.totalSits)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Close%
+                                </span>
+                                {o.totalSits > 0 ? (
+                                  <StatusBadge
+                                    value={Math.round(o.closeRate)}
+                                    good={THRESHOLDS.closeRatePerSit.good}
+                                    ok={THRESHOLDS.closeRatePerSit.ok}
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Wk Avg
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {o.weeklyAvg > 0 ? o.weeklyAvg : "--"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Cancel%
+                                </span>
+                                {o.cancelPct > 0 ? (
+                                  <span
+                                    className={`font-mono tabular-nums text-xs font-semibold ${o.cancelPct > 30 ? "text-destructive" : o.cancelPct > 15 ? "text-warning" : "text-muted-foreground"}`}
+                                  >
+                                    {o.cancelPct}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/25 font-mono">
+                                    --
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Team
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {o.activeSetters}S / {o.activeClosers}C
+                                </span>
+                              </div>
+                            </div>
+                            {/* Top closers & setters */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                                  Top Closers
+                                </p>
+                                <div className="space-y-1">
+                                  {o.closers
+                                    .sort(
+                                      (a: any, b: any) =>
+                                        (b.qbCloses || 0) - (a.qbCloses || 0),
+                                    )
+                                    .slice(0, 3)
+                                    .map((c: any) => (
+                                      <div
+                                        key={c.userId}
+                                        className="flex items-center justify-between text-xs"
+                                      >
+                                        <Link
+                                          href={`/rep/${c.userId}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-foreground hover:text-primary truncate mr-1"
+                                        >
+                                          {c.name}
+                                        </Link>
+                                        <span className="font-mono tabular-nums text-primary font-semibold shrink-0">
+                                          {c.qbCloses || 0}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  {o.closers.length === 0 && (
+                                    <span className="text-[10px] text-muted-foreground/40">
+                                      None
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                                  Top Setters
+                                </p>
+                                <div className="space-y-1">
+                                  {o.setters
+                                    .sort(
+                                      (a: any, b: any) =>
+                                        (b.APPT || 0) - (a.APPT || 0),
+                                    )
+                                    .slice(0, 3)
+                                    .map((s: any) => (
+                                      <div
+                                        key={s.userId}
+                                        className="flex items-center justify-between text-xs"
+                                      >
+                                        <Link
+                                          href={`/rep/${s.userId}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-foreground hover:text-primary truncate mr-1"
+                                        >
+                                          {s.name}
+                                        </Link>
+                                        <span className="font-mono tabular-nums text-info font-semibold shrink-0">
+                                          {s.APPT || 0}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  {o.setters.length === 0 && (
+                                    <span className="text-[10px] text-muted-foreground/40">
+                                      None
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Link
+                              href={`/office/${encodeURIComponent(o.name)}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              Full office page &rarr;
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </Section>
             </div>

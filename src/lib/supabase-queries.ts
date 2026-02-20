@@ -926,3 +926,134 @@ export async function getContactTimeline(
   );
   return events;
 }
+
+// ── Field Time Stats from door_knocks ──
+
+export interface RepFieldTime {
+  rep_id: number;
+  rep_name: string;
+  daysKnocked: number;
+  avgHoursPerDay: number;
+  avgStartTime: string; // "2:30 PM" format
+  avgEndTime: string;
+}
+
+/**
+ * Compute field time stats from door_knocks table.
+ * Groups by rep + local date, computes avg start/end/hours per day.
+ * @param repIds - filter to specific reps (null = all reps)
+ * @param teamNames - filter to specific office teams (null = all)
+ * @param from - inclusive start date YYYY-MM-DD
+ * @param to - inclusive end date YYYY-MM-DD
+ * @param timezone - IANA timezone for local date grouping
+ */
+export async function getFieldTimeStats(
+  repIds: number[] | null,
+  teamNames: string[] | null,
+  from: string,
+  to: string,
+  timezone: string,
+): Promise<RepFieldTime[]> {
+  let query = supabaseAdmin
+    .from("door_knocks")
+    .select("rep_id, rep_name, knocked_at")
+    .gte("knocked_at", `${from}T00:00:00Z`)
+    .lte("knocked_at", `${to}T23:59:59Z`);
+
+  if (repIds && repIds.length > 0) {
+    query = query.in("rep_id", repIds);
+  }
+  if (teamNames && teamNames.length > 0) {
+    query = query.in("office_team", teamNames);
+  }
+
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) return [];
+
+  // Group knocks by rep_id + local date
+  const byRepDay = new Map<string, Date[]>();
+  const repNames = new Map<number, string>();
+
+  for (const row of data) {
+    const localDate = new Date(row.knocked_at).toLocaleDateString("en-CA", {
+      timeZone: timezone,
+    });
+    const key = `${row.rep_id}|${localDate}`;
+    if (!byRepDay.has(key)) byRepDay.set(key, []);
+    byRepDay.get(key)!.push(new Date(row.knocked_at));
+    if (row.rep_name) repNames.set(row.rep_id, row.rep_name);
+  }
+
+  // Per rep: compute daily first/last knock, then average
+  const repDays = new Map<
+    number,
+    { hours: number; startMinutes: number; endMinutes: number }[]
+  >();
+
+  // Convert to local time-of-day in minutes since midnight
+  const toLocalMinutes = (d: Date) => {
+    const parts = d.toLocaleTimeString("en-US", {
+      timeZone: timezone,
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const [h, m] = parts.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  byRepDay.forEach((knocks, key) => {
+    const repId = parseInt(key.split("|")[0], 10);
+    if (knocks.length < 2) return; // Need at least 2 knocks to compute a span
+
+    const sorted = knocks.sort((a: Date, b: Date) => a.getTime() - b.getTime());
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const hours = (last.getTime() - first.getTime()) / (1000 * 60 * 60);
+
+    if (!repDays.has(repId)) repDays.set(repId, []);
+    repDays.get(repId)!.push({
+      hours,
+      startMinutes: toLocalMinutes(first),
+      endMinutes: toLocalMinutes(last),
+    });
+  });
+
+  // Average across days per rep
+  const results: RepFieldTime[] = [];
+  repDays.forEach((days, repId) => {
+    if (days.length === 0) return;
+    const n = days.length;
+    type DayStats = { hours: number; startMinutes: number; endMinutes: number };
+    const avgHours =
+      Math.round(
+        (days.reduce((s: number, d: DayStats) => s + d.hours, 0) / n) * 10,
+      ) / 10;
+    const avgStartMin = Math.round(
+      days.reduce((s: number, d: DayStats) => s + d.startMinutes, 0) / n,
+    );
+    const avgEndMin = Math.round(
+      days.reduce((s: number, d: DayStats) => s + d.endMinutes, 0) / n,
+    );
+
+    const formatMinutes = (mins: number) => {
+      let h = Math.floor(mins / 60);
+      const m = mins % 60;
+      const ampm = h >= 12 ? "PM" : "AM";
+      if (h === 0) h = 12;
+      else if (h > 12) h -= 12;
+      return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+    };
+
+    results.push({
+      rep_id: repId,
+      rep_name: repNames.get(repId) || "",
+      daysKnocked: n,
+      avgHoursPerDay: avgHours,
+      avgStartTime: formatMinutes(avgStartMin),
+      avgEndTime: formatMinutes(avgEndMin),
+    });
+  });
+
+  return results;
+}

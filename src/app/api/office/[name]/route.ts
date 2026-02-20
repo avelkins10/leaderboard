@@ -5,14 +5,30 @@ import {
   OFFICE_MAPPING,
   qbOfficeToRepCardTeams,
   normalizeQBOffice,
+  getOfficeTimezone,
 } from "@/lib/config";
 import {
   getOfficeSetterQualityStats,
   getOfficePartnerships,
   getSpeedToClose,
   getCloserQualityByStars,
+  getFieldTimeStats,
+  RepFieldTime,
 } from "@/lib/supabase-queries";
 import { isCancel, isValidPpw, getMonday, getToday } from "@/lib/data";
+
+function getTzAbbrev(qbOfficeName: string): string {
+  const tz = getOfficeTimezone(qbOfficeName);
+  try {
+    return (
+      new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+        .formatToParts(new Date())
+        .find((p) => p.type === "timeZoneName")?.value || ""
+    );
+  } catch {
+    return "";
+  }
+}
 
 export async function GET(
   req: NextRequest,
@@ -37,6 +53,7 @@ export async function GET(
       speedToClose,
       closerQualityByStars,
       installs,
+      fieldTimeData,
     ] = await Promise.all([
       getTypedLeaderboards("closer", fromDate, toDate),
       getTypedLeaderboards("setter", fromDate, toDate),
@@ -55,6 +72,15 @@ export async function GET(
           )
         : Promise.resolve([]),
       getInstalls(fromDate, toDate).catch(() => []),
+      repCardTeamNames.length > 0
+        ? getFieldTimeStats(
+            null,
+            repCardTeamNames,
+            fromDate,
+            toDate,
+            getOfficeTimezone(officeName),
+          )
+        : Promise.resolve([] as RepFieldTime[]),
     ]);
 
     const userMap: Record<number, any> = {};
@@ -235,6 +261,10 @@ export async function GET(
     const qualityMap: Record<number, any> = {};
     for (const qs of qualityStats) qualityMap[qs.setter_id] = qs;
 
+    // Build field-time lookup by rep_id
+    const fieldTimeMap: Record<number, RepFieldTime> = {};
+    for (const ft of fieldTimeData) fieldTimeMap[ft.rep_id] = ft;
+
     const setterAccountability = setters.map((s: any) => {
       const apptData = setterApptMap[s.userId] || {};
       const quality = qualityMap[s.userId];
@@ -245,19 +275,22 @@ export async function GET(
       const nosh = apptData.NOSH || 0;
       const canc = apptData.CANC || 0;
       const sitRate = appt > 0 ? (sits / appt) * 100 : 0;
-      const closeRate = appt > 0 ? (qbCloses / appt) * 100 : 0;
-      const wasteRate = appt > 0 ? ((nosh + canc) / appt) * 100 : 0;
+      const sitCloseRate = sits > 0 ? (qbCloses / sits) * 100 : 0;
+      const ft = fieldTimeMap[s.userId];
+      const pb = quality?.power_bill_count || 0;
       return {
         ...s,
         nosh,
         canc,
         qbCloses,
         sitRate,
-        closeRate,
-        wasteRate,
+        sitCloseRate,
         avgStars: quality?.avg_stars || 0,
-        powerBillCount: quality?.power_bill_count || 0,
+        powerBillCount: pb,
         qualityCount: quality?.quality_count || 0,
+        pbPct: appt > 0 ? Math.round((pb / appt) * 100) : 0,
+        fieldHours: ft?.avgHoursPerDay ?? null,
+        fieldStart: ft?.avgStartTime ?? null,
       };
     });
 
@@ -270,10 +303,17 @@ export async function GET(
       (s: number, r: any) => s + (r.APPT || 0),
       0,
     );
-    const totalSits = closers.reduce(
+    // Use setter SITS (not closer SAT) — offices with shared closers
+    // have 0 closers on their team but setters still track sits
+    const setterSits = setters.reduce(
+      (s: number, r: any) => s + (r.SITS || 0),
+      0,
+    );
+    const closerSats = closers.reduce(
       (s: number, r: any) => s + (r.SAT || 0),
       0,
     );
+    const totalSits = Math.max(setterSits, closerSats);
     const totalQBCloses = officeSales.length;
     const totalRCClaims = closers.reduce(
       (s: number, r: any) => s + (r.CLOS || 0),
@@ -294,6 +334,89 @@ export async function GET(
           byCloser: speedToClose!.byCloser,
         }
       : null;
+
+    // ── Setter summary for cards ──
+    const sTotalAppts = setterAccountability.reduce(
+      (s: number, r: any) => s + (r.APPT || 0),
+      0,
+    );
+    const sTotalSits = setterAccountability.reduce(
+      (s: number, r: any) => s + (r.SITS || 0),
+      0,
+    );
+    const sTotalQBCloses = setterAccountability.reduce(
+      (s: number, r: any) => s + (r.qbCloses || 0),
+      0,
+    );
+    const sTotalPB = setterAccountability.reduce(
+      (s: number, r: any) => s + (r.powerBillCount || 0),
+      0,
+    );
+    const sWithStars = setterAccountability.filter(
+      (s: any) => (s.avgStars || 0) > 0,
+    );
+    const sAvgStars =
+      sWithStars.length > 0
+        ? Math.round(
+            (sWithStars.reduce((sum: number, s: any) => sum + s.avgStars, 0) /
+              sWithStars.length) *
+              10,
+          ) / 10
+        : 0;
+    const sWithField = setterAccountability.filter(
+      (s: any) => s.fieldHours != null,
+    );
+    const sAvgFieldHours =
+      sWithField.length > 0
+        ? Math.round(
+            (sWithField.reduce((sum: number, s: any) => sum + s.fieldHours, 0) /
+              sWithField.length) *
+              10,
+          ) / 10
+        : null;
+    // Average first-knock from field time data
+    const sAvgFieldStart = (() => {
+      const fts = fieldTimeData.filter((ft) => ft.avgStartTime);
+      if (fts.length === 0) return null;
+      const parseTime = (t: string) => {
+        const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (!m) return null;
+        let h = parseInt(m[1]);
+        const min = parseInt(m[2]);
+        if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+        if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+        return h * 60 + min;
+      };
+      const mins = fts
+        .map((ft) => parseTime(ft.avgStartTime))
+        .filter((m): m is number => m !== null);
+      if (mins.length === 0) return null;
+      const avgMin = Math.round(mins.reduce((s, m) => s + m, 0) / mins.length);
+      let h = Math.floor(avgMin / 60);
+      const mm = avgMin % 60;
+      const ampm = h >= 12 ? "PM" : "AM";
+      if (h === 0) h = 12;
+      else if (h > 12) h -= 12;
+      return `${h}:${String(mm).padStart(2, "0")} ${ampm}`;
+    })();
+
+    // ── Closer summary for cards ──
+    const cTotalAssigned = closers.reduce(
+      (s: number, r: any) => s + (r.LEAD || 0),
+      0,
+    );
+    const cTotalSat = closers.reduce(
+      (s: number, r: any) => s + (r.SAT || 0),
+      0,
+    );
+    const cTotalQBCloses = closers.reduce(
+      (s: number, r: any) => s + (r.qbCloses || 0),
+      0,
+    );
+    const cTotalCancelled = closers.reduce(
+      (s: number, r: any) => s + (r.qbCancelled || 0),
+      0,
+    );
 
     return NextResponse.json({
       office: officeName,
@@ -335,6 +458,32 @@ export async function GET(
             : 0;
         })(),
       },
+      setterSummary: {
+        totalAppts: sTotalAppts,
+        totalSits: sTotalSits,
+        totalQBCloses: sTotalQBCloses,
+        setSitPct:
+          sTotalAppts > 0 ? Math.round((sTotalSits / sTotalAppts) * 100) : 0,
+        sitClosePct:
+          sTotalSits > 0 ? Math.round((sTotalQBCloses / sTotalSits) * 100) : 0,
+        pbPct: sTotalAppts > 0 ? Math.round((sTotalPB / sTotalAppts) * 100) : 0,
+        avgStars: sAvgStars,
+        avgFieldHours: sAvgFieldHours,
+        avgFieldStart: sAvgFieldStart,
+      },
+      closerSummary: {
+        totalAssigned: cTotalAssigned,
+        totalSat: cTotalSat,
+        totalQBCloses: cTotalQBCloses,
+        closePct:
+          cTotalSat > 0 ? Math.round((cTotalQBCloses / cTotalSat) * 100) : 0,
+        totalCancelled: cTotalCancelled,
+        cancelPct:
+          cTotalQBCloses > 0
+            ? Math.round((cTotalCancelled / cTotalQBCloses) * 100)
+            : 0,
+      },
+      timezone: getTzAbbrev(officeName),
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

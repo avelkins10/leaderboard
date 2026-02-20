@@ -44,8 +44,11 @@ export default function OfficeDirectory() {
       .map(([name, d]: [string, any]) => {
         const totalAppts =
           d.setters?.reduce((s: number, r: any) => s + (r.APPT || 0), 0) || 0;
-        const totalSits =
+        const setterSits =
+          d.setters?.reduce((s: number, r: any) => s + (r.SITS || 0), 0) || 0;
+        const closerSats =
           d.closers?.reduce((s: number, r: any) => s + (r.SAT || 0), 0) || 0;
+        const totalSits = Math.max(setterSits, closerSats);
         const deals = d.sales?.deals || 0;
         const kw = d.sales?.kw || 0;
         const activeReps = d.activeReps || 0;

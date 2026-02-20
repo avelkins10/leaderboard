@@ -8,7 +8,7 @@ import {
   getOfficeTimezone,
 } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase";
-import { dispositionCategory } from "@/lib/supabase-queries";
+import { dispositionCategory, getFieldTimeStats } from "@/lib/supabase-queries";
 import {
   getRepSales,
   computeCloserQBStats,
@@ -16,52 +16,6 @@ import {
   getToday,
 } from "@/lib/data";
 import repRoles from "@/lib/rep-roles.json";
-
-/** Convert RepCard UTC HH:MM time to local 12-hour format */
-function formatTimeLocal(raw: any, tz: string): string | null {
-  if (raw == null || raw === 0) return null;
-  const str = String(raw).trim();
-  const match = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  const h = parseInt(match[1], 10);
-  const m = parseInt(match[2], 10);
-  if (h > 23) return null;
-  // Build a UTC date with that time (date doesn't matter, just need time conversion)
-  const utc = new Date(Date.UTC(2026, 0, 1, h, m));
-  return utc.toLocaleTimeString("en-US", {
-    timeZone: tz,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-/** Parse RepCard duration value like "64 : 9" or "4 : 0" to readable format */
-function formatDuration(raw: any): string | null {
-  if (raw == null || raw === 0) return null;
-  const str = String(raw).trim();
-  // Match "H : M", "H:M", "HH : MM" patterns (with optional spaces)
-  const match = str.match(/^(\d+)\s*:\s*(\d+)$/);
-  if (match) {
-    const h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    if (h === 0 && m === 0) return null;
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  // Handle "20.95 h" format (TSF)
-  const hMatch = str.match(/^([\d.]+)\s*h$/i);
-  if (hMatch) {
-    const hours = parseFloat(hMatch[1]);
-    const hrs = Math.floor(hours);
-    const mins = Math.round((hours - hrs) * 60);
-    if (hrs === 0 && mins === 0) return null;
-    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
-  }
-  // If it's already a number, treat as hours
-  const num = Number(raw);
-  if (!isNaN(num) && num > 0) return `${Math.round(num * 10) / 10}h`;
-  return null;
-}
 
 /** Get short timezone abbreviation for an office */
 function getTzAbbrev(qbOffice: string): string {
@@ -75,18 +29,6 @@ function getTzAbbrev(qbOffice: string): string {
   } catch {
     return "";
   }
-}
-
-function formatFieldTime(stats: Record<string, any>, qbOffice: string) {
-  const tz = getOfficeTimezone(qbOffice);
-  const tzAbbrev = getTzAbbrev(qbOffice);
-  return {
-    qualityHours: formatDuration(stats.QHST),
-    firstDoorKnock: formatTimeLocal(stats.FDK, tz),
-    lastDoorKnock: formatTimeLocal(stats.LDK, tz),
-    timeSinceFirst: formatDuration(stats.TSF),
-    timezone: tzAbbrev,
-  };
 }
 
 export async function GET(
@@ -413,14 +355,32 @@ export async function GET(
         doorToAppt: dk > 0 ? Math.round((appt / dk) * 1000) / 10 : 0,
         doorToQP: dk > 0 ? Math.round((qp / dk) * 1000) / 10 : 0,
         avgScheduleOutHours: avgScheduleOut,
-        // Field time — raw values from RepCard leaderboard
-        qualityHoursRaw: setterStats.QHST || null,
-        firstDoorKnockRaw: setterStats.FDK || null,
-        lastDoorKnockRaw: setterStats.LDK || null,
-        timeSinceFirstRaw: setterStats.TSF || null,
-        // Formatted field time values
-        ...formatFieldTime(setterStats, qbOffice),
+        // Field time — computed from Supabase door_knocks
+        qualityHours: null as string | null,
+        firstDoorKnock: null as string | null,
+        lastDoorKnock: null as string | null,
+        timezone: getTzAbbrev(qbOffice),
       };
+
+      // Fetch field time from Supabase door_knocks (accurate per-day averages)
+      try {
+        const tz = getOfficeTimezone(qbOffice);
+        const fieldTime = await getFieldTimeStats(
+          [userId],
+          null,
+          fromDate,
+          toDate,
+          tz,
+        );
+        if (fieldTime.length > 0) {
+          const ft = fieldTime[0];
+          setterCoaching.qualityHours = `${ft.avgHoursPerDay}h`;
+          setterCoaching.firstDoorKnock = ft.avgStartTime;
+          setterCoaching.lastDoorKnock = ft.avgEndTime;
+        }
+      } catch {
+        // Graceful fallback — field time stays null
+      }
     }
 
     // Closer QB stats — use shared computation from data.ts
